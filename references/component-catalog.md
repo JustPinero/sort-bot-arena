@@ -310,9 +310,91 @@ Route at `/leaderboard/inputs/:inputId`. Input header with size badge + descript
 
 Hook in `src/hooks/`. Reads/writes leaderboard filter state via `useSearchParams`. Type-safe: invalid values fall back to defaults. Default values (all, rank) are removed from the URL on write so shareable links stay minimal.
 
-## Phase 4 — arena components (planned)
+## Phase 4 — arena components
 
-`<PreFightStaredown />`, `<LiveBattle />`, `<DigimonAttackVisualization />`, `<HealthBar />`, `<RoundCounter />`, `<StatSlamIn />`, `<CommentaryFeed />`, `<KOGraphic />`, `<DecisionGraphic />`, `<ScanLines />`. Specs land when Phase 4 starts.
+### `<HealthBar />`
+
+10-segment health bar, role=meter, danger-red on the lowest 3 segments when lit.
+
+```tsx
+<HealthBar value={number} maxValue?={100} cornerColor?={string} label?={string} />
+```
+
+### `<RoundCounter />`
+
+LED-display "current/total" with hazard glow.
+
+```tsx
+<RoundCounter current={number} total={number} />
+```
+
+### `<HypeMeter />`
+
+Top-of-screen meter that fills with hype level. PEAK callout (animated) at 95%+.
+
+```tsx
+<HypeMeter level={number /* 0..1 */} />
+```
+
+### `<TrashTalkBubble />`
+
+Quote bubble with deterministic generic-taunt fallback when `text` is null (same speaker always falls back to the same taunt).
+
+```tsx
+<TrashTalkBubble speaker={string} text={string | null} side="left" | "right" />
+```
+
+### `<CountdownTimer />`
+
+aria-live timer ticking 1Hz to zero, then fires `onComplete`.
+
+```tsx
+<CountdownTimer seconds={number} onComplete?={() => void} />
+```
+
+### `<PreFightStaredown />`
+
+Three-part hero: countdown overhead, `<TaleOfTheTape mode="active" />`, two `<TrashTalkBubble />`s flanking, and an "Enter Arena" CTA. The CTA is the user-gesture moment that lets audio + animations begin without violating autoplay policy.
+
+### `<FighterPortraitFrame />`
+
+Per-side portrait with corner-color border + glow. Damage filters auto-apply at 50% / 25% / 10% health (progressive desaturation + scan-line glitch overlay). `attacking` prop translates the portrait toward the opponent; `shaken` triggers the shake keyframe.
+
+### `<CommentaryFeed />`
+
+Event log → broadcast-ticker lines. `aria-live="polite"`, smooth-scroll-on-update (jsdom-safe).
+
+### `<StatSlamIn />`
+
+Pointer-events-none overlay that slams in via the `slam-in` keyframe, holds `durationMs`, then clears.
+
+### `<LiveBattle />`
+
+The bout. Composes HypeMeter + two FighterPortraitFrames flanking a center spine (RoundCounter + current input + score line + last-round delta + brief beam) + CommentaryFeed + StatSlamIn. Animation cues fire from the **latest** event only — replay-safe; revisiting an old event log doesn't re-trigger animations.
+
+### `<PostFightDecision />`
+
+KNOCKOUT title for ko/tko, DECISION VICTORY for narrow finishes, DECISIVE VICTORY for blowouts (≥80% rounds). Fight-poster portraits: winner with champion glow, loser dimmed + desaturated. `<ChampionBelt active />` overlay with "New Champion" callout when `rankChange` is set. Replay + Next Fight buttons.
+
+### `<ArenaIndexPage />`
+
+Lists battles with status badges (Live / Upcoming / Completed). Each card links to `/arena/<id>`.
+
+### `<BattlePage />`
+
+Drives the three-phase flow (PreFight → Live → PostFight) based on local `phase` state and the SSE-derived view model. Uses `playMockBattle()` until backend SSE ships.
+
+### `useBattleEvents(battleId, { fighterAId, fighterBId, enabled? })`
+
+SSE hook in `src/api/sse.ts`. Returns `{ events, derived, connected, error }`. Validates every event with `battleEventSchema` before adding to state.
+
+### `deriveBattleState(events, fighterAId, fighterBId)`
+
+Pure reducer in `src/lib/battleReducer.ts`. Folds `BattleEvent[]` into `BattleDerivedState` (status, currentRound, healths, rounds won, hype level, downed state, outcome, winner). Tested against every event type.
+
+### `playMockBattle({ fighterAId, fighterBId, rounds, speedMs, onEvent })`
+
+Browser-side helper in `src/lib/playMockBattle.ts` that emits a scripted bout (walkout pair → fight_start → N rounds with progress + result + commentary → fight_end). Configurable speed and blowout winner. Used by `<BattlePage />` until backend SSE ships.
 
 ## Phase 5 — submit + tournament components (planned)
 

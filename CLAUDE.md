@@ -36,7 +36,7 @@ Prime → Plan → RED → GREEN → Validate.
 | 1     | `phase-1-foundation`         | shipped |
 | 2     | `phase-2-fighter-profile`    | shipped |
 | 3     | `phase-3-leaderboard`        | shipped |
-| 4     | `phase-4-arena`              | pending |
+| 4     | `phase-4-arena`              | shipped |
 | 5     | `phase-5-submit-tournaments` | pending |
 | 6     | `phase-6-polish`             | pending |
 

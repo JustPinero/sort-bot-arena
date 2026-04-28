@@ -53,14 +53,15 @@ Filter state lives in the URL via `?weight=&activity=&sort=&language=`. Defaults
 
 ## Phase 4 (arena)
 
-Will consume:
+Consumed via two query hooks + one SSE hook. MSW handlers cover the contract; the real SSE backend ships in sort-bot-api Phase 5.
 
-- `GET /v1/battles` — index of current/recent/upcoming.
-- `GET /v1/battles/:id` — battle detail (pre-fight stare-down state).
-- `GET /v1/battles/:id/events` — **SSE** stream of battle events (round results, animations, terminal verdict).
-- `POST /v1/battles/:id/trash-talk` — server-side cached AI taunt for the pre-fight phase.
+- `GET /v1/battles` → `CursorPage<Battle>` — index of current/recent/upcoming. Hook: `useBattles()`.
+- `GET /v1/battles/:id` → `Battle` — battle detail. Hook: `useBattle(id)` (with 4xx-skip retry).
+- `GET /v1/battles/:id/events` → **SSE** stream of `BattleEvent` (8-variant discriminated union: walkout, fight_start, round_start, round_progress, round_end, fighter_downed, commentary, fight_end). Hook: `useBattleEvents(id, opts)`. Every event runs through `battleEventSchema` (zod) before applying state; malformed events are dropped with a warn log.
 
-Event schema documented in detail when Phase 4 starts. zod schemas mirror the backend definitions; mismatches drop the event.
+Until backend ships SSE, frontend uses `playMockBattle()` (in `src/lib/playMockBattle.ts`) to drive a scripted bout in the BattlePage. Same event shape, no network round-trip.
+
+`POST /v1/battles/:id/trash-talk` (server-cached AI taunt) deferred — `bot.trash_talk` from the bot record is read directly in the pre-fight stare-down for now.
 
 ---
 
