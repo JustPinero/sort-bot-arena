@@ -67,15 +67,15 @@ Until backend ships SSE, frontend uses `playMockBattle()` (in `src/lib/playMockB
 
 ## Phase 5 (submit + tournaments)
 
-Will consume:
+Consumed via mutations + queries. MSW handlers cover the contract; backend Phase 5+ ships the wire-format-final endpoints.
 
-- `POST /v1/bots` — multipart upload of bot source. Returns 202 with `bot_id`; debut evaluation streams via SSE.
-- `GET /v1/bots/:id/debut/events` — SSE stream of evaluation progress.
-- `GET /v1/users/me/bots` — current user's bots for `/me/fighters`.
-- `PATCH /v1/bots/:id` — display_name update, retire flag.
-- `GET /v1/tournaments` — list.
-- `GET /v1/tournaments/:id` — bracket.
-- `GET /v1/tournaments/:id/events` — **SSE** for live round advancement.
+- `POST /v1/bots` → 202 `{ bot_id }` — bot submission. Frontend currently sends JSON `{ display_name, language, source, filename }`; backend will accept multipart once it ships (the API client transparently switches when given a FormData body). Hook: `useSubmitBot()` (mutation, invalidates leaderboard + my-bots on success).
+- `GET /v1/bots/:id/debut/events` → SSE — evaluation progress. **Deferred**: until backend ships, frontend uses `playMockEvaluation()` (in `src/lib/playMockEvaluation.ts`) to script the debut event sequence client-side.
+- `GET /v1/users/me/bots` → `Bot[]` — current user's bots. Hook: `useMyBots()`.
+- `PATCH /v1/bots/:id` → `Bot` — display_name update + retire flag. Hook: `useRetireBot()` (mutation, sets `retired: true`).
+- `GET /v1/tournaments` → `CursorPage<Tournament>` — fight nights. Hook: `useTournaments()`.
+- `GET /v1/tournaments/:id` → `Tournament` — bracket detail. Hook: `useTournament(id)` (with 4xx-skip retry).
+- `GET /v1/tournaments/:id/events` (SSE) — live round advancement. **Deferred**: same pattern as debut events; would activate when backend ships.
 
 ---
 

@@ -396,9 +396,55 @@ Pure reducer in `src/lib/battleReducer.ts`. Folds `BattleEvent[]` into `BattleDe
 
 Browser-side helper in `src/lib/playMockBattle.ts` that emits a scripted bout (walkout pair → fight_start → N rounds with progress + result + commentary → fight_end). Configurable speed and blowout winner. Used by `<BattlePage />` until backend SSE ships.
 
-## Phase 5 — submit + tournament components (planned)
+## Phase 5 — submit + tournament components
 
-`<MonacoEditor />`, `<DebutEvaluation />`, `<BracketDisplay />`, `<MatchCard />`. Specs land when Phase 5 starts.
+### `<MonacoEditor />`
+
+Thin wrapper around `@monaco-editor/react` with a vs-dark theme and the JetBrains Mono font. Lazy-loaded on `/submit` only; Monaco's runtime loads from the CDN at first interaction so it doesn't bloat the main bundle.
+
+```tsx
+<MonacoEditor value={string} language={string} onChange={(v) => void} height? />
+```
+
+### Submit-page templates
+
+`src/components/submit/templates.ts` exports starter source per language with the bot-contract stdin/stdout protocol commented inline. Editing language in the form auto-swaps the source via `setValue('source', LANGUAGE_TEMPLATES[lang].source)`.
+
+### `<DebutEvaluation />`
+
+Live evaluation feed: progress bar (X of N), running placement estimate, rolling event ticker, "FIGHTER DEBUT COMPLETE" graphic on `eval_complete`, 3-second redirect to the new bot's profile.
+
+```tsx
+<DebutEvaluation botId={string} events={EvaluationEvent[]} />
+```
+
+### `<SubmitPage />`
+
+react-hook-form + zod. Three fields: fighter name, weight class (chip group of 4 languages), source (Monaco-bound). Submit → POST `/v1/bots` → on 202 transitions to `<DebutEvaluation />` driven by `playMockEvaluation()`. Inline validation errors per field; root-level error for non-field failures.
+
+### `<MyFightersPage />`
+
+Lists `useMyBots()` results. Each row: corner badge, nickname → profile link, weight + record + rank/retired chips, RETIRE button per active bot. Empty state links to `/submit`.
+
+### `<TournamentsListPage />`
+
+Broadcast-poster cards per tournament with status badge (Live tonight / Upcoming / Completed), participant count, prize, scheduled date. Click into bracket.
+
+### `<MatchCard />`
+
+Compressed-row matchup card. Two FighterRow links (corner badge + nickname). BYE auto-advance row. Live-match border + glow. Optional Open link to the live battle.
+
+```tsx
+<MatchCard match={TournamentMatch} participantsById={Record<string, TournamentParticipant>} />
+```
+
+### `<TournamentBracketPage />`
+
+Round-grouped match grid (responsive columns). Champion belt callout when completed. Live-match border + hazard glow. 404 panel for unknown ids.
+
+### `playMockEvaluation({ botId, total, speedMs, onEvent })`
+
+Browser-side helper in `src/lib/playMockEvaluation.ts` that emits a scripted `EvaluationEvent` sequence (`eval_start` → progress × N → `eval_complete`). Used by `<SubmitPage />` until backend ships the debut SSE endpoint.
 
 ## Phase 6 — homepage + polish components (planned)
 

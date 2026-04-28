@@ -55,3 +55,24 @@ When activated: each is a 1-2 hour add. None are on the critical path; the bout 
 Pagination on `<RankingsTable />` not built. The MSW handler returns all entries in one page; the API will need cursor-based paging once real data lands. The `useBotRuns` hook already shows the pattern (load-more button); apply the same here when activating.
 
 When activated: add `cursor` state to `<LeaderboardPage />`, thread into `useLeaderboard`, render a "Load more" button at the table's foot when `next_cursor` is non-null. Optionally upgrade to infinite-scroll with `IntersectionObserver`.
+
+## D-6 (2026-04-28) — phase-5-submit-tournaments / 6cf8e27
+
+Real multipart submit + backend SSE deferred. Frontend currently sends JSON to `POST /v1/bots` and uses `playMockEvaluation()` for the debut feed. The API client already detects FormData bodies and switches the wire format automatically — no client changes needed when backend ships.
+
+When activated:
+
+1. Update `useSubmitBot()` in `src/api/queries.ts` to build a FormData body (the original code is in git history).
+2. Replace `playMockEvaluation()` in `<SubmitPage />` with a `useDebutEvents(botId)` SSE hook (mirror `useBattleEvents()`).
+3. Add `evaluationEventSchema` (zod) for runtime validation per event.
+4. Same for tournaments: add `useTournamentEvents(id)` SSE for live round advancement.
+
+## D-7 (2026-04-28) — phase-5-submit-tournaments / 6cf8e27
+
+Polish items deferred to Phase 6:
+
+- PPV promo card generator at `/tournaments/:id/promo/:matchId` (auto-generated SVG poster for top-5 vs top-5 matchups).
+- Auto-generated fight-poster image export from `<PostFightDecision />`.
+- Native share sheet integration with copy-link fallback.
+- `<BotBadge />` embeddable shield component.
+- Champion-crowning ticker-tape effect on tournament finale.
