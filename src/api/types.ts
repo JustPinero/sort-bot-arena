@@ -161,6 +161,67 @@ export interface Battle {
   rank_change?: BattleRankChange;
 }
 
+export interface SubmitBotResponse {
+  bot_id: string;
+}
+
+export type EvaluationEvent =
+  | { type: 'eval_start'; total: number; ts: string }
+  | {
+      type: 'eval_progress';
+      input_id: string;
+      input_name: string;
+      time_seconds: number;
+      rank_estimate: number | null;
+      completed: number;
+      total: number;
+      ts: string;
+    }
+  | {
+      type: 'eval_complete';
+      bot_id: string;
+      final_rank: number | null;
+      record: { wins: number; losses: number; draws: number };
+      ts: string;
+    }
+  | { type: 'eval_failed'; reason: string; ts: string };
+
+export interface TournamentMatch {
+  id: string;
+  round: number;
+  position: number;
+  fighter_a_bot_id: string | null;
+  fighter_b_bot_id: string | null;
+  winner_bot_id: string | null;
+  status: 'pending' | 'live' | 'completed' | 'bye';
+  battle_id: string | null;
+}
+
+export type TournamentStatus = 'upcoming' | 'active' | 'completed';
+
+export interface TournamentParticipant {
+  bot_id: string;
+  nickname: string | null;
+  display_name: string;
+  language: string;
+  portrait_url: string | null;
+}
+
+export interface Tournament {
+  id: string;
+  name: string;
+  status: TournamentStatus;
+  participant_count: number;
+  weight_class_filter: string | null;
+  prize_description: string | null;
+  scheduled_at: string;
+  rounds_total: number;
+  current_round: number;
+  champion_bot_id: string | null;
+  matches: TournamentMatch[];
+  participants: TournamentParticipant[];
+}
+
 export type BattleEvent =
   | { type: 'walkout'; bot_id: string; ts: string }
   | { type: 'fight_start'; ts: string }

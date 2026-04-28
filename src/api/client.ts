@@ -64,7 +64,8 @@ async function request<T>(
   }
 
   const headers = new Headers(opts?.headers);
-  if (body !== undefined) headers.set('Content-Type', 'application/json');
+  const isFormData = typeof FormData !== 'undefined' && body instanceof FormData;
+  if (body !== undefined && !isFormData) headers.set('Content-Type', 'application/json');
 
   if (!opts?.skipAuth) {
     const apiKey = useAuthStore.getState().apiKey;
@@ -76,7 +77,7 @@ async function request<T>(
     response = await fetch(`${config.apiBaseUrl}${path}`, {
       method,
       headers,
-      body: body !== undefined ? JSON.stringify(body) : undefined,
+      body: body === undefined ? undefined : isFormData ? (body as FormData) : JSON.stringify(body),
       signal: controller.signal,
     });
   } catch (err) {

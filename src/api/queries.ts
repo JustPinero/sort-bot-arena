@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { apiClient } from './client';
 
@@ -15,6 +15,8 @@ import type {
   LeaderboardEntry,
   LeaderboardFilters,
   PerInputLeaderboardEntry,
+  SubmitBotResponse,
+  Tournament,
 } from './types';
 
 export function usePing() {
@@ -147,6 +149,69 @@ export function useBattle(battleId: string | undefined) {
     queryFn: () => apiClient.get<Battle>(`/v1/battles/${battleId}`),
     enabled: Boolean(battleId),
     staleTime: 30 * 1000,
+    retry: (failureCount, err) => {
+      const status = (err as { status?: number } | null)?.status;
+      if (status && status >= 400 && status < 500) return false;
+      return failureCount < 1;
+    },
+  });
+}
+
+export interface SubmitBotInput {
+  display_name: string;
+  language: string;
+  source: string;
+  filename: string;
+}
+
+export function useSubmitBot() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: SubmitBotInput) => {
+      // Backend Phase 5 will accept multipart; JSON works for now (sort-bot-api's
+      // OpenAPI will dictate the wire format once it ships).
+      return apiClient.post<SubmitBotResponse>('/v1/bots', input);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['leaderboard'] });
+      queryClient.invalidateQueries({ queryKey: ['users', 'me', 'bots'] });
+    },
+  });
+}
+
+export function useMyBots() {
+  return useQuery({
+    queryKey: ['users', 'me', 'bots'],
+    queryFn: () => apiClient.get<Bot[]>('/v1/users/me/bots'),
+    staleTime: 60 * 1000,
+  });
+}
+
+export function useRetireBot() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (botId: string) => apiClient.patch<Bot>(`/v1/bots/${botId}`, { retired: true }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['users', 'me', 'bots'] });
+      queryClient.invalidateQueries({ queryKey: ['leaderboard'] });
+    },
+  });
+}
+
+export function useTournaments() {
+  return useQuery({
+    queryKey: ['tournaments'],
+    queryFn: () => apiClient.get<CursorPage<Tournament>>('/v1/tournaments'),
+    staleTime: 60 * 1000,
+  });
+}
+
+export function useTournament(id: string | undefined) {
+  return useQuery({
+    queryKey: ['tournaments', id],
+    queryFn: () => apiClient.get<Tournament>(`/v1/tournaments/${id}`),
+    enabled: Boolean(id),
+    staleTime: 60 * 1000,
     retry: (failureCount, err) => {
       const status = (err as { status?: number } | null)?.status;
       if (status && status >= 400 && status < 500) return false;

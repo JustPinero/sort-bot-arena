@@ -8,9 +8,11 @@ import {
   championRuns,
   championSnapshots,
   leaderboardEntries,
+  myBots,
   perInputLeaderboard,
   sampleBattle,
   sampleInputs,
+  sampleTournaments,
 } from './fixtures';
 
 const BASE = 'http://api.test';
@@ -127,5 +129,54 @@ export const defaultHandlers = [
       return HttpResponse.json({ error: 'battle not found', code: 'not_found' }, { status: 404 });
     }
     return HttpResponse.json(sampleBattle);
+  }),
+
+  http.post(`${BASE}/v1/bots`, async ({ request }) => {
+    const body = (await request.json()) as { display_name?: string; source?: string };
+    if (!body.display_name) {
+      return HttpResponse.json(
+        {
+          error: 'invalid input',
+          code: 'validation_failed',
+          fields: [{ path: 'display_name', message: 'must be ≥ 1 char' }],
+        },
+        { status: 400 },
+      );
+    }
+    if (!body.source || body.source.length < 10) {
+      return HttpResponse.json(
+        {
+          error: 'invalid source',
+          code: 'validation_failed',
+          fields: [{ path: 'source', message: 'must be at least 10 characters' }],
+        },
+        { status: 400 },
+      );
+    }
+    return HttpResponse.json({ bot_id: 'bot_new_debut' }, { status: 202 });
+  }),
+
+  http.get(`${BASE}/v1/users/me/bots`, () => HttpResponse.json(myBots)),
+
+  http.patch(`${BASE}/v1/bots/:botId`, async ({ params, request }) => {
+    const botId = params.botId as string;
+    if (!allBotsById[botId]) {
+      return HttpResponse.json({ error: 'not found', code: 'not_found' }, { status: 404 });
+    }
+    const body = (await request.json()) as { display_name?: string; retired?: boolean };
+    return HttpResponse.json({ ...allBotsById[botId], ...body });
+  }),
+
+  http.get(`${BASE}/v1/tournaments`, () =>
+    HttpResponse.json({ items: sampleTournaments, next_cursor: null }),
+  ),
+
+  http.get(`${BASE}/v1/tournaments/:id`, ({ params }) => {
+    const id = params.id as string;
+    const t = sampleTournaments.find((x) => x.id === id);
+    if (!t) {
+      return HttpResponse.json({ error: 'not found', code: 'not_found' }, { status: 404 });
+    }
+    return HttpResponse.json(t);
   }),
 ];
