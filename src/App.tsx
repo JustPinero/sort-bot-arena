@@ -18,6 +18,9 @@ const HallOfFamePage = lazy(() => import('@/pages/HallOfFamePage'));
 const AchievementsPage = lazy(() => import('@/pages/AchievementsPage'));
 const EventsFeedPage = lazy(() => import('@/pages/EventsFeedPage'));
 const NotFoundPage = lazy(() => import('@/pages/NotFoundPage'));
+const DesignSystemPage = lazy(() => import('@/pages/DesignSystemPage'));
+
+const VISUAL_REGRESSION_ENABLED = import.meta.env.VITE_ENABLE_VISUAL_REGRESSION === 'true';
 
 function RouteFallback() {
   return (
@@ -146,6 +149,16 @@ export default function App() {
               </AppShell>
             }
           />
+          {VISUAL_REGRESSION_ENABLED ? (
+            <Route
+              path="/dev/design-system"
+              element={
+                <AppShell>
+                  <DesignSystemPage />
+                </AppShell>
+              }
+            />
+          ) : null}
           <Route
             path="*"
             element={
