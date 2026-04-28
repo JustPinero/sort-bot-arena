@@ -26,6 +26,11 @@ export function useBot(botId: string | undefined) {
     queryFn: () => apiClient.get<Bot>(`/v1/bots/${botId}`),
     enabled: Boolean(botId),
     staleTime: 5 * 60 * 1000,
+    retry: (failureCount, err) => {
+      const status = (err as { status?: number } | null)?.status;
+      if (status && status >= 400 && status < 500) return false;
+      return failureCount < 1;
+    },
   });
 }
 
