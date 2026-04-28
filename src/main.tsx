@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client';
 
 import { createQueryClient } from '@/api/queryClient';
 import App from '@/App';
+import '@/styles/globals.css';
 
 const rootEl = document.getElementById('root');
 if (!rootEl) throw new Error('root element missing');

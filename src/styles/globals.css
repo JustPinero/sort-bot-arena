@@ -1,0 +1,77 @@
+@import './fonts.css';
+@import './tokens.css';
+@import './patterns.css';
+@import './animations.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  html,
+  body {
+    margin: 0;
+    padding: 0;
+    background-color: var(--surface-0);
+    color: var(--text-primary);
+    font-family:
+      'Inter',
+      system-ui,
+      -apple-system,
+      sans-serif;
+    font-feature-settings: 'cv11', 'ss01', 'ss03';
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  html {
+    color-scheme: dark light;
+  }
+
+  [data-theme='dark'] html,
+  [data-theme='dark'] {
+    color-scheme: dark;
+  }
+
+  [data-theme='light'] html,
+  [data-theme='light'] {
+    color-scheme: light;
+  }
+
+  *:focus-visible {
+    outline: 2px solid var(--hazard-yellow);
+    outline-offset: 2px;
+  }
+
+  :where([data-theme='light']) *:focus-visible {
+    outline-color: var(--combat-red);
+  }
+
+  ::selection {
+    background-color: var(--hazard-yellow);
+    color: #0a0a0a;
+  }
+
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  button {
+    font-family: inherit;
+    cursor: pointer;
+  }
+}
+
+@layer utilities {
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum';
+  }
+}
