@@ -41,10 +41,13 @@ All five hooks use stable, resource-mirrored query keys (`['bots', botId]`, `['b
 
 ## Phase 3 (leaderboard)
 
-Will consume:
+Consumed via three hooks. MSW handlers cover the contract.
 
-- `GET /v1/leaderboard?weight=…&activity=…&sort=…&page=…` — paginated rankings with rank, fighter, record, weight class, KO%, signature input + time, last fight date.
-- `GET /v1/leaderboard/inputs/:inputId?page=…` — per-input ranking + that input's pattern.
+- `GET /v1/leaderboard?weight=&activity=&sort=&language=&cursor=&limit=` → `CursorPage<LeaderboardEntry>` — paginated rankings. Server-side filtering by weight class (mapped from language), activity window, sort key. Hook: `useLeaderboard(filters)`.
+- `GET /v1/leaderboard/inputs/:inputId` → `{ input: InputSummary, items: PerInputLeaderboardEntry[], next_cursor }` — per-input ranking. 404 for unknown input. Hook: `usePerInputLeaderboard(inputId)`, with 4xx-skip retry.
+- `GET /v1/inputs` → `CursorPage<InputSummary>` — input list (Phase 5+ picker). Hook: `useInputs()`.
+
+Filter state lives in the URL via `?weight=&activity=&sort=&language=`. Defaults (`all`/`rank`) are stripped on write so shareable links stay clean. The `useLeaderboardFilters()` hook owns parsing + write-back.
 
 ---
 

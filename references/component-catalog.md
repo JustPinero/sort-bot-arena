@@ -267,9 +267,48 @@ Route at `/bots/:botId`. TotT hero (single-fighter mode) + ProfileTabs with Figh
 
 Route at `/bots/:a/vs/:b`. TotT two-fighter mode + shared-input comparison table. Sort by absolute delta descending. Decisive deltas (>30% margin) colored victory/combat; neutral otherwise.
 
-## Phase 3 — leaderboard components (planned)
+## Phase 3 — leaderboard components
 
-`<PodiumTop3 />`, `<RankingsTable />`, `<FilterChips />`, `<HoverPreviewPanel />`. Specs land when Phase 3 starts.
+### `<PodiumTop3 />`
+
+Top-3 podium. Three larger cards: silver (#2), champion (#1, taller, with belt + glow-cycle), bronze (#3). Hover scale + glow on each. Each card links to its bot's profile.
+
+```tsx
+<PodiumTop3 entries={LeaderboardEntry[]} className?={string} />
+```
+
+### `<FilterChips />`
+
+Three chip groups: weight class (All / Heavy / Cruiser / Middle / Light), activity (All Time / This Month / This Week), sort (Rank / Wins / KO% / Recent / A-Z). Active chip uses hazard yellow + dark text. `aria-pressed` for screen readers. Filtered badge surfaces when any filter is non-default.
+
+```tsx
+<FilterChips
+  weight activity sort
+  onWeightChange onActivityChange onSortChange
+/>
+```
+
+### `<RankingsTable />`
+
+The table proper. Columns: rank (with up/down/steady/new/returning trend arrow), fighter (corner badge + nickname + display_name + profile link), record, weight class, KO%, signature input + time, last fight date. Empty-results panel: "NO FIGHTERS MATCH THESE WEIGHT CLASSES — TRY EXPANDING YOUR SEARCH".
+
+```tsx
+<RankingsTable entries={LeaderboardEntry[]} isLoading? startRank? className? />
+```
+
+`startRank` lets pages render rows from rank N onward (so the podium owns ranks 1-3 and the table starts at #4).
+
+### `<LeaderboardPage />`
+
+Route at `/leaderboard`. Composes `<FilterChips />` + `<PodiumTop3 />` + `<RankingsTable />`. Filter state via `useLeaderboardFilters()` hook (URL search params). Hides podium when filtered results have no top-3.
+
+### `<PerInputLeaderboardPage />`
+
+Route at `/leaderboard/inputs/:inputId`. Input header with size badge + description, then a ranked table by time. 404 panel for unknown input id.
+
+### `useLeaderboardFilters()`
+
+Hook in `src/hooks/`. Reads/writes leaderboard filter state via `useSearchParams`. Type-safe: invalid values fall back to defaults. Default values (all, rank) are removed from the URL on write so shareable links stay minimal.
 
 ## Phase 4 — arena components (planned)
 
