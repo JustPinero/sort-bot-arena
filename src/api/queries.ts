@@ -4,6 +4,7 @@ import { apiClient } from './client';
 
 import type {
   AnalysisResponse,
+  Battle,
   Bot,
   BotRun,
   BotSnapshot,
@@ -129,5 +130,27 @@ export function useInputs() {
     queryKey: ['inputs'],
     queryFn: () => apiClient.get<CursorPage<InputSummary>>('/v1/inputs'),
     staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useBattles() {
+  return useQuery({
+    queryKey: ['battles'],
+    queryFn: () => apiClient.get<CursorPage<Battle>>('/v1/battles'),
+    staleTime: 30 * 1000,
+  });
+}
+
+export function useBattle(battleId: string | undefined) {
+  return useQuery({
+    queryKey: ['battles', battleId],
+    queryFn: () => apiClient.get<Battle>(`/v1/battles/${battleId}`),
+    enabled: Boolean(battleId),
+    staleTime: 30 * 1000,
+    retry: (failureCount, err) => {
+      const status = (err as { status?: number } | null)?.status;
+      if (status && status >= 400 && status < 500) return false;
+      return failureCount < 1;
+    },
   });
 }

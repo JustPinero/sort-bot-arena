@@ -286,6 +286,40 @@ export const leaderboardEntries: LeaderboardEntry[] = [
   ),
 ];
 
+export const sampleBattle = {
+  id: 'bat_demo_1',
+  status: 'live' as const,
+  fighter_a: {
+    bot_id: championBot.id,
+    nickname: championBot.nickname,
+    display_name: championBot.display_name,
+    language: championBot.language,
+    portrait_url: championBot.portrait_url,
+    corner: 'red' as const,
+    rank: championBot.rank,
+    trash_talk: championBot.trash_talk,
+  },
+  fighter_b: {
+    bot_id: veteranBot.id,
+    nickname: veteranBot.nickname,
+    display_name: veteranBot.display_name,
+    language: veteranBot.language,
+    portrait_url: veteranBot.portrait_url,
+    corner: 'blue' as const,
+    rank: veteranBot.rank,
+    trash_talk: veteranBot.trash_talk,
+  },
+  rounds_total: 5,
+  current_round: 0,
+  scheduled_at: '2026-04-28T19:00:00Z',
+  started_at: null,
+  completed_at: null,
+  winner_bot_id: null,
+  outcome: null,
+};
+
+export const allBattles = [sampleBattle];
+
 export const sampleInputs: InputSummary[] = [
   {
     id: 'in_killer_quicksort',

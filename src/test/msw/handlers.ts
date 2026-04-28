@@ -1,6 +1,7 @@
 import { http, HttpResponse } from 'msw';
 
 import {
+  allBattles,
   allBotsById,
   championAnalysis,
   championInputs,
@@ -8,6 +9,7 @@ import {
   championSnapshots,
   leaderboardEntries,
   perInputLeaderboard,
+  sampleBattle,
   sampleInputs,
 } from './fixtures';
 
@@ -116,4 +118,14 @@ export const defaultHandlers = [
   http.get(`${BASE}/v1/inputs`, () =>
     HttpResponse.json({ items: sampleInputs, next_cursor: null }),
   ),
+
+  http.get(`${BASE}/v1/battles`, () => HttpResponse.json({ items: allBattles, next_cursor: null })),
+
+  http.get(`${BASE}/v1/battles/:battleId`, ({ params }) => {
+    const battleId = params.battleId as string;
+    if (battleId !== sampleBattle.id) {
+      return HttpResponse.json({ error: 'battle not found', code: 'not_found' }, { status: 404 });
+    }
+    return HttpResponse.json(sampleBattle);
+  }),
 ];
