@@ -76,7 +76,7 @@ export interface Bot {
   portrait_url: string | null;
   rank: number | null;
   record: { wins: number; losses: number; draws: number };
-  ko_percentage: number;                     // 0-100
+  ko_percentage: number; // 0-100
   signature_input: BotInputResult | null;
   achilles_heel: BotInputResult | null;
   recent_form: ReadonlyArray<'W' | 'L' | 'D'>;
@@ -95,10 +95,10 @@ export interface BotInputResult {
 export interface Achievement {
   id: string;
   name: string;
-  icon: string;            // lucide icon name OR emoji
+  icon: string; // lucide icon name OR emoji
   description: string;
-  unlocked_at: string;     // ISO
-  rarity_pct: number;      // 0-100, lower = rarer
+  unlocked_at: string; // ISO
+  rarity_pct: number; // 0-100, lower = rarer
 }
 
 export interface BotRun {
@@ -109,7 +109,7 @@ export interface BotRun {
   opponent_portrait_url: string | null;
   outcome: 'win' | 'loss' | 'draw' | 'no_contest';
   ko: boolean;
-  date: string;            // ISO
+  date: string; // ISO
 }
 
 export interface CursorPage<T> {
@@ -118,7 +118,7 @@ export interface CursorPage<T> {
 }
 
 export interface BotSnapshot {
-  date: string;            // ISO
+  date: string; // ISO
   rank: number;
 }
 
@@ -139,6 +139,7 @@ When the script regenerates `src/api/types.ts` from the backend OpenAPI, these n
 Each slice ends with `pnpm validate` green. Component tests are RED-first for state-bearing components (ProfileTabs, FighterCard hover states, FightHistoryTable pagination); presentational primitives (VSBadge, AchievementIconStrip, PortraitFallback) ship with smoke + axe per the kickoff §8 escape hatch.
 
 ### Slice 1 — types, MSW fixtures, query hooks (RED first)
+
 - `src/api/types.ts` shapes above.
 - `src/test/msw/fixtures.ts`: a curated set of bot personas — `rookieBot` (0-0-0, no portrait, no analysis), `championBot` (rank=1, full stats), `retiredBot`, `noAnalysisBot`, `noPortraitBot`. Hand-tuned to exercise all `<FighterCard />` variants.
 - `src/test/msw/handlers.ts`: `/v1/bots/:id` returns the matching fixture; `/v1/bots/:id/runs` returns paginated `BotRun[]`; `/v1/bots/:id/snapshots`; `/v1/bots/:id/inputs`; `/v1/bots/:id/analysis` returns `{ analysis: string }` with retry-eligible 503 for the no-analysis fixture.
@@ -147,12 +148,14 @@ Each slice ends with `pnpm validate` green. Component tests are RED-first for st
 - Exit: 5 hooks each round-trip through MSW; tests green.
 
 ### Slice 2 — design primitives the FighterCard needs (presentational)
+
 - `<VSBadge />`: 96px circular with diagonal hazard accent + the word "VS" in Bebas Neue. Reduced size + horizontal stripe for mobile.
 - `<PortraitFallback language>`: procedural silhouette per language. SVG, 1:1 aspect, shows a stylized icon (binary → terminal, go → gopher silhouette, node → leaf, python → snake). Uses corner color via inline style.
 - `<AchievementIconStrip achievements maxVisible>`: lucide icons in a row; "+N more" tooltip when overflow.
 - Smoke + axe per primitive.
 
 ### Slice 3 — `<FighterCard />` (the unit of TotT)
+
 - Single-bot card. Layout (top to bottom): hazard-stripe header, portrait area (corner-color border, fallback to procedural), nickname (Bebas Neue 48 desktop / 32 mobile), display_name + algorithm subtitle, weight class chip + record chip, stat grid (signature move, Achilles heel, KO%, recent form W/L symbols), achievement strip, optional champion belt overlay.
 - Variants handled internally based on bot prop:
   - rookie (0-0-0): replaces W-L-D with `<RecordChip variant="rookie" />`; hides recent form.
@@ -169,6 +172,7 @@ Each slice ends with `pnpm validate` green. Component tests are RED-first for st
   - keyboard focus surfaces the same hover state.
 
 ### Slice 4 — `<TaleOfTheTape />`
+
 - API per the kickoff supplemental:
   ```tsx
   <TaleOfTheTape
@@ -187,6 +191,7 @@ Each slice ends with `pnpm validate` green. Component tests are RED-first for st
 - Tests cover all four modes + single-fighter + mobile container query.
 
 ### Slice 5 — Profile sub-components
+
 - `<FightHistoryTable runs cursor onLoadMore>`: paginated table with opponent thumbnail, outcome chip, KO/DEC indicator, date. Click row → navigate to battle replay (Phase 4 placeholder).
 - `<PerformanceHeatmap data>`: 19 columns × 3 rows. Color-coded by relative time vs field — `combat-red` for "exposed here", `tech-cyan` for "finishing move", neutral for middle of field. Tooltip per cell shows input + time + rank.
 - `<RankHistoryChart snapshots>`: Recharts `<LineChart>`, theme-aware colors, gold accent on the current rank. Year markers as fight-card tape labels.
@@ -195,6 +200,7 @@ Each slice ends with `pnpm validate` green. Component tests are RED-first for st
 - Tests: each gets a smoke + axe; FightHistoryTable + ProfileTabs go through RED for behavior (pagination request, tab persistence in URL).
 
 ### Slice 6 — `<BotProfilePage />`
+
 - Replaces the Phase 1 placeholder.
 - Hero: `<TaleOfTheTape />` in single-fighter mode.
 - Below: `<ProfileTabs>` with four tabs (Fight History, Performance, Scouting Report, Achievements).
@@ -204,17 +210,20 @@ Each slice ends with `pnpm validate` green. Component tests are RED-first for st
 - Tests: full integration via MSW — render the page, verify TotT, switch tabs, assert each tab's data renders.
 
 ### Slice 7 — `<HeadToHeadPage />`
+
 - Replaces the Phase 1 placeholder.
 - Hero: `<TaleOfTheTape />` two-fighter mode.
 - Below the hero: shared-input performance comparison table (inputs both bots have run, side-by-side time + delta). `combat-red` highlight when the current bot loses badly; `victory-green` when wins decisively.
 - Tests: render with two fixtures, verify both names render, verify shared-input rows.
 
 ### Slice 8 — Visual regression baseline
+
 - `tests/e2e/tale-of-the-tape.spec.ts`: Playwright loads the dev-only `/dev/design-system` route in tot-test mode (a local sandbox route added behind `VITE_ENABLE_VISUAL_REGRESSION` that renders specific TotT variants in isolation). Snapshots: pre-fight, champion, rookie, mobile (Chromium 375px viewport), full profile.
 - Snapshots committed under `tests/e2e/__screenshots__/`.
 - CI runs Playwright on PR — gated on visual-regression workflow that we can keep optional in Phase 2 and tighten in Phase 6.
 
 ### Slice 9 — Close-out
+
 - Update `references/component-catalog.md` with every new component (FighterCard, TaleOfTheTape, VSBadge, PortraitFallback, AchievementIconStrip, PerformanceHeatmap, RankHistoryChart, ProfileTabs, FightHistoryTable, ScoutingReport, BotProfilePage, HeadToHeadPage).
 - Update `references/api-contracts.md` Phase 2 section with the actual endpoints consumed.
 - Update `CLAUDE.md` phase table.

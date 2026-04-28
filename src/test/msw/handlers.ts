@@ -1,5 +1,13 @@
 import { http, HttpResponse } from 'msw';
 
+import {
+  allBotsById,
+  championAnalysis,
+  championInputs,
+  championRuns,
+  championSnapshots,
+} from './fixtures';
+
 const BASE = 'http://api.test';
 
 export const defaultHandlers = [
@@ -22,4 +30,52 @@ export const defaultHandlers = [
   http.get(`${BASE}/v1/users/me`, () =>
     HttpResponse.json({ id: 'usr_test_1', display_name: 'anonymous-test-0000' }),
   ),
+
+  http.get(`${BASE}/v1/bots/:botId`, ({ params }) => {
+    const botId = params.botId as string;
+    const bot = allBotsById[botId];
+    if (!bot) {
+      return HttpResponse.json({ error: 'bot not found', code: 'not_found' }, { status: 404 });
+    }
+    return HttpResponse.json(bot);
+  }),
+
+  http.get(`${BASE}/v1/bots/:botId/runs`, ({ params }) => {
+    const botId = params.botId as string;
+    if (!allBotsById[botId]) {
+      return HttpResponse.json({ error: 'bot not found', code: 'not_found' }, { status: 404 });
+    }
+    return HttpResponse.json({ items: championRuns, next_cursor: null });
+  }),
+
+  http.get(`${BASE}/v1/bots/:botId/snapshots`, ({ params }) => {
+    const botId = params.botId as string;
+    if (!allBotsById[botId]) {
+      return HttpResponse.json({ error: 'bot not found', code: 'not_found' }, { status: 404 });
+    }
+    return HttpResponse.json(championSnapshots);
+  }),
+
+  http.get(`${BASE}/v1/bots/:botId/inputs`, ({ params }) => {
+    const botId = params.botId as string;
+    if (!allBotsById[botId]) {
+      return HttpResponse.json({ error: 'bot not found', code: 'not_found' }, { status: 404 });
+    }
+    return HttpResponse.json(championInputs);
+  }),
+
+  http.get(`${BASE}/v1/bots/:botId/analysis`, ({ params }) => {
+    const botId = params.botId as string;
+    const bot = allBotsById[botId];
+    if (!bot) {
+      return HttpResponse.json({ error: 'bot not found', code: 'not_found' }, { status: 404 });
+    }
+    if (!bot.analysis_url) {
+      return HttpResponse.json(
+        { error: 'analysis not available', code: 'analysis_unavailable' },
+        { status: 503 },
+      );
+    }
+    return HttpResponse.json(championAnalysis);
+  }),
 ];

@@ -3,9 +3,17 @@ import { renderHook, waitFor } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
 import { describe, expect, it } from 'vitest';
 
+import { championBot, noAnalysisBot, rookieBot } from '@/test/msw/fixtures';
 import { server } from '@/test/msw/server';
 
-import { usePing } from './queries';
+import {
+  useBot,
+  useBotAnalysis,
+  useBotInputPerformance,
+  useBotRuns,
+  useBotSnapshots,
+  usePing,
+} from './queries';
 import { createQueryClient } from './queryClient';
 
 import type { ReactNode } from 'react';
@@ -28,9 +36,75 @@ describe('usePing', () => {
         HttpResponse.json({ error: 'down', code: 'unavailable' }, { status: 503 }),
       ),
     );
-
     const { result } = renderHook(() => usePing(), { wrapper });
     await waitFor(() => expect(result.current.isError).toBe(true), { timeout: 5000 });
     expect(result.current.error).toMatchObject({ name: 'ApiError', status: 503 });
+  });
+});
+
+describe('useBot', () => {
+  it('returns the bot fixture by id', async () => {
+    const { result } = renderHook(() => useBot(championBot.id), { wrapper });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data?.nickname).toBe('The Algorithm');
+    expect(result.current.data?.rank).toBe(1);
+  });
+
+  it('returns 404 for unknown bot', async () => {
+    const { result } = renderHook(() => useBot('bot_does_not_exist'), { wrapper });
+    await waitFor(() => expect(result.current.isError).toBe(true), { timeout: 5000 });
+    expect(result.current.error).toMatchObject({ status: 404 });
+  });
+
+  it('is disabled when botId is undefined', () => {
+    const { result } = renderHook(() => useBot(undefined), { wrapper });
+    expect(result.current.fetchStatus).toBe('idle');
+  });
+});
+
+describe('useBotRuns', () => {
+  it('returns paginated runs for a bot', async () => {
+    const { result } = renderHook(() => useBotRuns(championBot.id), { wrapper });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data?.items).toHaveLength(3);
+    expect(result.current.data?.next_cursor).toBeNull();
+  });
+});
+
+describe('useBotSnapshots', () => {
+  it('returns rank snapshots over time', async () => {
+    const { result } = renderHook(() => useBotSnapshots(championBot.id), { wrapper });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data).toHaveLength(4);
+    expect(result.current.data?.at(-1)?.rank).toBe(1);
+  });
+});
+
+describe('useBotInputPerformance', () => {
+  it('returns per-input performance entries', async () => {
+    const { result } = renderHook(() => useBotInputPerformance(championBot.id), { wrapper });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data?.[0]?.input_id).toBe('in_killer_quicksort');
+  });
+});
+
+describe('useBotAnalysis', () => {
+  it('returns the AI analysis for a bot with analysis_url', async () => {
+    const { result } = renderHook(() => useBotAnalysis(championBot.id), { wrapper });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data?.analysis).toMatch(/introsort/i);
+  });
+
+  it('surfaces 503 when analysis is unavailable', async () => {
+    const { result } = renderHook(() => useBotAnalysis(noAnalysisBot.id), { wrapper });
+    await waitFor(() => expect(result.current.isError).toBe(true), { timeout: 5000 });
+    expect(result.current.error).toMatchObject({ status: 503, code: 'analysis_unavailable' });
+  });
+
+  it('respects enabled=false', () => {
+    const { result } = renderHook(() => useBotAnalysis(rookieBot.id, { enabled: false }), {
+      wrapper,
+    });
+    expect(result.current.fetchStatus).toBe('idle');
   });
 });
