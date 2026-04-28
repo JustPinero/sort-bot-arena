@@ -31,6 +31,7 @@ When activated: add `useHoverIntent(delay)` to `src/hooks/`, add `<HoverPreviewP
 Audio deferred from Phase 4. The audio store and lazy-load shape are in place from Phase 1; what's missing is asset sourcing and the `useFightAudio()` hook that wires SSE events to Howler triggers.
 
 When activated:
+
 1. Source 4 royalty-free walkout cues (one per language), 1 ambient crowd loop, 1 round-start ding, 1 round-loss thud, 1 KO fanfare. Total budget ~250KB.
 2. Drop into `public/audio/`.
 3. Implement `src/lib/audio.ts` (Howler wrapper, dynamic-imported only when `useAudioStore.enabled === true`).
@@ -41,6 +42,7 @@ When activated:
 ## D-5 (2026-04-28) — phase-4-arena (planned)
 
 LiveBattle "extras" deferred. Kickoff explicitly tags these as polish:
+
 - Special move callouts (algorithm name slam on dramatic round wins).
 - Crowd silhouettes along the bottom (animated SVG, hands up on KOs).
 - Stoppage referee overlay on `fighter_downed` events.

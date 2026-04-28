@@ -125,3 +125,75 @@ export interface PerInputLeaderboardEntry {
   time_seconds: number;
   achieved_at: string;
 }
+
+export type Corner = 'red' | 'blue';
+export type BattleStatus = 'pre_fight' | 'live' | 'completed';
+export type BattleOutcome = 'ko' | 'tko' | 'decision' | 'draw' | 'no_contest';
+
+export interface BattleFighter {
+  bot_id: string;
+  nickname: string | null;
+  display_name: string;
+  language: string;
+  portrait_url: string | null;
+  corner: Corner;
+  rank: number | null;
+  trash_talk?: string | null;
+}
+
+export interface BattleRankChange {
+  previous_champion_bot_id: string;
+  new_champion_bot_id: string;
+}
+
+export interface Battle {
+  id: string;
+  status: BattleStatus;
+  fighter_a: BattleFighter;
+  fighter_b: BattleFighter;
+  rounds_total: number;
+  current_round: number;
+  scheduled_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+  winner_bot_id: string | null;
+  outcome: BattleOutcome | null;
+  rank_change?: BattleRankChange;
+}
+
+export type BattleEvent =
+  | { type: 'walkout'; bot_id: string; ts: string }
+  | { type: 'fight_start'; ts: string }
+  | { type: 'round_start'; round: number; input_id: string; input_name: string; ts: string }
+  | {
+      type: 'round_progress';
+      round: number;
+      bot_id: string;
+      progress_pct: number;
+      ts: string;
+    }
+  | {
+      type: 'round_end';
+      round: number;
+      winner_bot_id: string;
+      a_time_seconds: number;
+      b_time_seconds: number;
+      delta_seconds: number;
+      ts: string;
+    }
+  | {
+      type: 'fighter_downed';
+      bot_id: string;
+      reason: 'timeout' | 'crash' | 'oom';
+      ts: string;
+    }
+  | { type: 'commentary'; text: string; ts: string }
+  | {
+      type: 'fight_end';
+      winner_bot_id: string | null;
+      outcome: BattleOutcome;
+      a_rounds_won: number;
+      b_rounds_won: number;
+      rank_change?: BattleRankChange;
+      ts: string;
+    };
