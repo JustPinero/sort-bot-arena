@@ -1,14 +1,21 @@
 # SORT ARENA WEB — PROJECT KICKOFF (v3.5 template)
+
 # ============================================================
+
 # Generated from universal-v3.5 kickoff template.
+
 # All [ASK ME] fields resolved during pre-build planning.
+
 # Companion to sort-bot-api-kickoff.md (the backend repo).
+
 # [CLAUDE WILL HANDLE] sections will populate during initialization.
-# ============================================================
-
 
 # ============================================================
+
+# ============================================================
+
 # SECTION 1: PROJECT IDENTITY
+
 # ============================================================
 
 **App Name:** sort-arena-web
@@ -21,39 +28,50 @@
 
 **Team:** Solo. Companion project to sort-bot-api. Audience is portfolio reviewers, fellow engineers, and anyone the developer wants to show off the system to.
 
-
 # ============================================================
+
 # SECTION 2: STACK DEFINITION
+
 # ============================================================
 
 ## Frontend framework
+
 **Frontend:** Vite + React 18 + TypeScript. Pure SPA, no SSR — content is dynamic and authenticated, SEO is not a goal, and Vite's dev experience is unmatched for this kind of project.
 
 ## Backend / API layer
+
 **Backend:** N/A — this frontend consumes sort-bot-api (separate repo). All persistence, auth, AI integration, and business logic live in the backend. The frontend is a pure presentation layer.
 
 ## Primary language
+
 **Language:** TypeScript, strict mode. Backend API contract types are auto-generated from sort-bot-api's OpenAPI spec via `openapi-typescript`, so frontend imports types directly. When backend contracts change, frontend won't compile until updated. End-to-end type safety across repos is the architectural payoff for going split-repo.
 
 ## Database
+
 **Database:** N/A — server state lives in sort-bot-api. Frontend persistence is limited to: API key in localStorage, theme preference in localStorage, audio toggle in localStorage, dismissed-tooltips set in localStorage. Server state cached via TanStack Query (5-minute default stale time).
 
 ## Auth
+
 **Auth:** Bearer-token API key obtained from sort-bot-api. Frontend auto-provisions a guest user on first visit (POST /v1/users with a generated friendly name like "anonymous-otter-4729"), stashes the returned key in localStorage, and includes it in every authenticated API call via `Authorization: Bearer <key>` header. User can later "claim" the guest profile by setting a real display name and optional email — backend supports this without any new auth flow. Magic-link recovery is documented as future work in the backend; not required for this frontend.
 
 ## Hosting / deployment target
+
 **Hosting:** Vercel. Static SPA deployment with `vercel.json` SPA-rewrite for client-side routing. Preview deployments per PR. CSP configured to allow the backend API origin and the necessary CDNs (fonts, Leonardo-served portraits if proxied through backend). No server-side runtime needed — all dynamic data comes from the API.
 
 ## Testing framework
+
 **Testing:** Vitest for unit tests + React Testing Library for component tests + Playwright for E2E flows on critical paths (submit-and-watch-evaluate, view-leaderboard-click-into-profile, start-battle-watch-completion). Visual regression testing via Playwright screenshots on the Tale of the Tape and KO graphic — these are visually critical components and a regression there would be embarrassing.
 
 ## Key third-party integrations
+
 **Integrations (all consumed via backend, no direct frontend keys):**
+
 - **sort-bot-api** — every page reads from this. OpenAPI-generated TypeScript client.
 - **Leonardo.ai bot portraits** — frontend never calls Leonardo directly; backend proxies. Frontend just renders the `portrait_url` returned on the bot record.
 - **Anthropic Claude** for trash-talk and AI analysis — proxied through backend, frontend just reads `bot.trash_talk` and `bot.analysis` fields.
 
 **Frontend-only libraries:**
+
 - **TanStack Query** for server state caching and synchronization.
 - **Zustand** for client state (current user, theme, audio toggle, active battle subscription).
 - **React Router v6** for routing.
@@ -66,28 +84,32 @@
 - **shadcn/ui** for base component primitives, heavily themed.
 - **openapi-typescript** for type generation from the backend's OpenAPI spec.
 
-
 # ============================================================
+
 # SECTION 3: CORE DATA MODEL
+
 # ============================================================
 
 **Core data entity:** None — this is a presentation-layer frontend that doesn't own data. The conceptual entities (Bot/Fighter, Battle, Tournament, User) live in sort-bot-api and are consumed via the typed API client.
 
 **Client-side state model (Zustand stores):**
+
 - `useAuthStore` — current user (id, display_name, api_key), guest_provisioned flag, claim status.
 - `useThemeStore` — preferred theme (dark | light | system), per-route forced theme overrides.
 - `useAudioStore` — audio enabled toggle, master volume, walkout-sounds enabled.
 - `useBattleStore` — currently-subscribed battle ID, accumulated event log, derived state (round counts, current scores, animation queue).
 
 **Server-state caching (TanStack Query):**
+
 - Query keys mirror API resource paths: `['bots', botId]`, `['leaderboard', filters]`, `['battles', battleId]`, etc.
 - 5-minute default stale time on read-mostly resources (leaderboard, profiles).
 - Real-time resources (active battles, live event feed) bypass cache, use SSE subscriptions.
 - Optimistic updates on submission (bot appears in user's collection immediately, rolled back on failure).
 
-
 # ============================================================
+
 # SECTION 4: PHASE BREAKDOWN
+
 # ============================================================
 
 **Phase 1 — Foundation & Design System:**
@@ -114,11 +136,11 @@ Exit criteria: leaderboard loads in under 1 second. Filters apply instantly (ser
 **Phase 4 — The Arena (centerpiece feature):**
 What gets built: This is the showstopper. `<ArenaIndexPage />` at `/arena` lists current/recent/upcoming battles with the active one featured prominently (auto-redirect option to live view). `<BattlePage />` at `/arena/:battleId` is the main event. Three sequential phases on the same screen, transitioning into each other:
 
-*Pre-fight phase (`<PreFightStaredown />`).* Both fighters' Tale of the Tape cards render with a slow Ken Burns animation on each. AI-generated trash talk (from the backend trash-talk endpoint) displays in quote bubbles below each portrait. Countdown timer in giant Bebas Neue 96px overhead. "ENTER ARENA" button at bottom. Optional walkout audio cues triggered for each fighter (Howler.js, off by default unless audio toggle is on).
+_Pre-fight phase (`<PreFightStaredown />`)._ Both fighters' Tale of the Tape cards render with a slow Ken Burns animation on each. AI-generated trash talk (from the backend trash-talk endpoint) displays in quote bubbles below each portrait. Countdown timer in giant Bebas Neue 96px overhead. "ENTER ARENA" button at bottom. Optional walkout audio cues triggered for each fighter (Howler.js, off by default unless audio toggle is on).
 
-*Bout phase (`<LiveBattle />`).* Split-screen layout: left half is bot A, right half is bot B, divided by a thin VS-themed center spine. Each side has: the AI-generated portrait (full-color, animated), a health bar below it (segment-display style, starts at 100, ticks down with each round loss), the corner color glowing around the portrait, the current round timer in LED display style. Center spine: current input being processed (visualized as small bars for arrays under 100 elements, abstracted heatmap for larger), round counter "ROUND 7/19," last-round-result callout that fades in/out. Right side panel (collapsible): scrolling commentary feed showing SSE events as broadcast-ticker lines ("BOT A CRUSHES THE PARTIALLY-SORTED INPUT — MASTERCLASS"), AI-generated commentary on dramatic moments (cached and rate-limited via the backend). Stat slam-in overlays trigger on round completion: "ROUND 7: BOT A WINS BY 0.041s — 3.2x FASTER" — appears via slam-in animation, holds 2 seconds, slides out. When a bot loses a round, their portrait reacts: brief shake, red flash, health bar tick down. When a bot times out or crashes: bigger shake, "DOWNED!" callout, opponent gets a small free attack animation. The Digimon-style attack visualization: when a round result comes in, the winner's portrait does a quick forward lunge (Framer Motion `whileTap`-style transform), a particle beam fires across the screen toward the loser (CSS keyframe animation, color matches winner's corner color), the loser's portrait does the damage reaction. Implementation note: the entire bout phase is driven by a single `useBattleEvents(battleId)` SSE hook that returns the event log, with a derived state machine that translates events into animation cues.
+_Bout phase (`<LiveBattle />`)._ Split-screen layout: left half is bot A, right half is bot B, divided by a thin VS-themed center spine. Each side has: the AI-generated portrait (full-color, animated), a health bar below it (segment-display style, starts at 100, ticks down with each round loss), the corner color glowing around the portrait, the current round timer in LED display style. Center spine: current input being processed (visualized as small bars for arrays under 100 elements, abstracted heatmap for larger), round counter "ROUND 7/19," last-round-result callout that fades in/out. Right side panel (collapsible): scrolling commentary feed showing SSE events as broadcast-ticker lines ("BOT A CRUSHES THE PARTIALLY-SORTED INPUT — MASTERCLASS"), AI-generated commentary on dramatic moments (cached and rate-limited via the backend). Stat slam-in overlays trigger on round completion: "ROUND 7: BOT A WINS BY 0.041s — 3.2x FASTER" — appears via slam-in animation, holds 2 seconds, slides out. When a bot loses a round, their portrait reacts: brief shake, red flash, health bar tick down. When a bot times out or crashes: bigger shake, "DOWNED!" callout, opponent gets a small free attack animation. The Digimon-style attack visualization: when a round result comes in, the winner's portrait does a quick forward lunge (Framer Motion `whileTap`-style transform), a particle beam fires across the screen toward the loser (CSS keyframe animation, color matches winner's corner color), the loser's portrait does the damage reaction. Implementation note: the entire bout phase is driven by a single `useBattleEvents(battleId)` SSE hook that returns the event log, with a derived state machine that translates events into animation cues.
 
-*Decision phase (`<PostFightDecision />`).* Battle ends when all rounds complete or one bot can't continue. Final scorecard displays prominently: rounds won by each, total time differential, winner determined by SSE stream's terminal event. KO graphic if it was a blowout (≥80% rounds to one fighter): full-screen Bebas Neue 96px "KNOCKOUT" with combat-red glow, fighter loser's portrait with heavy damage filter, winner's portrait with championship glow. Decision graphic if narrow: "DECISION VICTORY" with the per-round scorecard tabulated. Champion's belt overlay with glow-cycle if the winner just dethroned the previous #1 (compares pre-battle and post-battle ranks). Shareable highlight: auto-generated "FIGHT POSTER" image — both portraits, result, date, social-share button (opens native share sheet, falls back to copy-link). Replay button: re-renders the battle from the event log at 4× speed for highlights. "Next Fight" button: pulls another active or recent battle.
+_Decision phase (`<PostFightDecision />`)._ Battle ends when all rounds complete or one bot can't continue. Final scorecard displays prominently: rounds won by each, total time differential, winner determined by SSE stream's terminal event. KO graphic if it was a blowout (≥80% rounds to one fighter): full-screen Bebas Neue 96px "KNOCKOUT" with combat-red glow, fighter loser's portrait with heavy damage filter, winner's portrait with championship glow. Decision graphic if narrow: "DECISION VICTORY" with the per-round scorecard tabulated. Champion's belt overlay with glow-cycle if the winner just dethroned the previous #1 (compares pre-battle and post-battle ranks). Shareable highlight: auto-generated "FIGHT POSTER" image — both portraits, result, date, social-share button (opens native share sheet, falls back to copy-link). Replay button: re-renders the battle from the event log at 4× speed for highlights. "Next Fight" button: pulls another active or recent battle.
 
 Implementation extras: damage states on portraits (CSS filters as health drops — slight red tint at 50%, scan-line glitch at 25%, heavy damage at 10%), special move callouts (when a bot wins a round dramatically: algorithm name in Bebas Neue with subtitle, e.g. "MERGESORT — DIVIDE AND CONQUER," 1.5 seconds), crowd silhouettes (animated SVG along bottom, hands up on KOs), hype meter (top of screen, fills on dramatic moments, when full triggers "crowd going wild" effect — slight zoom + shake + saturation bump for 1 second), stoppage referee (when a bot crashes mid-round: "TECHNICAL KNOCKOUT — REFEREE WAVES IT OFF AT 0:14" referee silhouette overlay), post-fight interview (AI-generated victor's quote for top-10 wins or upsets, rendered as quote bubble after decision graphic).
 
@@ -150,15 +172,18 @@ Stretch (do if time permits): animated sort visualization mode in the arena (tog
 
 Exit criteria: all routes ship and feel polished. Lighthouse Performance ≥ 85, Accessibility = 100, Best Practices ≥ 95 on the leaderboard, profile, and arena pages. All visual regression tests pass. Mobile responsive on profile and leaderboard pages (arena is desktop-first, accepted limitation). Production deployment to Vercel with SPA rewrite, CSP headers, custom domain optional.
 
-
 # ============================================================
+
 # SECTION 5: ENVIRONMENT VARIABLES
+
 # ============================================================
 
 **Required:**
+
 - `VITE_API_BASE_URL`: URL of the sort-bot-api backend (e.g., `https://api.sort-arena.dev` or `http://localhost:8080` in dev)
 
 **Optional:**
+
 - `VITE_GUEST_NAME_PREFIX` (default: `anonymous-`): prefix for auto-generated guest names
 - `VITE_ENABLE_AUDIO_BY_DEFAULT` (default: `false`): if true, audio toggle starts on (rare, mostly for dev)
 - `VITE_ENABLE_VISUAL_REGRESSION` (default: `false`): enables `/dev/design-system` route and Playwright visual-regression mode
@@ -167,12 +192,14 @@ Exit criteria: all routes ship and feel polished. Lighthouse Performance ≥ 85,
 
 `.env.example` checked in. `.env.local` gitignored. Vite will fail to start if `VITE_API_BASE_URL` is missing — `src/api/client.ts` validates this at module load.
 
-
 # ============================================================
+
 # SECTION 6: KNOWN CONSTRAINTS
+
 # ============================================================
 
 **In scope:**
+
 - Full UI for every backend endpoint: leaderboards (overall + per-input + per-size), bot profiles, head-to-head, battles with live SSE, tournaments with live SSE, submission with Monaco editor, custom inputs, achievements, hall of fame, homepage broadcast feed, embeddable badges.
 - BattleBots × UFC theming everywhere — vocabulary swap (bots = fighters, weight classes = languages, etc.), broadcast-quality presentation, Tale of the Tape, KO graphics, championship belts.
 - Light mode support on data routes; forced dark on combat routes.
@@ -180,6 +207,7 @@ Exit criteria: all routes ship and feel polished. Lighthouse Performance ≥ 85,
 - a11y baseline: full keyboard nav, focus management, semantic landmarks, screen-reader friendly on data routes (arena is best-effort given the heavy visual emphasis).
 
 **Out of scope:**
+
 - Server-side rendering / SSG. Pure SPA.
 - Native mobile apps. Mobile-responsive web is enough.
 - Real user authentication beyond the API-key guest flow. No password reset, no OAuth, no email verification — those are documented as future work in sort-bot-api's ARCHITECTURE.md.
@@ -190,226 +218,417 @@ Exit criteria: all routes ship and feel polished. Lighthouse Performance ≥ 85,
 - Real-money / payments / subscriptions. This is a portfolio piece.
 
 **Hard constraints:**
+
 - The frontend MUST work without backend AI features. If `analysis_url` is null on a bot, the scouting report tab shows a clear "ANALYSIS NOT AVAILABLE" state. If trash talk fails to generate, the pre-fight phase shows generic taunts. Graceful degradation, never broken UI.
 - The frontend MUST work without bot portraits. Procedural silhouette per language as fallback. Portrait failures don't block bot profile loading.
 - The frontend MUST NOT log API keys or any user-identifying tokens. Sentry / error-tracking integration (if added later) must filter localStorage values.
 - Page weight budget: leaderboard initial load < 200KB JS gzip, profile page < 250KB gzip, arena page < 400KB gzip (allows for Framer Motion + animation libs).
 - Lighthouse Performance ≥ 85 on data routes. Accessibility = 100 on all routes (the arena's heavy visuals will pull Performance down — we accept that there but enforce a11y everywhere).
 
-
 # ============================================================
+
 # SECTION 6B: DEPLOYMENT LANDMINES
+
 # ============================================================
+
 # [CLAUDE WILL HANDLE] — generate references/deployment-landmines.md
+
 # during Phase 1 init, scoped to: Vercel + Vite + React + SPA.
+
 #
+
 # Specifically include warnings from these template categories:
+
 # - Vercel: SPA rewrite rule required for client-side routing,
-#   VITE_/NEXT_PUBLIC_ vars baked at build time, secrets never
-#   in client-prefixed env vars, env vars set for ALL environments
-#   (Prod + Preview + Dev), CSP must allow the backend API origin
-#   and font CDNs (fonts.googleapis.com, fonts.gstatic.com,
-#   cdn.jsdelivr.net for fontsource), CSP must include
-#   img-src for the backend domain serving Leonardo portraits.
+
+# VITE*/NEXT_PUBLIC* vars baked at build time, secrets never
+
+# in client-prefixed env vars, env vars set for ALL environments
+
+# (Prod + Preview + Dev), CSP must allow the backend API origin
+
+# and font CDNs (fonts.googleapis.com, fonts.gstatic.com,
+
+# cdn.jsdelivr.net for fontsource), CSP must include
+
+# img-src for the backend domain serving Leonardo portraits.
+
 # - Vite specifically: build output goes to dist/, vercel.json
-#   "outputDirectory": "dist", "rewrites" with source "/(.*)"
-#   destination "/index.html". Env vars accessed via import.meta.env.
-#   Use mode-specific env files (.env.production, .env.preview)
-#   for environment-specific config.
+
+# "outputDirectory": "dist", "rewrites" with source "/(.\*)"
+
+# destination "/index.html". Env vars accessed via import.meta.env.
+
+# Use mode-specific env files (.env.production, .env.preview)
+
+# for environment-specific config.
+
 # - SPA + SSE: EventSource opens a long-lived connection. Vercel's
-#   default function timeout doesn't apply (frontend is static),
-#   but the backend's load balancer (e.g., Railway) needs configured
-#   read timeout to keep SSE connections alive. Document this for
-#   the deploy story.
+
+# default function timeout doesn't apply (frontend is static),
+
+# but the backend's load balancer (e.g., Railway) needs configured
+
+# read timeout to keep SSE connections alive. Document this for
+
+# the deploy story.
+
 # - Generic: validate env vars at module load (throw on missing
-#   VITE_API_BASE_URL); never use echo to pipe env vars (use printf);
-#   git secrets check on staged files.
 
+# VITE_API_BASE_URL); never use echo to pipe env vars (use printf);
+
+# git secrets check on staged files.
 
 # ============================================================
+
 # SECTION 6C: SECURITY LANDMINES
+
 # ============================================================
+
 # [CLAUDE WILL HANDLE] — generate references/security-landmines.md
+
 # during Phase 1 init, customized to a SPA consuming an external API.
+
 #
+
 # Points to call out:
+
 # - Bot source code submitted via the editor is sent to the API
-#   AS-IS — no client-side sanitization. The backend sandbox is
-#   the security boundary. Frontend treats user code as opaque.
+
+# AS-IS — no client-side sanitization. The backend sandbox is
+
+# the security boundary. Frontend treats user code as opaque.
+
 # - User-generated content (bot nicknames, custom inputs, trash talk
-#   from the API) MUST be rendered with React's default escaping —
-#   never use dangerouslySetInnerHTML on any API response. Even the
-#   AI-generated trash talk and analysis: render as text, not HTML.
+
+# from the API) MUST be rendered with React's default escaping —
+
+# never use dangerouslySetInnerHTML on any API response. Even the
+
+# AI-generated trash talk and analysis: render as text, not HTML.
+
 # - localStorage stores the API key. localStorage is XSS-vulnerable;
-#   ensure: strict CSP, no innerHTML usage, no eval, no Function
-#   constructor, dependency audit (no known-malicious packages).
+
+# ensure: strict CSP, no innerHTML usage, no eval, no Function
+
+# constructor, dependency audit (no known-malicious packages).
+
 # - Monaco editor: never use eval on the contents. The editor is
-#   a TEXT input with syntax highlighting, the source string goes
-#   straight to the API as a file upload. Treat the editor's value
-#   as untrusted user input even if it came from the user.
+
+# a TEXT input with syntax highlighting, the source string goes
+
+# straight to the API as a file upload. Treat the editor's value
+
+# as untrusted user input even if it came from the user.
+
 # - Image src for portraits: only allow URLs from the backend's
-#   configured domain (not arbitrary URLs from API responses).
-#   Even if the backend returns a Leonardo CDN URL directly, validate
-#   against an allowlist before rendering. Defense in depth.
+
+# configured domain (not arbitrary URLs from API responses).
+
+# Even if the backend returns a Leonardo CDN URL directly, validate
+
+# against an allowlist before rendering. Defense in depth.
+
 # - Every fetch has AbortController timeout (15s default, 60s for SSE).
-#   No unbounded requests.
+
+# No unbounded requests.
+
 # - PATCH/PUT to API: validate field sets client-side (zod schemas)
-#   in addition to the backend's validation. UX wins from instant
-#   feedback; security wins are doubled validation.
+
+# in addition to the backend's validation. UX wins from instant
+
+# feedback; security wins are doubled validation.
+
 # - SSE event handling: validate every event's shape via zod schema
-#   before applying state changes. A compromised backend or
-#   man-in-the-middle could inject malformed events; treat all
-#   incoming events as untrusted until validated.
 
+# before applying state changes. A compromised backend or
+
+# man-in-the-middle could inject malformed events; treat all
+
+# incoming events as untrusted until validated.
 
 # ============================================================
+
 # SECTION 7: WHAT GETS GENERATED
+
 # ============================================================
+
 # [TEMPLATE BOILERPLATE — UNCHANGED]
+
 # Generate the full v3.5 infrastructure as specified in the
+
 # template: CLAUDE.md (thin brain, ~50-60 lines), all skills
+
 # (test-audit, bughunt, optimize, drift-audit, course-correction,
+
 # coding-standards, session-handoff, pre-deploy), all subagents
+
 # (audit-runner, code-reviewer, debugger), all commands
+
 # (run-audits, individual audit commands, handoff, course-correct,
+
 # pre-deploy, phase-complete, ci-update, defer, activate), all
+
 # hooks (PostCompact recovery, PreToolUse secret check,
+
 # PostToolUse formatter — `prettier --write` for .ts/.tsx files,
+
 # PostToolUse a11y lint via jsx-a11y for .tsx files,
+
 # UserPromptSubmit working-state check), Git workflow (phase
+
 # branches), CI pipeline (progressive — lint via eslint with
+
 # typescript + jsx-a11y + react-hooks plugins, type check via
+
 # `tsc --noEmit`, unit tests via vitest, E2E via playwright on
+
 # tagged-complete flows), local-CI parity via scripts/validate.sh.
+
 #
+
 # Stack-specific coding standards to add to coding-standards skill:
+
 # - Strict TypeScript. No `any` without an explicit comment justifying.
+
 # - All API calls go through the typed client (src/api/client.ts).
-#   Never call fetch directly outside of that module.
+
+# Never call fetch directly outside of that module.
+
 # - Server state via TanStack Query, client state via Zustand,
-#   component state via useState. Never the wrong tool for the
-#   wrong category.
+
+# component state via useState. Never the wrong tool for the
+
+# wrong category.
+
 # - Animations via Framer Motion `<motion.div>` components.
-#   No raw CSS keyframes for complex animations (simple ones via
-#   the Tailwind animation tokens are fine).
+
+# No raw CSS keyframes for complex animations (simple ones via
+
+# the Tailwind animation tokens are fine).
+
 # - Forms via react-hook-form + zod. Never raw onChange on inputs
-#   except for trivial UI state.
+
+# except for trivial UI state.
+
 # - Components: PascalCase named exports, one component per file
-#   for top-level components, colocated test files (`<Name>.test.tsx`).
+
+# for top-level components, colocated test files (`<Name>.test.tsx`).
+
 # - Styling: Tailwind utility classes preferred. CSS modules only
-#   when a component has truly complex styles (>30 lines of styling).
+
+# when a component has truly complex styles (>30 lines of styling).
+
 # - a11y: every interactive element needs proper role, label, and
-#   keyboard handling. jsx-a11y violations block CI.
+
+# keyboard handling. jsx-a11y violations block CI.
+
 # - Imports: ordered (1) external packages, (2) internal absolute
-#   imports via @/ alias, (3) relative imports. Enforced by eslint.
+
+# imports via @/ alias, (3) relative imports. Enforced by eslint.
+
 # - No console.log in committed code. console.warn/error allowed
-#   for genuine warnings/errors with context.
+
+# for genuine warnings/errors with context.
+
 #
+
 # Reference docs to generate during Phase 1:
+
 # - references/architecture.md (the load-bearing senior doc)
+
 # - references/api-contracts.md (mirror of OpenAPI types from backend)
+
 # - references/component-catalog.md (PROJECT-SPECIFIC: every reusable
-#   component with its API and visual spec — Tale of the Tape,
-#   LED Display, Hazard Stripes, Record Chip, etc.)
+
+# component with its API and visual spec — Tale of the Tape,
+
+# LED Display, Hazard Stripes, Record Chip, etc.)
+
 # - references/design-system.md (drop in the entire content of
-#   sort-arena-web-design-tokens.md — that doc IS this reference)
+
+# sort-arena-web-design-tokens.md — that doc IS this reference)
+
 # - references/routing.md (PROJECT-SPECIFIC: route table with
-#   layout, theme policy, auth requirements per route)
+
+# layout, theme policy, auth requirements per route)
+
 # - references/state-management.md (PROJECT-SPECIFIC: Zustand
-#   stores, TanStack Query patterns, SSE consumption hooks)
+
+# stores, TanStack Query patterns, SSE consumption hooks)
+
 # - references/env-vars.md
+
 # - references/deployment-landmines.md (per Section 6B)
+
 # - references/security-landmines.md (per Section 6C)
 
+# ============================================================
+
+# SECTION 8 / 8B / 9: ACTION LOOP, REQUEST FORMAT, DEBT MGMT
 
 # ============================================================
-# SECTION 8 / 8B / 9: ACTION LOOP, REQUEST FORMAT, DEBT MGMT
-# ============================================================
+
 # [TEMPLATE BOILERPLATE — UNCHANGED]
+
 # Use the v3.5 action loop verbatim: Prime → Plan → RED → GREEN
+
 # → Validate. Use the request file format from Section 8B
+
 # verbatim. Use the debt management workflow from Section 9
+
 # verbatim including /defer and /activate commands.
+
 #
+
 # Frontend-specific note on the RED escape hatch: "pure
+
 # presentational components with ZERO business logic" includes
+
 # the design-system primitives (HazardStripes, LEDDisplay, etc.)
+
 # and the static page layouts. State-bearing components (forms,
+
 # editors, battle viewer, SSE consumers) MUST go through RED
+
 # first.
 
+# ============================================================
+
+# DIRECTORY STRUCTURE
 
 # ============================================================
-# DIRECTORY STRUCTURE
-# ============================================================
+
 # [TEMPLATE BOILERPLATE — UNCHANGED]
+
 # Generate the standard v3.5 directory structure at project init,
+
 # adapted for Vite + React layout:
+
 #
+
 # src/
+
 # ├── api/
-# │   ├── client.ts             # fetch wrapper + auth
-# │   ├── types.ts              # generated from OpenAPI
-# │   ├── queries.ts            # TanStack Query hooks
-# │   └── sse.ts                # EventSource hooks
+
+# │ ├── client.ts # fetch wrapper + auth
+
+# │ ├── types.ts # generated from OpenAPI
+
+# │ ├── queries.ts # TanStack Query hooks
+
+# │ └── sse.ts # EventSource hooks
+
 # ├── components/
-# │   ├── ui/                   # shadcn primitives, themed
-# │   ├── design-system/        # HazardStripes, LEDDisplay, RecordChip, etc.
-# │   ├── fighter/              # TaleOfTheTape, FighterCard, ProfileTabs
-# │   ├── arena/                # PreFightStaredown, LiveBattle, PostFightDecision
-# │   ├── leaderboard/          # PodiumTop3, RankingsTable, FilterChips
-# │   ├── tournaments/          # BracketDisplay, MatchCard
-# │   ├── submit/               # MonacoEditor, DebutEvaluation
-# │   └── layout/               # AppShell, TopNav, ThemeProvider
+
+# │ ├── ui/ # shadcn primitives, themed
+
+# │ ├── design-system/ # HazardStripes, LEDDisplay, RecordChip, etc.
+
+# │ ├── fighter/ # TaleOfTheTape, FighterCard, ProfileTabs
+
+# │ ├── arena/ # PreFightStaredown, LiveBattle, PostFightDecision
+
+# │ ├── leaderboard/ # PodiumTop3, RankingsTable, FilterChips
+
+# │ ├── tournaments/ # BracketDisplay, MatchCard
+
+# │ ├── submit/ # MonacoEditor, DebutEvaluation
+
+# │ └── layout/ # AppShell, TopNav, ThemeProvider
+
 # ├── pages/
-# │   ├── HomePage.tsx
-# │   ├── ArenaIndexPage.tsx
-# │   ├── BattlePage.tsx
-# │   ├── LeaderboardPage.tsx
-# │   ├── PerInputLeaderboardPage.tsx
-# │   ├── BotProfilePage.tsx
-# │   ├── HeadToHeadPage.tsx
-# │   ├── TournamentsListPage.tsx
-# │   ├── TournamentBracketPage.tsx
-# │   ├── SubmitPage.tsx
-# │   ├── MyFightersPage.tsx
-# │   ├── HallOfFamePage.tsx
-# │   ├── AchievementsPage.tsx
-# │   ├── EventsFeedPage.tsx
-# │   └── DesignSystemPage.tsx  # dev-only
-# ├── stores/                   # Zustand stores
-# ├── hooks/                    # useBattleEvents, useTournamentEvents, etc.
+
+# │ ├── HomePage.tsx
+
+# │ ├── ArenaIndexPage.tsx
+
+# │ ├── BattlePage.tsx
+
+# │ ├── LeaderboardPage.tsx
+
+# │ ├── PerInputLeaderboardPage.tsx
+
+# │ ├── BotProfilePage.tsx
+
+# │ ├── HeadToHeadPage.tsx
+
+# │ ├── TournamentsListPage.tsx
+
+# │ ├── TournamentBracketPage.tsx
+
+# │ ├── SubmitPage.tsx
+
+# │ ├── MyFightersPage.tsx
+
+# │ ├── HallOfFamePage.tsx
+
+# │ ├── AchievementsPage.tsx
+
+# │ ├── EventsFeedPage.tsx
+
+# │ └── DesignSystemPage.tsx # dev-only
+
+# ├── stores/ # Zustand stores
+
+# ├── hooks/ # useBattleEvents, useTournamentEvents, etc.
+
 # ├── lib/
-# │   ├── cornerColor.ts
-# │   ├── motion.ts             # Framer Motion variants
-# │   ├── theme.ts
-# │   └── format.ts             # time formatting, record formatting, etc.
+
+# │ ├── cornerColor.ts
+
+# │ ├── motion.ts # Framer Motion variants
+
+# │ ├── theme.ts
+
+# │ └── format.ts # time formatting, record formatting, etc.
+
 # ├── styles/
-# │   ├── tokens.css
-# │   ├── fonts.css
-# │   ├── globals.css
-# │   ├── patterns.css
-# │   └── animations.css
-# ├── copy/                     # static UI strings
+
+# │ ├── tokens.css
+
+# │ ├── fonts.css
+
+# │ ├── globals.css
+
+# │ ├── patterns.css
+
+# │ └── animations.css
+
+# ├── copy/ # static UI strings
+
 # ├── App.tsx
+
 # └── main.tsx
+
 #
+
 # Plus standard root-level: tailwind.config.ts, vite.config.ts,
+
 # vercel.json, tsconfig.json, .eslintrc, .prettierrc, package.json,
+
 # pnpm-lock.yaml, .env.example, README.md, CLAUDE.md, .claude/,
+
 # audits/, references/, requests/, scripts/, .github/workflows/.
 
+# ============================================================
+
+# SUPPLEMENTAL: ARCHITECTURE BRIEF
 
 # ============================================================
-# SUPPLEMENTAL: ARCHITECTURE BRIEF
-# ============================================================
+
 # Captures key design decisions made during pre-build planning so
+
 # Phase 1 generates accurate references/ without needing to
+
 # re-derive them. Companion section to the equivalent in the
+
 # backend kickoff.
 
 ## Visual system
+
 The visual language is fully specified in the companion document `sort-arena-web-design-tokens.md` (also reproduced as `references/design-system.md` after Phase 1). Reference it as the authoritative source for color, type, spacing, motion, and component aesthetics. Key axioms:
+
 - Dark mode is default. Light mode supported on data routes only. Combat routes (`/arena`, `/submit`, `/`) force dark.
 - Mixed-radius philosophy: combat surfaces sharp (radius 0), data surfaces soft (8/12/16px).
 - Bebas Neue for display, Inter for body, JetBrains Mono for data.
@@ -418,7 +637,9 @@ The visual language is fully specified in the companion document `sort-arena-web
 - Glows replace shadows on dark surfaces; reserved for active/featured state.
 
 ## Routing & theming policy
+
 Routes by category:
+
 - Home (`/`): forced dark, broadcast feed.
 - Arena routes (`/arena`, `/arena/:battleId`): forced dark, scan-lines applied.
 - Submit (`/submit`): forced dark.
@@ -427,12 +648,15 @@ Routes by category:
 - Auth gate: none on read-only routes; submit and my-fighters require an authenticated user (auto-provisioned guest counts).
 
 ## State management strategy
+
 Server state via TanStack Query. Client state via Zustand. Component state via useState. Choose by lifecycle: server state has invalidation rules → Query; client state crosses components → Zustand; component state stays in component → useState.
 
 Real-time data (active battles, tournaments, global event feed) bypasses Query — uses SSE hooks that maintain their own derived state. The hook returns both the raw event log and the derived view (round counts, current scores, etc.). Components consume the derived view; debugging tools consume the event log.
 
 ## API consumption pattern
+
 All requests go through `src/api/client.ts`. The client:
+
 1. Loads the API key from localStorage on first import.
 2. Auto-provisions a guest user if no key found (POST /v1/users with a generated friendly name, stores returned key).
 3. Sets `Authorization: Bearer <key>` on every request.
@@ -443,6 +667,7 @@ All requests go through `src/api/client.ts`. The client:
 TanStack Query hooks live in `src/api/queries.ts`, organized by resource (leaderboard, bots, battles, etc.). Each hook is a thin wrapper around `useQuery` with stable query keys and proper cache invalidation rules.
 
 SSE hooks live in `src/api/sse.ts`. Pattern:
+
 ```ts
 function useBattleEvents(battleId: string) {
   const [events, setEvents] = useState<BattleEvent[]>([]);
@@ -455,7 +680,7 @@ function useBattleEvents(battleId: string) {
     es.onmessage = (e) => {
       try {
         const event = battleEventSchema.parse(JSON.parse(e.data));
-        setEvents(prev => [...prev, event]);
+        setEvents((prev) => [...prev, event]);
       } catch (err) {
         // log, ignore malformed event
       }
@@ -473,7 +698,9 @@ function useBattleEvents(battleId: string) {
 ```
 
 ## Tale of the Tape component spec
+
 The foundational component. Exposed API:
+
 ```tsx
 <TaleOfTheTape
   fighterA={bot}
@@ -484,9 +711,11 @@ The foundational component. Exposed API:
   onFighterClick?={(botId) => void} // navigation; disabled during active battles
 />
 ```
+
 Internal structure: two `<FighterCard>` components separated by `<VSBadge>`. `<FighterCard>` is a self-contained presentational component that handles all variants (rookie, champion, retired) internally based on the bot prop. Layout responds to container width via CSS container queries — when narrower than 800px, switches to vertical stack with horizontal VS strip.
 
 Key visual elements per `<FighterCard>`:
+
 1. Hazard stripe header (16px tall, full width).
 2. Portrait area (1:1 aspect, 4px corner-color border, fallback to procedural silhouette if no portrait_url).
 3. Champion belt overlay (only when bot.rank === 1).
@@ -499,9 +728,11 @@ Key visual elements per `<FighterCard>`:
 States: rookie (replaces W-L-D with "ROOKIE" chip; recent form hidden), retired (full card greyscaled, RETIRED chip overlay), champion (belt overlay + glow-cycle animation on the corner-color border).
 
 ## Component catalog (key reusable components)
+
 Will be cataloged in `references/component-catalog.md` after Phase 1, but for planning:
 
 Design system primitives (Phase 1):
+
 - `<HazardStripes orientation="horizontal|vertical" thickness="thin|thick" />`
 - `<LEDDisplay value={string|number} format="time|score|count" glow="hazard|tech|champion" />`
 - `<RecordChip wins={n} losses={n} draws={n} />`
@@ -510,6 +741,7 @@ Design system primitives (Phase 1):
 - `<ChampionBelt active?={boolean} />`
 
 Fighter components (Phase 2):
+
 - `<FighterCard />` (and the wrapping `<TaleOfTheTape />`)
 - `<VSBadge />`
 - `<AchievementIconStrip />`
@@ -517,6 +749,7 @@ Fighter components (Phase 2):
 - `<RankHistoryChart snapshots={[]} />`
 
 Arena components (Phase 4):
+
 - `<PreFightStaredown />`
 - `<LiveBattle />`
 - `<DigimonAttackVisualization />`
@@ -528,7 +761,9 @@ Arena components (Phase 4):
 - `<DecisionGraphic scorecard={...} />`
 
 ## Audio integration
+
 Howler.js, lazy-loaded only when audio is toggled on (saves ~30KB on initial bundle). Audio assets:
+
 - One walkout cue per language (4 short clips, 2-3 seconds each, royalty-free).
 - One ambient crowd loop (used on arena page when audio enabled).
 - One "ding" for round start, one "thud" for round loss, one "fanfare" for KO.
@@ -536,6 +771,7 @@ Howler.js, lazy-loaded only when audio is toggled on (saves ~30KB on initial bun
 All assets <100KB total when MP3 + 64kbps. Hosted as static files in `public/audio/`. `useAudioStore.enabled` gates playback; if false, all audio calls are no-ops.
 
 ## Performance budget
+
 - Initial bundle (route-split, lazy-loaded): ~150KB gzip for the layout shell + home page.
 - Per-page additional bundle: 50-150KB depending on complexity (arena is heaviest at ~250KB additional).
 - LCP target: <2s on a fast 3G connection for data routes; <3.5s for arena.
@@ -544,7 +780,9 @@ All assets <100KB total when MP3 + 64kbps. Hosted as static files in `public/aud
 - Font subsetting: Bebas Neue subset to A-Z 0-9 + basic punctuation (it's a display font, only used for short headlines).
 
 ## Future amendments (out of this kickoff's scope)
+
 The backend kickoff has a planned Phase 7 amendment for:
+
 - Bot nickname column + auto-generation
 - Portrait URL field + Leonardo.ai integration endpoint
 - Trash-talk endpoint + caching

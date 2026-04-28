@@ -1,0 +1,17 @@
+node_modules/
+dist/
+coverage/
+.env
+.env.local
+.env.*.local
+.vite/
+.vercel/
+.DS_Store
+*.log
+playwright-report/
+test-results/
+.turbo/
+.tsbuild-node/
+*.tsbuildinfo
+audits/*
+!audits/.gitkeep

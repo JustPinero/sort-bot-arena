@@ -1,0 +1,107 @@
+# API Contracts — sort-arena-web
+
+The frontend consumes [sort-bot-api](https://github.com/JustPinero/sort-bot-api). Types live in `src/api/types.ts`, generated from the backend's OpenAPI spec via:
+
+```sh
+pnpm generate:api-types
+```
+
+which runs `scripts/generate-api-types.sh`. By default it reads from `../sort-bot-api/references/openapi.yaml`; override with `BACKEND_REPO=/path/to/sort-bot-api` to point elsewhere.
+
+This file mirrors the contract surface phase-by-phase so a reader can see what the frontend expects without leaving the repo. Update it whenever the backend ships a new endpoint we consume.
+
+> Status: **stub seeded in Phase 1.** Each phase's "consumes" section gets filled in as the frontend reaches that phase.
+
+---
+
+## Phase 1 (foundation)
+
+Endpoints actually consumed in Phase 1:
+
+- `POST /v1/users` — auto-provision a guest user. Body: `{ display_name }`. Returns `{ id, display_name, api_key }`. Used once on first visit; key persisted in localStorage.
+- `GET /healthz` — liveness probe. Used by `usePing()` to verify the wiring.
+
+Phase 1 mocks both via MSW until the backend's auth phase ships. See `src/test/msw/handlers.ts`.
+
+---
+
+## Phase 2 (Tale of the Tape + profile)
+
+Will consume (subject to backend Phase 7 amendment landing):
+
+- `GET /v1/bots/:id` — bot record incl. nickname, portrait_url, weight class, record (W-L-D), achievements, signature input/time.
+- `GET /v1/bots/:id/runs?paginated` — fight history.
+- `GET /v1/bots/:id/snapshots` — rank history for the line chart.
+- `GET /v1/bots/:id/analysis` — AI scouting report.
+- `GET /v1/inputs/:id` — input metadata for per-input performance heatmap.
+
+Filled in when Phase 2 starts.
+
+---
+
+## Phase 3 (leaderboard)
+
+Will consume:
+
+- `GET /v1/leaderboard?weight=…&activity=…&sort=…&page=…` — paginated rankings with rank, fighter, record, weight class, KO%, signature input + time, last fight date.
+- `GET /v1/leaderboard/inputs/:inputId?page=…` — per-input ranking + that input's pattern.
+
+---
+
+## Phase 4 (arena)
+
+Will consume:
+
+- `GET /v1/battles` — index of current/recent/upcoming.
+- `GET /v1/battles/:id` — battle detail (pre-fight stare-down state).
+- `GET /v1/battles/:id/events` — **SSE** stream of battle events (round results, animations, terminal verdict).
+- `POST /v1/battles/:id/trash-talk` — server-side cached AI taunt for the pre-fight phase.
+
+Event schema documented in detail when Phase 4 starts. zod schemas mirror the backend definitions; mismatches drop the event.
+
+---
+
+## Phase 5 (submit + tournaments)
+
+Will consume:
+
+- `POST /v1/bots` — multipart upload of bot source. Returns 202 with `bot_id`; debut evaluation streams via SSE.
+- `GET /v1/bots/:id/debut/events` — SSE stream of evaluation progress.
+- `GET /v1/users/me/bots` — current user's bots for `/me/fighters`.
+- `PATCH /v1/bots/:id` — display_name update, retire flag.
+- `GET /v1/tournaments` — list.
+- `GET /v1/tournaments/:id` — bracket.
+- `GET /v1/tournaments/:id/events` — **SSE** for live round advancement.
+
+---
+
+## Phase 6 (homepage + polish)
+
+Will consume:
+
+- `GET /v1/feed` — broadcast ticker feed (rank changes, submissions, KOs, tournaments).
+- `GET /v1/feed/events` — **SSE** for live broadcast feed.
+- `GET /v1/halloffame` — retired bots.
+- `GET /v1/achievements` — definitions + rarity stats.
+- `GET /v1/bots/:id/badge.svg` — embeddable shield.
+
+---
+
+## Error envelope
+
+All errors follow:
+
+```json
+{
+  "error": "human-readable message",
+  "code": "machine_code",
+  "request_id": "uuid",
+  "fields": [{ "path": "display_name", "message": "must be ≥ 1 char" }]
+}
+```
+
+`fields` only present for 400 validation errors. Frontend `ApiError` class surfaces all four members.
+
+## Pagination
+
+Cursor-based for high-cardinality lists (leaderboard, fight history): `?cursor=…&limit=…`, response `{ items, next_cursor }`. Page-based for small fixed sets (achievements, inputs): `?page=…&page_size=…`, response `{ items, total, page, page_size }`. Both shapes have typed helpers in `src/api/queries.ts`.

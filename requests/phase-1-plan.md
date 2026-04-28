@@ -17,6 +17,7 @@ Phase 1 ships **no business logic** beyond what the kickoff names: theme managem
 - `<DesignSystemPage />` (dev-only at `/dev/design-system`) renders every color, font size, button variant, badge variant, and animation primitive for visual verification.
 
 Plus v3.5 process gates:
+
 - `pnpm validate` (lint + typecheck + unit + build) is green locally.
 - CI pipeline (`.github/workflows/ci.yml`) replicates `validate.sh` and is green on the phase branch.
 - `references/architecture.md`, `references/design-system.md`, `references/routing.md`, `references/state-management.md`, `references/env-vars.md`, `references/deployment-landmines.md`, `references/security-landmines.md` exist and are accurate. `references/component-catalog.md` and `references/api-contracts.md` are seeded and grow phase by phase.
@@ -162,6 +163,7 @@ sort-bot-arena/
 Each slice ends with `pnpm validate` green. Order chosen so each slice composes onto the previous; a slice that lands no business logic uses the kickoff §8 escape hatch (presentational primitives, static layout) and ships without a RED test.
 
 ### Slice 0 — process spine (no app code)
+
 - `package.json`, `tsconfig.json`, `.eslintrc.cjs`, `.prettierrc`, `.gitignore`, `.nvmrc`, `vite.config.ts`, `vitest.config.ts`, `postcss.config.cjs`, `tailwind.config.ts` (token wiring deferred to Slice 3), `vercel.json`, `index.html`, `src/main.tsx`, `src/App.tsx` skeleton (renders `<h1>` only).
 - `scripts/validate.sh` (lint + typecheck + unit + build).
 - `.github/workflows/ci.yml` mirroring validate.sh.
@@ -172,6 +174,7 @@ Each slice ends with `pnpm validate` green. Order chosen so each slice composes 
 - Exit: `pnpm install && pnpm validate` green; `pnpm dev` opens a blank app; CI green on a draft PR.
 
 ### Slice 1 — env, API client, auth bootstrap (RED first)
+
 - `src/api/client.ts` — fetch wrapper. Validates `import.meta.env.VITE_API_BASE_URL` at module load (throws on missing). Attaches `Authorization: Bearer <key>` from `useAuthStore`. AbortController timeout (15s default, 60s passed for SSE). Normalizes errors into a `ApiError` class with `status`, `code`, `message`, `requestId`, `fields?`.
 - `src/api/guest.ts` — generates a friendly name (animal + 4-digit suffix), POSTs to `/v1/users`, stores returned key.
 - `src/stores/auth.ts` — Zustand store with persist middleware (localStorage). Fields: `apiKey | null`, `userId | null`, `displayName | null`, `guestProvisioned: boolean`, `claimed: boolean`. Actions: `setKey`, `clear`, `markClaimed`.
@@ -189,12 +192,14 @@ Each slice ends with `pnpm validate` green. Order chosen so each slice composes 
 - Exit: all RED tests pass; `pnpm validate` green.
 
 ### Slice 2 — TanStack Query + Zustand provider wiring
+
 - `src/api/queries.ts` — Phase 1 only ships `usePing()` (GET `/healthz`) to prove the wiring. More hooks land Phase 2+.
 - `src/main.tsx` — wraps app in `<QueryClientProvider>` with sane defaults (5min stale, 1 retry, retryDelay exponential).
 - `src/stores/audio.ts`, `src/stores/battle.ts` — scaffolded with empty initial state and minimal actions; smoke tests assert defaults.
 - Exit: `usePing()` round-trips through MSW in tests; `pnpm validate` green.
 
 ### Slice 3 — design tokens, fonts, Tailwind
+
 - `src/styles/tokens.css` — CSS variables for: 5 combat colors (hazard yellow, combat red, tech cyan, champion gold, victory green), 8 corner colors, surface/text/border palette, 8-step spacing scale, 6 radii (combat sharp + data soft), z-index scale, shadow/glow primitives.
 - `src/styles/fonts.css` — `@font-face` (or fontsource imports) for Bebas Neue, Inter (with cv11/ss01/ss03), JetBrains Mono (with tnum); `font-display: swap`.
 - `src/styles/patterns.css` — hazard stripe gradient, scan-line overlay.
@@ -204,6 +209,7 @@ Each slice ends with `pnpm validate` green. Order chosen so each slice composes 
 - Exit: visible tokens render; no logic to test (presentational only).
 
 ### Slice 4 — ThemeProvider (RED first)
+
 - `src/components/layout/ThemeProvider.tsx` — context provider. Reads system preference via `matchMedia('(prefers-color-scheme: dark)')`. Supports `forceTheme?: 'dark' | 'light'` prop on a per-route layout. Persists user choice in `useThemeStore`. Toggles `data-theme` and `data-force-theme` on `<html>`.
 - `src/stores/theme.ts` — Zustand: `mode: 'system' | 'light' | 'dark'`, persisted.
 - `src/lib/theme.ts` — `resolveTheme(mode, systemPref, forceTheme)` pure function.
@@ -216,7 +222,9 @@ Each slice ends with `pnpm validate` green. Order chosen so each slice composes 
 - Exit: theme toggle in storybook-less manual test confirms class flip; tests green.
 
 ### Slice 5 — design system primitives (presentational; smoke tests only)
+
 Per kickoff §8 RED escape hatch: pure presentational primitives skip the full RED cycle and ship with a smoke test (renders + a11y).
+
 - `<HazardStripes orientation thickness />` — CSS gradient div.
 - `<LEDDisplay value format glow />` — JetBrains Mono digits with glow ring.
 - `<RecordChip wins losses draws />` — W-L-D in mono.
@@ -230,6 +238,7 @@ Per kickoff §8 RED escape hatch: pure presentational primitives skip the full R
 - Exit: every primitive renders; axe reports 0 violations.
 
 ### Slice 6 — shadcn/ui themed + variants
+
 - `pnpm dlx shadcn@latest init` with our token CSS as the source of truth (no separate shadcn theme; `globals.css` already defines `--background`, `--foreground`, etc.).
 - Add `Button`, `Card`, `Badge`, `Dialog`, `Tabs`, `Tooltip`, `Toast`.
 - Layer custom variants via `cva`:
@@ -240,6 +249,7 @@ Per kickoff §8 RED escape hatch: pure presentational primitives skip the full R
 - Exit: variants render with the right tokens; theme toggle changes appearance correctly.
 
 ### Slice 7 — layout shell + routing
+
 - `src/components/layout/TopNav.tsx` — logo, primary nav links (Arena, Rankings, Tournaments, Submit), user menu (current display_name + claim CTA), theme toggle. Keyboard navigable; semantic landmarks; jsx-a11y clean.
 - `src/components/layout/AppShell.tsx` — layout wrapper, accepts `forceTheme` prop, renders `<TopNav />` + `<main>` + skip-link.
 - `src/App.tsx` — React Router v6 route table per `references/routing.md`. Each page lazy-loaded via `React.lazy` + `<Suspense>`. Route-level error boundaries. 404.
@@ -247,12 +257,14 @@ Per kickoff §8 RED escape hatch: pure presentational primitives skip the full R
 - Exit: every kickoff route reachable in dev; nav clicks update URL + visible page; 404 for unknown.
 
 ### Slice 8 — DesignSystemPage + visual regression scaffold
+
 - `src/pages/DesignSystemPage.tsx` — sections: Colors, Typography, Spacing, Radii, Shadows/Glows, Buttons (every variant + state), Badges (every variant), Cards (every variant), Design Primitives (every component above), Animations (each keyframe in a labeled tile).
 - Gated by `VITE_ENABLE_VISUAL_REGRESSION` so it doesn't ship to prod.
 - `playwright.config.ts` configured; one Playwright test asserts the page renders (visual snapshots populate when Phase 2+ ships TotT).
 - Exit: visiting `/dev/design-system` in dev surfaces every primitive in one place.
 
 ### Slice 9 — README, .env.example, polish, phase complete
+
 - `README.md` — quickstart, scripts, env vars, link to references/.
 - `.env.example` — `VITE_API_BASE_URL` (required), `VITE_GUEST_NAME_PREFIX`, `VITE_ENABLE_AUDIO_BY_DEFAULT`, `VITE_ENABLE_VISUAL_REGRESSION`, `VITE_USE_MOCKS`.
 - Run `/phase-complete` (or its equivalent — the command is part of the v3.5 ports).
@@ -261,30 +273,30 @@ Per kickoff §8 RED escape hatch: pure presentational primitives skip the full R
 
 ## Dependencies to add (and why)
 
-| Package | Why |
-|---|---|
-| `react`, `react-dom` | Framework. |
-| `react-router-dom` | Routing. |
-| `@tanstack/react-query` | Server state. |
-| `@tanstack/react-query-devtools` | Dev only. |
-| `zustand` | Client state. |
-| `zod` | Schema validation for API responses + SSE events + forms. |
-| `react-hook-form`, `@hookform/resolvers` | Forms (Phase 5; installed Phase 1). |
-| `framer-motion` | Animations (used Phase 2+; installed Phase 1 for tokens.ts). |
-| `lucide-react` | Icons. |
-| `class-variance-authority`, `clsx`, `tailwind-merge` | shadcn-style variant composition. |
-| `@radix-ui/react-*` | shadcn primitives (only the ones we use). |
-| `@fontsource/bebas-neue`, `@fontsource/inter`, `@fontsource/jetbrains-mono` | Self-hosted fonts. |
-| `tailwindcss`, `postcss`, `autoprefixer`, `@tailwindcss/container-queries` | Styling. |
-| `openapi-typescript` (devDep) | Generate `src/api/types.ts` from backend OpenAPI. |
-| `vite`, `@vitejs/plugin-react` | Bundler. |
-| `vitest`, `@vitest/coverage-v8`, `@testing-library/react`, `@testing-library/jest-dom`, `@testing-library/user-event`, `jsdom` | Unit + component tests. |
-| `vitest-axe`, `axe-core` | a11y enforcement in tests. |
-| `msw` | Mock Service Worker for API contracts in tests + dev. |
-| `@playwright/test` | E2E (config land Phase 1; suites land Phase 2+). |
-| `eslint`, `@typescript-eslint/parser`, `@typescript-eslint/eslint-plugin`, `eslint-plugin-react`, `eslint-plugin-react-hooks`, `eslint-plugin-jsx-a11y`, `eslint-plugin-import`, `eslint-config-prettier` | Lint + a11y enforcement in CI. |
-| `prettier` | Formatter. |
-| `typescript` | Strict mode. |
+| Package                                                                                                                                                                                                   | Why                                                          |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| `react`, `react-dom`                                                                                                                                                                                      | Framework.                                                   |
+| `react-router-dom`                                                                                                                                                                                        | Routing.                                                     |
+| `@tanstack/react-query`                                                                                                                                                                                   | Server state.                                                |
+| `@tanstack/react-query-devtools`                                                                                                                                                                          | Dev only.                                                    |
+| `zustand`                                                                                                                                                                                                 | Client state.                                                |
+| `zod`                                                                                                                                                                                                     | Schema validation for API responses + SSE events + forms.    |
+| `react-hook-form`, `@hookform/resolvers`                                                                                                                                                                  | Forms (Phase 5; installed Phase 1).                          |
+| `framer-motion`                                                                                                                                                                                           | Animations (used Phase 2+; installed Phase 1 for tokens.ts). |
+| `lucide-react`                                                                                                                                                                                            | Icons.                                                       |
+| `class-variance-authority`, `clsx`, `tailwind-merge`                                                                                                                                                      | shadcn-style variant composition.                            |
+| `@radix-ui/react-*`                                                                                                                                                                                       | shadcn primitives (only the ones we use).                    |
+| `@fontsource/bebas-neue`, `@fontsource/inter`, `@fontsource/jetbrains-mono`                                                                                                                               | Self-hosted fonts.                                           |
+| `tailwindcss`, `postcss`, `autoprefixer`, `@tailwindcss/container-queries`                                                                                                                                | Styling.                                                     |
+| `openapi-typescript` (devDep)                                                                                                                                                                             | Generate `src/api/types.ts` from backend OpenAPI.            |
+| `vite`, `@vitejs/plugin-react`                                                                                                                                                                            | Bundler.                                                     |
+| `vitest`, `@vitest/coverage-v8`, `@testing-library/react`, `@testing-library/jest-dom`, `@testing-library/user-event`, `jsdom`                                                                            | Unit + component tests.                                      |
+| `vitest-axe`, `axe-core`                                                                                                                                                                                  | a11y enforcement in tests.                                   |
+| `msw`                                                                                                                                                                                                     | Mock Service Worker for API contracts in tests + dev.        |
+| `@playwright/test`                                                                                                                                                                                        | E2E (config land Phase 1; suites land Phase 2+).             |
+| `eslint`, `@typescript-eslint/parser`, `@typescript-eslint/eslint-plugin`, `eslint-plugin-react`, `eslint-plugin-react-hooks`, `eslint-plugin-jsx-a11y`, `eslint-plugin-import`, `eslint-config-prettier` | Lint + a11y enforcement in CI.                               |
+| `prettier`                                                                                                                                                                                                | Formatter.                                                   |
+| `typescript`                                                                                                                                                                                              | Strict mode.                                                 |
 
 Deliberately deferred: `@monaco-editor/react` (Phase 5), `recharts` (Phase 2), `howler` (Phase 4, lazy-loaded).
 

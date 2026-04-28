@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: '20'
+  PNPM_VERSION: '9.15.9'
+
+jobs:
+  validate:
+    name: validate (lint + typecheck + test + build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: setup node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: install
+        run: pnpm install --frozen-lockfile
+
+      - name: lint
+        run: pnpm run lint
+
+      - name: format check
+        run: pnpm run format:check
+
+      - name: typecheck
+        run: pnpm run typecheck
+
+      - name: unit tests
+        run: pnpm run test
+
+      - name: build
+        run: pnpm run build
+
+      - name: bundle size summary
+        if: always()
+        run: |
+          if [ -d dist/assets ]; then
+            echo "::group::Bundle sizes"
+            ls -lh dist/assets/*.js 2>/dev/null | awk '{print $5"\t"$NF}' || true
+            echo "::endgroup::"
+          fi

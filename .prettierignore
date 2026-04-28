@@ -1,0 +1,8 @@
+node_modules
+dist
+coverage
+.vite
+.vercel
+pnpm-lock.yaml
+references/
+audits/
