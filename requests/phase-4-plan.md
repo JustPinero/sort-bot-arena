@@ -175,11 +175,30 @@ export type BattleEvent =
 - **Replay mode timing accuracy.** 4× speed is approximate; precise timing requires backend-supplied event timestamps with sub-millisecond precision (will tune later).
 - **Mobile arena experience.** Best-effort. The kickoff explicitly accepts this.
 
-## Open questions
+## Decisions (locked)
 
-1. **Audio assets.** Where do royalty-free walkout cues come from? Plan: skip audio in Phase 4 ship (Slice 7 deferred to debt.md); document in the audio store that it's a Phase 6 polish item.
-2. **Particle beam rendering.** SVG with stroke-dashoffset, or canvas, or pure CSS keyframes? Plan: CSS keyframes for the beam (cheaper, GPU-accelerated transforms); SVG for the crowd silhouettes (one-time render, no animation cost).
-3. **Hype meter trigger.** Backend pushes a `hype` event, or frontend computes from event density? Plan: frontend computes — `hype = recent_dramatic_events / window`. Backend `commentary` events with high enthusiasm contribute. Tunable.
+- **Audio**: deferred entirely. The audio store + lazy-load wrapper exist from Phase 1, so plugging in cues later is straightforward. Sourcing royalty-free walkout audio is a content problem, not a code problem; Slice 7 moves to `debt.md` (D-4).
+- **Particle beam**: CSS keyframes only. Cheaper than SVG/canvas, GPU-accelerated, and the take-home doesn't need physics-grade particles.
+- **Hype meter**: frontend-computed. Derived state in the battle reducer — `hype = clamp(recent_dramatic_events_count / 5, 0, 1)` over the last 10 events. Backend doesn't need a special event for this.
+- **LiveBattle scope** trimmed. Polish items the kickoff explicitly tags as "extras" move to debt:
+  - Special move callouts on dramatic round wins (D-5)
+  - Crowd silhouettes along the bottom (D-5)
+  - Stoppage referee overlay on `fighter_downed` (D-5)
+  - Post-fight victor interview quote (D-5)
+  - Damage filter scan-line glitch at 25% (kept; just a CSS filter)
+- **Visual regression**: still deferred. Phase 4 is the natural moment but it's a separate workflow concern (Playwright in CI). D-1 stays open.
+
+## Slices (revised)
+
+1. Types + MSW SSE mock + `useBattleEvents` hook + `battleReducer` (RED first)
+2. `<HealthBar />` + `<RoundCounter />` + `<HypeMeter />` primitives
+3. `<PreFightStaredown />`
+4. `<LiveBattle />` — split-screen, slam-in overlays, Digimon attack, damage filter states, commentary feed
+5. `<PostFightDecision />` — KO graphic, decision graphic, fight-poster export
+6. `<ArenaIndexPage />` + `<BattlePage />` composition + 3-phase transition
+7. ~~Audio~~ → deferred (D-4)
+8. ~~Visual regression~~ → deferred (D-1)
+9. Close-out: catalog + contracts + state-management + CLAUDE + PR
 
 ## Validate gate (unchanged)
 

@@ -26,6 +26,28 @@ Why deferred: the kickoff treats it as a polish nicety; rows are already click-t
 
 When activated: add `useHoverIntent(delay)` to `src/hooks/`, add `<HoverPreviewPanel />` to `src/components/leaderboard/`, prefetch the bot record on hover, and integrate into `<RankingsTable />` rows. Mobile keeps click-through (no hover concept).
 
+## D-4 (2026-04-28) — phase-4-arena (planned)
+
+Audio deferred from Phase 4. The audio store and lazy-load shape are in place from Phase 1; what's missing is asset sourcing and the `useFightAudio()` hook that wires SSE events to Howler triggers.
+
+When activated:
+1. Source 4 royalty-free walkout cues (one per language), 1 ambient crowd loop, 1 round-start ding, 1 round-loss thud, 1 KO fanfare. Total budget ~250KB.
+2. Drop into `public/audio/`.
+3. Implement `src/lib/audio.ts` (Howler wrapper, dynamic-imported only when `useAudioStore.enabled === true`).
+4. Implement `src/hooks/useFightAudio()` — subscribes to battle events, plays cues. No autoplay on mute. Reads `useAudioStore` for current enable + volume.
+5. Wire `<PreFightStaredown />` to play walkout cues on `walkout` events.
+6. Wire `<LiveBattle />` to play round-end thud + KO fanfare.
+
+## D-5 (2026-04-28) — phase-4-arena (planned)
+
+LiveBattle "extras" deferred. Kickoff explicitly tags these as polish:
+- Special move callouts (algorithm name slam on dramatic round wins).
+- Crowd silhouettes along the bottom (animated SVG, hands up on KOs).
+- Stoppage referee overlay on `fighter_downed` events.
+- Post-fight victor interview quote bubble for top-10 wins or upsets.
+
+When activated: each is a 1-2 hour add. None are on the critical path; the bout already feels alive without them. Worth landing during Phase 6 polish if there's bandwidth.
+
 ## D-3 (2026-04-28) — phase-3-leaderboard / c6a5d2a
 
 Pagination on `<RankingsTable />` not built. The MSW handler returns all entries in one page; the API will need cursor-based paging once real data lands. The `useBotRuns` hook already shows the pattern (load-more button); apply the same here when activating.
