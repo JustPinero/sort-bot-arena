@@ -6,6 +6,9 @@ import {
   championInputs,
   championRuns,
   championSnapshots,
+  leaderboardEntries,
+  perInputLeaderboard,
+  sampleInputs,
 } from './fixtures';
 
 const BASE = 'http://api.test';
@@ -78,4 +81,39 @@ export const defaultHandlers = [
     }
     return HttpResponse.json(championAnalysis);
   }),
+
+  http.get(`${BASE}/v1/leaderboard`, ({ request }) => {
+    const url = new URL(request.url);
+    const weight = url.searchParams.get('weight') ?? 'all';
+    const language = url.searchParams.get('language');
+
+    const filtered = leaderboardEntries.filter((e) => {
+      if (e.retired) return false;
+      if (language && e.language !== language) return false;
+      if (weight === 'all') return true;
+      const wMap: Record<string, string[]> = {
+        heavyweight: ['binary'],
+        cruiserweight: ['go'],
+        middleweight: ['node'],
+        lightweight: ['python'],
+      };
+      const langs = wMap[weight];
+      return Boolean(langs?.includes(e.language));
+    });
+
+    return HttpResponse.json({ items: filtered, next_cursor: null });
+  }),
+
+  http.get(`${BASE}/v1/leaderboard/inputs/:inputId`, ({ params }) => {
+    const inputId = params.inputId as string;
+    const input = sampleInputs.find((i) => i.id === inputId);
+    if (!input) {
+      return HttpResponse.json({ error: 'input not found', code: 'not_found' }, { status: 404 });
+    }
+    return HttpResponse.json({ input, items: perInputLeaderboard, next_cursor: null });
+  }),
+
+  http.get(`${BASE}/v1/inputs`, () =>
+    HttpResponse.json({ items: sampleInputs, next_cursor: null }),
+  ),
 ];

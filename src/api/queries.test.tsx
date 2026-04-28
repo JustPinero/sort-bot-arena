@@ -12,6 +12,9 @@ import {
   useBotInputPerformance,
   useBotRuns,
   useBotSnapshots,
+  useInputs,
+  useLeaderboard,
+  usePerInputLeaderboard,
   usePing,
 } from './queries';
 import { createQueryClient } from './queryClient';
@@ -106,5 +109,60 @@ describe('useBotAnalysis', () => {
       wrapper,
     });
     expect(result.current.fetchStatus).toBe('idle');
+  });
+});
+
+describe('useLeaderboard', () => {
+  it('returns the unfiltered leaderboard', async () => {
+    const { result } = renderHook(
+      () => useLeaderboard({ weight: 'all', activity: 'all', language: null, sort: 'rank' }),
+      { wrapper },
+    );
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data?.items.length).toBeGreaterThan(0);
+    expect(result.current.data?.items[0]?.rank).toBe(1);
+  });
+
+  it('applies weight class filter', async () => {
+    const { result } = renderHook(
+      () =>
+        useLeaderboard({
+          weight: 'lightweight',
+          activity: 'all',
+          language: null,
+          sort: 'rank',
+        }),
+      { wrapper },
+    );
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    const items = result.current.data?.items ?? [];
+    for (const item of items) {
+      expect(item.language).toBe('python');
+    }
+  });
+});
+
+describe('usePerInputLeaderboard', () => {
+  it('returns ranked entries for an input', async () => {
+    const { result } = renderHook(() => usePerInputLeaderboard('in_killer_quicksort'), { wrapper });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data?.input.id).toBe('in_killer_quicksort');
+    expect(result.current.data?.items[0]?.rank_in_field).toBe(1);
+  });
+
+  it('404s for unknown input', async () => {
+    const { result } = renderHook(() => usePerInputLeaderboard('in_does_not_exist'), {
+      wrapper,
+    });
+    await waitFor(() => expect(result.current.isError).toBe(true), { timeout: 3000 });
+    expect(result.current.error).toMatchObject({ status: 404 });
+  });
+});
+
+describe('useInputs', () => {
+  it('returns the list of inputs', async () => {
+    const { result } = renderHook(() => useInputs(), { wrapper });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data?.items.length).toBeGreaterThan(0);
   });
 });

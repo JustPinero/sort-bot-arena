@@ -1,4 +1,13 @@
-import type { Achievement, Bot, BotRun, BotSnapshot, InputPerformance } from '@/api/types';
+import type {
+  Achievement,
+  Bot,
+  BotRun,
+  BotSnapshot,
+  InputPerformance,
+  InputSummary,
+  LeaderboardEntry,
+  PerInputLeaderboardEntry,
+} from '@/api/types';
 
 const ACH_FIRST_BLOOD: Achievement = {
   id: 'ach_first_blood',
@@ -219,3 +228,104 @@ export const championAnalysis = {
     "An introsort that knows when to switch. Excels on adversarial inputs by falling back to heapsort early; struggles on near-sorted inputs because the partitioning overhead doesn't amortize. Watch for the killer-pattern finishing move.",
   generated_at: '2026-04-25T12:00:00Z',
 };
+
+const ENTRY_BASE = (
+  bot: Bot,
+  rank: number,
+  trend: LeaderboardEntry['trend'],
+): LeaderboardEntry => ({
+  bot_id: bot.id,
+  rank,
+  trend,
+  display_name: bot.display_name,
+  nickname: bot.nickname,
+  language: bot.language,
+  portrait_url: bot.portrait_url,
+  record: bot.record,
+  ko_percentage: bot.ko_percentage,
+  signature_input: bot.signature_input,
+  last_fight_at: '2026-04-20T18:00:00Z',
+  retired: bot.retired,
+});
+
+export const leaderboardEntries: LeaderboardEntry[] = [
+  ENTRY_BASE(championBot, 1, 'up'),
+  ENTRY_BASE(
+    {
+      ...veteranBot,
+      id: 'bot_silver',
+      nickname: 'Silver Bullet',
+      display_name: 'Marina Cole',
+      record: { wins: 21, losses: 5, draws: 0 },
+      ko_percentage: 62.0,
+    },
+    2,
+    'steady',
+  ),
+  ENTRY_BASE(
+    {
+      ...veteranBot,
+      id: 'bot_bronze',
+      nickname: 'The Bronze',
+      display_name: 'Theo Park',
+      record: { wins: 19, losses: 6, draws: 1 },
+      ko_percentage: 51.0,
+    },
+    3,
+    'down',
+  ),
+  ENTRY_BASE(veteranBot, 7, 'up'),
+  ENTRY_BASE(
+    {
+      ...rookieBot,
+      record: { wins: 1, losses: 0, draws: 0 },
+      ko_percentage: 100,
+    },
+    14,
+    'new',
+  ),
+];
+
+export const sampleInputs: InputSummary[] = [
+  {
+    id: 'in_killer_quicksort',
+    name: 'Adversarial Quicksort Killer',
+    size: 5_000,
+    description: 'Median-of-three killer pattern.',
+  },
+  { id: 'in_random_large', name: 'Random, 10k', size: 10_000 },
+  { id: 'in_almost_sorted', name: 'Already Sorted, Big', size: 100_000 },
+];
+
+export const perInputLeaderboard: PerInputLeaderboardEntry[] = [
+  {
+    bot_id: championBot.id,
+    rank_in_field: 1,
+    display_name: championBot.display_name,
+    nickname: championBot.nickname,
+    language: championBot.language,
+    portrait_url: championBot.portrait_url,
+    time_seconds: 0.041,
+    achieved_at: '2026-04-20T18:00:00Z',
+  },
+  {
+    bot_id: 'bot_silver',
+    rank_in_field: 2,
+    display_name: 'Marina Cole',
+    nickname: 'Silver Bullet',
+    language: 'go',
+    portrait_url: null,
+    time_seconds: 0.067,
+    achieved_at: '2026-04-19T18:00:00Z',
+  },
+  {
+    bot_id: veteranBot.id,
+    rank_in_field: 7,
+    display_name: veteranBot.display_name,
+    nickname: veteranBot.nickname,
+    language: veteranBot.language,
+    portrait_url: veteranBot.portrait_url,
+    time_seconds: 4.871,
+    achieved_at: '2026-04-15T18:00:00Z',
+  },
+];

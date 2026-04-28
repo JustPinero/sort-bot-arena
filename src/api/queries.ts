@@ -10,6 +10,10 @@ import type {
   CursorPage,
   HealthResponse,
   InputPerformance,
+  InputSummary,
+  LeaderboardEntry,
+  LeaderboardFilters,
+  PerInputLeaderboardEntry,
 } from './types';
 
 export function usePing() {
@@ -78,6 +82,52 @@ export function useBotAnalysis(botId: string | undefined, opts?: { enabled?: boo
     queryFn: () => apiClient.get<AnalysisResponse>(`/v1/bots/${botId}/analysis`),
     enabled: Boolean(botId) && (opts?.enabled ?? true),
     retry: false,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+function leaderboardPath(filters: LeaderboardFilters): string {
+  const params = new URLSearchParams();
+  if (filters.weight !== 'all') params.set('weight', filters.weight);
+  if (filters.activity !== 'all') params.set('activity', filters.activity);
+  if (filters.language) params.set('language', filters.language);
+  if (filters.sort !== 'rank') params.set('sort', filters.sort);
+  const suffix = params.toString();
+  return `/v1/leaderboard${suffix ? `?${suffix}` : ''}`;
+}
+
+export function useLeaderboard(filters: LeaderboardFilters) {
+  return useQuery({
+    queryKey: ['leaderboard', filters],
+    queryFn: () => apiClient.get<CursorPage<LeaderboardEntry>>(leaderboardPath(filters)),
+    staleTime: 60 * 1000,
+  });
+}
+
+export interface PerInputLeaderboardResponse {
+  input: InputSummary;
+  items: PerInputLeaderboardEntry[];
+  next_cursor: string | null;
+}
+
+export function usePerInputLeaderboard(inputId: string | undefined) {
+  return useQuery({
+    queryKey: ['leaderboard', 'inputs', inputId],
+    queryFn: () => apiClient.get<PerInputLeaderboardResponse>(`/v1/leaderboard/inputs/${inputId}`),
+    enabled: Boolean(inputId),
+    staleTime: 60 * 1000,
+    retry: (failureCount, err) => {
+      const status = (err as { status?: number } | null)?.status;
+      if (status && status >= 400 && status < 500) return false;
+      return failureCount < 1;
+    },
+  });
+}
+
+export function useInputs() {
+  return useQuery({
+    queryKey: ['inputs'],
+    queryFn: () => apiClient.get<CursorPage<InputSummary>>('/v1/inputs'),
     staleTime: 5 * 60 * 1000,
   });
 }
