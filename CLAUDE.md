@@ -31,14 +31,14 @@ Prime → Plan → RED → GREEN → Validate.
 
 ## Phase boundaries
 
-| Phase | Branch                       | Status      |
-| ----- | ---------------------------- | ----------- |
-| 1     | `phase-1-foundation`         | in progress |
-| 2     | `phase-2-fighter-profile`    | pending     |
-| 3     | `phase-3-leaderboard`        | pending     |
-| 4     | `phase-4-arena`              | pending     |
-| 5     | `phase-5-submit-tournaments` | pending     |
-| 6     | `phase-6-polish`             | pending     |
+| Phase | Branch                       | Status  |
+| ----- | ---------------------------- | ------- |
+| 1     | `phase-1-foundation`         | shipped |
+| 2     | `phase-2-fighter-profile`    | pending |
+| 3     | `phase-3-leaderboard`        | pending |
+| 4     | `phase-4-arena`              | pending |
+| 5     | `phase-5-submit-tournaments` | pending |
+| 6     | `phase-6-polish`             | pending |
 
 Phases merge to `main` only after `/phase-complete` passes.
 
