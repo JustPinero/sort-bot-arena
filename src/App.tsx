@@ -1,8 +1,161 @@
+import { lazy, Suspense } from 'react';
+import { BrowserRouter, Route, Routes } from 'react-router-dom';
+
+import { AppShell } from '@/components/layout/AppShell';
+
+const HomePage = lazy(() => import('@/pages/HomePage'));
+const ArenaIndexPage = lazy(() => import('@/pages/ArenaIndexPage'));
+const BattlePage = lazy(() => import('@/pages/BattlePage'));
+const LeaderboardPage = lazy(() => import('@/pages/LeaderboardPage'));
+const PerInputLeaderboardPage = lazy(() => import('@/pages/PerInputLeaderboardPage'));
+const BotProfilePage = lazy(() => import('@/pages/BotProfilePage'));
+const HeadToHeadPage = lazy(() => import('@/pages/HeadToHeadPage'));
+const TournamentsListPage = lazy(() => import('@/pages/TournamentsListPage'));
+const TournamentBracketPage = lazy(() => import('@/pages/TournamentBracketPage'));
+const SubmitPage = lazy(() => import('@/pages/SubmitPage'));
+const MyFightersPage = lazy(() => import('@/pages/MyFightersPage'));
+const HallOfFamePage = lazy(() => import('@/pages/HallOfFamePage'));
+const AchievementsPage = lazy(() => import('@/pages/AchievementsPage'));
+const EventsFeedPage = lazy(() => import('@/pages/EventsFeedPage'));
+const NotFoundPage = lazy(() => import('@/pages/NotFoundPage'));
+
+function RouteFallback() {
+  return (
+    <div className="mx-auto max-w-3xl px-4 py-12" aria-busy="true" aria-live="polite">
+      <div className="hazard-stripes-thin h-2 w-full" aria-hidden="true" />
+      <div className="mt-6 h-8 w-48 animate-pulse rounded-sm bg-surface-2" />
+      <div className="mt-2 h-3 w-32 animate-pulse rounded-sm bg-surface-2" />
+    </div>
+  );
+}
+
 export default function App() {
   return (
-    <main>
-      <h1>sort-arena</h1>
-      <p>Phase 1 — foundation in progress.</p>
-    </main>
+    <BrowserRouter>
+      <Suspense fallback={<RouteFallback />}>
+        <Routes>
+          <Route
+            path="/"
+            element={
+              <AppShell forceTheme="dark">
+                <HomePage />
+              </AppShell>
+            }
+          />
+          <Route
+            path="/arena"
+            element={
+              <AppShell forceTheme="dark" scanLines>
+                <ArenaIndexPage />
+              </AppShell>
+            }
+          />
+          <Route
+            path="/arena/:battleId"
+            element={
+              <AppShell forceTheme="dark" scanLines>
+                <BattlePage />
+              </AppShell>
+            }
+          />
+          <Route
+            path="/submit"
+            element={
+              <AppShell forceTheme="dark">
+                <SubmitPage />
+              </AppShell>
+            }
+          />
+          <Route
+            path="/me/fighters"
+            element={
+              <AppShell>
+                <MyFightersPage />
+              </AppShell>
+            }
+          />
+          <Route
+            path="/leaderboard"
+            element={
+              <AppShell>
+                <LeaderboardPage />
+              </AppShell>
+            }
+          />
+          <Route
+            path="/leaderboard/inputs/:inputId"
+            element={
+              <AppShell>
+                <PerInputLeaderboardPage />
+              </AppShell>
+            }
+          />
+          <Route
+            path="/bots/:botId"
+            element={
+              <AppShell>
+                <BotProfilePage />
+              </AppShell>
+            }
+          />
+          <Route
+            path="/bots/:a/vs/:b"
+            element={
+              <AppShell>
+                <HeadToHeadPage />
+              </AppShell>
+            }
+          />
+          <Route
+            path="/tournaments"
+            element={
+              <AppShell>
+                <TournamentsListPage />
+              </AppShell>
+            }
+          />
+          <Route
+            path="/tournaments/:id"
+            element={
+              <AppShell>
+                <TournamentBracketPage />
+              </AppShell>
+            }
+          />
+          <Route
+            path="/halloffame"
+            element={
+              <AppShell>
+                <HallOfFamePage />
+              </AppShell>
+            }
+          />
+          <Route
+            path="/achievements"
+            element={
+              <AppShell>
+                <AchievementsPage />
+              </AppShell>
+            }
+          />
+          <Route
+            path="/events"
+            element={
+              <AppShell>
+                <EventsFeedPage />
+              </AppShell>
+            }
+          />
+          <Route
+            path="*"
+            element={
+              <AppShell>
+                <NotFoundPage />
+              </AppShell>
+            }
+          />
+        </Routes>
+      </Suspense>
+    </BrowserRouter>
   );
 }
