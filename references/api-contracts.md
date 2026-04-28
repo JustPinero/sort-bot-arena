@@ -27,15 +27,15 @@ Phase 1 mocks both via MSW until the backend's auth phase ships. See `src/test/m
 
 ## Phase 2 (Tale of the Tape + profile)
 
-Will consume (subject to backend Phase 7 amendment landing):
+Consumed via the typed `apiClient`, with hooks in `src/api/queries.ts`. Until backend Phase 7 ships these endpoints for real, MSW handlers in `src/test/msw/handlers.ts` cover the contract.
 
-- `GET /v1/bots/:id` — bot record incl. nickname, portrait_url, weight class, record (W-L-D), achievements, signature input/time.
-- `GET /v1/bots/:id/runs?paginated` — fight history.
-- `GET /v1/bots/:id/snapshots` — rank history for the line chart.
-- `GET /v1/bots/:id/analysis` — AI scouting report.
-- `GET /v1/inputs/:id` — input metadata for per-input performance heatmap.
+- `GET /v1/bots/:id` → `Bot` — full bot record incl. nickname, portrait_url, language, algorithm, rank, record, ko_percentage, signature_input, achilles_heel, recent_form, achievements, trash_talk, analysis_url, retired. Hook: `useBot(botId)`. Skips retry on 4xx.
+- `GET /v1/bots/:id/runs?cursor=&limit=` → `CursorPage<BotRun>` — paginated fight history. Hook: `useBotRuns(botId, opts)`.
+- `GET /v1/bots/:id/snapshots` → `BotSnapshot[]` — rank-over-time series. Hook: `useBotSnapshots(botId)`.
+- `GET /v1/bots/:id/inputs` → `InputPerformance[]` — per-input rank-in-field. Hook: `useBotInputPerformance(botId)`.
+- `GET /v1/bots/:id/analysis` → `AnalysisResponse` — AI scouting report. Returns 503 with `code: 'analysis_unavailable'` when `analysis_url` is null. Hook: `useBotAnalysis(botId, { enabled })` — opt-in so the page only fetches when the Scouting tab is active.
 
-Filled in when Phase 2 starts.
+All five hooks use stable, resource-mirrored query keys (`['bots', botId]`, `['bots', botId, 'runs', cursor, limit]`, etc.) and 5-minute stale time.
 
 ---
 
