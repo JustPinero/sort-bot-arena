@@ -7,6 +7,12 @@ import { botsRoutes } from './routes/bots.js';
 import { leaderboardRoutes } from './routes/leaderboard.js';
 import { statsRoutes } from './routes/stats.js';
 import { userRoutes } from './routes/users.js';
+import { inputsRoutes } from './routes/inputs.js';
+import { perInputLeaderboardRoutes } from './routes/per-input-leaderboard.js';
+import { hallOfFameRoutes } from './routes/halloffame.js';
+import { achievementsRoutes } from './routes/achievements.js';
+import { feedRoutes } from './routes/feed.js';
+import { h2hRoutes } from './routes/h2h.js';
 import type { AppContext } from './auth/middleware.js';
 import type { PersonaService } from './persona/service.js';
 
@@ -49,7 +55,19 @@ export function createApp(deps: AppDeps): Hono<AppContext> {
     '/api/v1/leaderboard',
     leaderboardRoutes({ sortBotApi: deps.sortBotApi, persona: deps.persona }),
   );
+  app.route(
+    '/api/v1/leaderboard',
+    perInputLeaderboardRoutes({ sortBotApi: deps.sortBotApi, persona: deps.persona }),
+  );
   app.route('/api/v1/stats', statsRoutes({ sortBotApi: deps.sortBotApi }));
+  app.route('/api/v1/inputs', inputsRoutes({ sortBotApi: deps.sortBotApi }));
+  app.route('/api/v1/feed', feedRoutes({ sortBotApi: deps.sortBotApi, persona: deps.persona }));
+  app.route(
+    '/api/v1/halloffame',
+    hallOfFameRoutes({ db: deps.db, sortBotApi: deps.sortBotApi, persona: deps.persona }),
+  );
+  app.route('/api/v1/achievements', achievementsRoutes({ sortBotApi: deps.sortBotApi }));
+  app.route('/api/v1/bots', h2hRoutes({ sortBotApi: deps.sortBotApi }));
   app.route(
     '/api/v1/users',
     userRoutes({

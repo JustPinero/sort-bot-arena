@@ -87,6 +87,43 @@ export function botsRoutes(deps: {
     }
   });
 
+  r.get('/:id/snapshots', async (c) => {
+    const id = c.req.param('id');
+    try {
+      const rh = await deps.sortBotApi.getBotRankHistory(id);
+      return c.json(
+        rh.history.map((s) => ({ date: s.snapshot_at, rank: s.rank })),
+      );
+    } catch (err) {
+      if (err instanceof SortBotApiError && err.status === 404) {
+        return c.json({ error: 'not_found' }, 404);
+      }
+      throw err;
+    }
+  });
+
+  r.get('/:id/inputs', async (c) => {
+    const id = c.req.param('id');
+    try {
+      const profile = await deps.sortBotApi.getBotProfile(id);
+      return c.json(
+        profile.per_input.map((p) => ({
+          input_id: String(p.input_id),
+          input_name: `Input #${p.input_id}`,
+          size: 0,
+          time_seconds: p.median_ms / 1000,
+          rank_in_field: 0,
+          total_in_field: 0,
+        })),
+      );
+    } catch (err) {
+      if (err instanceof SortBotApiError && err.status === 404) {
+        return c.json({ error: 'not_found' }, 404);
+      }
+      throw err;
+    }
+  });
+
   r.get('/:id/runs', async (c) => {
     const id = c.req.param('id');
     const limitParam = c.req.query('limit');
