@@ -1,12 +1,22 @@
 # API Reconciliation — `sort-bot-arena` ↔ `sort-bot-api`
 
-**Branch:** `api-reconciliation` (frontend) + a parallel branch on backend if needed.
+**Branch:** `api-reconciliation` (frontend) + `phase-7-leonardo` on backend.
 
 ## Why this exists
 
 The frontend was built against MSW mocks I authored from the kickoff prompt's narrative (BattleBots × UFC vibe). Those mocks invented a *richer* bot/battle shape than `sort-bot-api` actually exposes. We've now finished the demo end-to-end against fictional data — this plan reconciles that fiction with reality so the deployed app talks to the real backend.
 
 The user's directive: "build our own backend to fill in any blind spots." I'll call that layer the **BFF** (backend-for-frontend) — Vercel functions in the same repo, no new infrastructure.
+
+## Authoritative reference docs
+
+After auditing `sort-bot-api`'s actual code (not just OpenAPI), I produced three reference docs in this repo's `references/`:
+
+- [`backend-overview.md`](../references/backend-overview.md) — architecture summary, auth model, sandbox, async pipeline, LLM integration pattern
+- [`backend-endpoints.md`](../references/backend-endpoints.md) — every real endpoint with actual response shapes
+- [`backend-schema.md`](../references/backend-schema.md) — DB tables + the **derivability matrix** (where every frontend field comes from)
+
+Skim those before reading this plan; everything below assumes them.
 
 ---
 
@@ -109,15 +119,18 @@ Backend: `python | node | binary`. Frontend: `python | node | go | binary`.
 
 ---
 
-## Architecture decisions (locked)
+## Architecture decisions (locked after audit)
 
 1. **BFF lives in the frontend repo** at `api/` (Vercel Functions). Same deployment, no new auth path, no new CI.
-2. **Backend gets minimum changes**: `bots.nickname`, `bots.portrait_url`, `bots.trash_talk` columns + Phase 7 Leonardo wiring + a `POST /v1/bots/{id}/trash-talk` endpoint that LLM-generates and caches. Anything that can be derived stays derived. *Why these three columns:* they're identity (the *fighter*), not aggregate stats — so they can't be synthesized.
-3. **Synthesized fields have stable seeds.** Nickname / trash-talk / achievement assignments are deterministic on `bot.id`, so the same bot always shows the same fiction.
-4. **Backend stays the source of truth for everything verifiable.** Records, leaderboard, runs, battles, tournaments all proxy through.
-5. **The BFF caches.** In-memory LRU per Vercel function (cold start = empty cache). For production we'd add Redis or a CDN; for the take-home, in-process is fine.
-6. **The MSW handlers stay** for tests. They become the contract for what the BFF *returns* (synthesized shape). Tests don't change.
-7. **`.env.production` flips** to point at the deployed backend instead of `http://api.test`. `VITE_USE_MOCKS=true` stays as a fallback for dev / CI / when the backend is down. The BFF base URL is the same origin (`/api/v1/...` vs `https://backend/v1/...`).
+2. **Backend gets a minimum-viable persona migration**: `bots.{nickname,portrait_url,portrait_generated_at,trash_talk,trash_talk_generated_at}` columns + Leonardo client + a `POST /v1/bots/{id}/trash-talk` endpoint. Plus four new list endpoints the frontend can't synthesize without them: `GET /v1/users/me/bots`, `GET /v1/battles`, `GET /v1/tournaments`, `GET /v1/halloffame`.
+3. **Everything derivable is derived.** Record (W/L/D), KO%, recent_form, signature_input, achilles_heel, achievements all computed in the BFF from real backend data. See `backend-schema.md` for the exact derivation per field.
+4. **Battle event translator** is a stateless transformer in the BFF SSE proxy. Backend's 4-event vocabulary → frontend's 8-event dramatized version per the mapping in `backend-overview.md`.
+5. **Synthesized fields use stable seeds.** Nickname (deterministic from `bot.id` against a curated 100-name pool), achievement assignments (deterministic predicate), trash-talk fallback (per-language hash bucket) — same bot always shows the same fiction.
+6. **The BFF caches.** Per-function in-memory LRU; cold start = empty cache. For production we'd add Redis/CDN; in-process is fine for the take-home.
+7. **MSW handlers stay** for tests. They were already authored against the augmented (frontend) shape, which is what the BFF returns — so existing tests don't change.
+8. **`.env.production` flips** to `VITE_API_BASE_URL=/api` (self-origin, hits the BFF). `VITE_USE_MOCKS=true` stays available as a dev/CI fallback when the backend is down. The BFF reads `BACKEND_URL` (server-only Vercel env var) for the upstream call.
+9. **Tournament SSE: poll, don't push.** Backend has no `/v1/tournaments/{id}/events`; BFF polls `/v1/tournaments/{id}` every 2s on subscription and emits derived events. Cheap, no backend change, acceptable UX.
+10. **Drop `go` from the frontend language enum.** Backend doesn't support it (`python | node | binary` only). Three places: `src/lib/weightClass.ts`, `src/components/submit/templates.ts`, fixtures. champion/veteran fixtures need to switch from `go`/`node` to `binary`/`node`.
 
 ---
 
@@ -278,11 +291,29 @@ PR for the frontend (BFF + .env flip), separate PR for backend (3-column migrati
 - **SSE proxy buffering**. Vercel's response buffering on functions defaults to off for streaming, but specific edge cases bite. Mitigation: test the SSE translator under real load before relying on it.
 - **Tournament event mismatch**. Backend doesn't have a tournament event stream at all. Cleanest path: BFF polls the backend every 2s and emits derived events. Slightly worse UX but simple.
 
-## Open questions
+## Open questions (still need your input)
 
-1. **Does the backend already have a deployment?** If yes, we point `BACKEND_URL` at it. If not, we deploy `sort-bot-api` to Railway/Fly first. Need to confirm.
-2. **Achievements scope**. Five canned achievements covering the common milestones (first win, first KO, top-10, perfect debut, giant killer) is enough. Confirm before I synthesize.
-3. **Custom domain on Vercel?** `sort-bot-arena.vercel.app` is fine for take-home. Custom domain would be a nice-to-have but not required.
+1. **Where is `sort-bot-api` deployed**, if anywhere? We need a `BACKEND_URL` for the BFF. Three paths:
+   - It's already deployed somewhere → tell me the URL.
+   - It's not deployed → I deploy to Railway or Fly. (Recommended: Railway, since the backend already has a `docker-compose.yml` and Railway maps Dockerfile builds cleanly. Fly would also work.)
+   - We run the backend in the same Vercel project via Vercel's Go runtime → won't work for sandbox tests (Vercel functions can't fork sandboxed subprocesses), but acceptable if we disable sandbox runs and only return cached fixture data. Defer this option unless you specifically want a single-deploy story.
+
+2. **Achievements catalog confirm.** I'm proposing 5 derived from real stats:
+   - **First Blood** (1+ wins)
+   - **KO King** (10+ KOs — winner ≥80% of input runs in a battle)
+   - **Giant Killer** (beat a top-3 ranked bot)
+   - **Perfect Debut** (won every input on first evaluation — i.e. all `runs.status = success` AND `runs.duration_ms` median was best in field for that input on the first eval)
+   - **Top 10** (best_rank ≤ 10 across rank-history)
+   
+   Confirm or replace.
+
+3. **Anonymous "guest" UX.** Backend's `POST /v1/bots` accepts anonymous and attributes to `system` user. Frontend's `useAuthStore` auto-provisions a guest via `POST /v1/users` and stashes the key. Two paths:
+   - Keep auto-provision: every browser visitor gets a real user account. Slight privacy footprint but the take-home doesn't care.
+   - Drop auto-provision: send anonymous bot submissions, the bot belongs to `system`. Simpler but breaks `/me/fighters` (the user has no bots they own).
+   
+   Recommend: keep auto-provision.
+
+4. **Custom domain?** `sort-bot-arena.vercel.app` is fine for the take-home. Confirm or specify a custom domain you want to wire.
 
 ---
 
@@ -297,9 +328,12 @@ PR for the frontend (BFF + .env flip), separate PR for backend (3-column migrati
 ## What I need from you to start
 
 - ✅ Leonardo API key — already in 1Password, fetched.
-- ❓ Confirm: green-light the BFF approach (Vercel Functions in `sort-bot-arena/api/`) over alternatives (extend backend more aggressively, or a separate microservice)?
-- ❓ Confirm: drop `go` from the frontend's language enum?
-- ❓ Confirm: backend deployment target. Is there an existing `sort-bot-api` deploy somewhere, or do we need to ship it to Railway/Fly first?
-- ❓ Confirm: achievement scope (5 canned ones, derived from real stats)?
+- ✅ Drop `go` from frontend — locked (decision #10 above).
+- ✅ BFF in Vercel functions — locked (decision #1 above).
+- ✅ Tournament events via polling — locked (decision #9 above).
+- ❓ **Confirm backend deployment path** (open question #1 above). Most blocking question; I can't run Slice 1 without a `BACKEND_URL` to hit. Recommendation: deploy `sort-bot-api` to Railway, I can do this autonomously if you grant Railway CLI access (or you can deploy and paste the URL).
+- ❓ **Confirm achievements catalog** (open question #2 above).
+- ❓ **Confirm guest UX** (open question #3 above).
+- ❓ **Custom domain?** (open question #4 above).
 
 Once you answer those four, I run Slice 1 (sanity check the live backend) and report back with the captured shapes before any code changes.
