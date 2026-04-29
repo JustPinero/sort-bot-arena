@@ -22,6 +22,7 @@ async function bootstrap(): Promise<void> {
     sortBotApi,
     sessionSecret: env.SESSION_SECRET,
     cookieSecure: process.env['NODE_ENV'] === 'production',
+    allowedOrigins: env.ALLOWED_ORIGINS.split(',').map((s) => s.trim()).filter(Boolean),
   });
 
   serve({ fetch: app.fetch, port: env.PORT }, (info) => {

@@ -1,0 +1,42 @@
+// 100 BattleBots × UFC-flavored nicknames. Picked deterministically by
+// hashing the bot.id so the same bot always gets the same nickname,
+// even before Leonardo / Anthropic personas land.
+
+const POOL: ReadonlyArray<string> = [
+  'The Algorithm', 'Heap Crusher', 'Quick Strike', 'Merge Marauder', 'Bubble Buster',
+  'Radix Reaper', 'Cache Hit', 'Bit Twister', 'Stack Smasher', 'Pivot Punisher',
+  'The Sentinel', 'Linear Lord', 'Logarithm Lou', 'The Comparator', 'Index Inferno',
+  'The Pivot Point', 'Constant K', 'Big O Bandit', 'Loop Slayer', 'Branch Breaker',
+  'The Heuristic', 'Buffer Berserker', 'Worst Case Walker', 'Median Master',
+  'Insertion Insomniac', 'Selection Sniper', 'Counting Cobra', 'Bucket Bandit',
+  'Shell Shocker', 'Tim the Sorter', 'Heap of Trouble', 'The Iterator', 'O of Wonder',
+  'The Recursion', 'Tail Call Tiger', 'Stack Frame Sam', 'Pointer Pete',
+  'The Asymptote', 'Threshold Thomas', 'Partition Patrick', 'Quick Quentin',
+  'Merge Monty', 'Sort Slayer', 'Compare Cobra', 'Swap Specialist', 'Rotation Rebel',
+  'The Permutation', 'Inversion Index', 'Stable Sue', 'Adaptive Ace',
+  'Bogosort Bob', 'Cyclesort Sid', 'Patience Sorter', 'Smooth Operator',
+  'The Strand', 'Cocktail Carlos', 'Comb Crusher', 'Pancake Pete', 'Gnome Gurgi',
+  'Block Sorter', 'Pigeon Hole Pat', 'Spaghetti Carbonara', 'Tournament Tony',
+  'Heap Hydra', 'Min-Max Mick', 'Skip List Slim', 'Trie Tornado', 'B-Tree Bob',
+  'Red-Black Red', 'AVL Antonio', 'Splay Master', 'Treap Trooper',
+  'Suffix Sammy', 'Bloom Bandit', 'Hash Hammer', 'Linked Lance', 'Doubly Donny',
+  'Circular Carla', 'Deque Dom', 'Priority P', 'The FIFO', 'The LIFO',
+  'Round Robin Rocky', 'Kernel Karl', 'Page Fault Pete', 'Cache Miss Mike',
+  'Branch Predictor', 'Pipeline Penny', 'Out-of-Order Oz', 'Speculative Sue',
+  'SIMD Stryker', 'Vector Vic', 'GPU Gus', 'TPU Tess', 'Goroutine Greg',
+  'Async Andy', 'Thread Tom', 'Mutex Maddie', 'Atomic Annie', 'Lock-Free Larry',
+  'Fork Bombshell',
+];
+
+export function nicknameFor(botId: string): string {
+  // Stable string hash (FNV-1a 32-bit) — good enough for assignment.
+  let h = 0x811c9dc5;
+  for (let i = 0; i < botId.length; i++) {
+    h ^= botId.charCodeAt(i);
+    h = (h * 0x01000193) >>> 0;
+  }
+  const idx = h % POOL.length;
+  return POOL[idx]!;
+}
+
+export const NICKNAME_POOL_SIZE = POOL.length;
