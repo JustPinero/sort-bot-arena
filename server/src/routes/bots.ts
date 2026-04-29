@@ -7,6 +7,7 @@ import { synthesizeBot } from '../synthesize/bot.js';
 import { decryptString } from '../auth/encrypt.js';
 import { requireAuth, getUser, type AppContext } from '../auth/middleware.js';
 import { isUserOwnerOf, markRetired, recordUserBot } from '../store/user-bots.js';
+import type { PersonaService } from '../persona/service.js';
 
 const submitSchema = z.object({
   display_name: z.string().min(1).max(80),
@@ -20,21 +21,33 @@ export function botsRoutes(deps: {
   db: Client;
   sortBotApi: SortBotApiClient;
   sessionSecret: string;
+  persona: PersonaService;
 }): Hono<AppContext> {
   const r = new Hono<AppContext>();
 
   r.get('/:id', async (c) => {
     const id = c.req.param('id');
     try {
-      const [bot, profile, analysis] = await Promise.all([
+      const [bot, profile, analysis, persona] = await Promise.all([
         deps.sortBotApi.getBot(id),
         deps.sortBotApi.getBotProfile(id).catch(() => undefined),
         deps.sortBotApi
           .getBotAnalysis(id)
           .catch(() => null)
           .then((a) => (a && typeof a === 'object' ? (a as { algorithm?: string }).algorithm ?? null : null)),
+        deps.persona.get(id),
       ]);
-      const synth = synthesizeBot({ bot, profile, algorithm: analysis });
+      // Re-kick persona generation lazily if it never ran (e.g. bot was
+      // submitted before the personas table existed).
+      if (!persona) {
+        deps.persona.startBackgroundGeneration({
+          bot_id: bot.id,
+          display_name: bot.display_name,
+          language: bot.language,
+          algorithm: analysis,
+        });
+      }
+      const synth = synthesizeBot({ bot, profile, algorithm: analysis, persona });
       return c.json(synth);
     } catch (err) {
       if (err instanceof SortBotApiError && err.status === 404) {
@@ -109,6 +122,11 @@ export function botsRoutes(deps: {
           source: new Blob([body.data.source], { type: 'text/plain' }),
         });
         await recordUserBot(deps.db, me.id, created.id);
+        deps.persona.startBackgroundGeneration({
+          bot_id: created.id,
+          display_name: created.display_name,
+          language: created.language,
+        });
         const synth = synthesizeBot({ bot: created });
         return c.json(synth, 201);
       } catch (err) {

@@ -6,6 +6,7 @@ import type {
   BotProfileResponse,
 } from '../clients/sort-bot-api/index.js';
 import { nicknameFor } from '../persona/nicknames.js';
+import type { BotPersonaRow } from '../persona/store.js';
 import { deriveKoPercentage, deriveRecentForm, deriveRecord } from './record.js';
 import type { BattleForBot } from './types.js';
 
@@ -40,18 +41,19 @@ interface SynthesizeArgs {
   algorithm?: string | null | undefined;
   history?: ReadonlyArray<BattleForBot> | undefined;
   retired?: boolean | undefined;
+  persona?: BotPersonaRow | null | undefined;
 }
 
 export function synthesizeBot(args: SynthesizeArgs): SynthesizedBot {
-  const { bot, profile, history = [], algorithm = null, retired = false } = args;
+  const { bot, profile, history = [], algorithm = null, retired = false, persona } = args;
   const record = deriveRecord(history);
   return {
     id: bot.id,
     display_name: bot.display_name,
-    nickname: nicknameFor(bot.id),
+    nickname: persona?.nickname ?? nicknameFor(bot.id),
     language: bot.language,
     algorithm,
-    portrait_url: null,
+    portrait_url: persona?.portrait_url ?? null,
     rank: profile?.rank ?? null,
     record,
     ko_percentage: deriveKoPercentage(history),
@@ -71,7 +73,7 @@ export function synthesizeBot(args: SynthesizeArgs): SynthesizedBot {
       : null,
     recent_form: deriveRecentForm(history, 5),
     achievements: [],
-    trash_talk: null,
+    trash_talk: persona?.trash_talk ?? null,
     analysis_url: `/api/v1/bots/${bot.id}/analysis`,
     retired,
   };

@@ -31,4 +31,20 @@ export const migrations: ReadonlyArray<{ id: string; sql: string }> = [
       CREATE INDEX IF NOT EXISTS idx_user_bots_bot ON user_bots(sort_bot_api_bot_id);
     `,
   },
+  {
+    id: '0003_bot_personas',
+    sql: `
+      CREATE TABLE IF NOT EXISTS bot_personas (
+        bot_id TEXT PRIMARY KEY,
+        nickname TEXT,
+        portrait_url TEXT,
+        trash_talk TEXT,
+        leonardo_generation_id TEXT,
+        portrait_status TEXT NOT NULL DEFAULT 'pending',
+        trash_talk_status TEXT NOT NULL DEFAULT 'pending',
+        created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+        updated_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP)
+      );
+    `,
+  },
 ];

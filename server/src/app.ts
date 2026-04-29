@@ -8,10 +8,12 @@ import { leaderboardRoutes } from './routes/leaderboard.js';
 import { statsRoutes } from './routes/stats.js';
 import { userRoutes } from './routes/users.js';
 import type { AppContext } from './auth/middleware.js';
+import type { PersonaService } from './persona/service.js';
 
 export interface AppDeps {
   db: Client;
   sortBotApi: SortBotApiClient;
+  persona: PersonaService;
   sessionSecret: string;
   cookieSecure: boolean;
   allowedOrigins?: string[];
@@ -40,9 +42,13 @@ export function createApp(deps: AppDeps): Hono<AppContext> {
       db: deps.db,
       sortBotApi: deps.sortBotApi,
       sessionSecret: deps.sessionSecret,
+      persona: deps.persona,
     }),
   );
-  app.route('/api/v1/leaderboard', leaderboardRoutes({ sortBotApi: deps.sortBotApi }));
+  app.route(
+    '/api/v1/leaderboard',
+    leaderboardRoutes({ sortBotApi: deps.sortBotApi, persona: deps.persona }),
+  );
   app.route('/api/v1/stats', statsRoutes({ sortBotApi: deps.sortBotApi }));
   app.route(
     '/api/v1/users',
@@ -50,6 +56,7 @@ export function createApp(deps: AppDeps): Hono<AppContext> {
       db: deps.db,
       sortBotApi: deps.sortBotApi,
       sessionSecret: deps.sessionSecret,
+      persona: deps.persona,
     }),
   );
   return app;
