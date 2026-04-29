@@ -4,6 +4,21 @@ Every route the third-party `sort-bot-api` service exposes, with the actual resp
 
 Companion: [`sort-bot-api-overview.md`](./sort-bot-api-overview.md) for the architecture summary.
 
+> **Source of truth for live shapes** is [`requests/sort-bot-api-shapes.md`](../requests/sort-bot-api-shapes.md) — captured against the deployed Railway service on 2026-04-29. When this doc and shapes.md disagree, shapes.md wins.
+
+## Drift from earlier drafts (corrections)
+
+Confirmed against the live deploy:
+
+- Per-input leaderboard is `GET /v1/leaderboard/inputs/{input_id}`, **not** `/v1/per-input-leaderboard`.
+- There is **no** `GET /v1/inputs/{id}` route — it 404s.
+- Bot lifecycle status terminal value is `"evaluated"`, not `"completed"`. Battles use `"complete"`.
+- `POST /v1/battles` request body: `bot_a` / `bot_b` (not `bot_a_id` / `bot_b_id`).
+- `POST /v1/tournaments` request body: `participant_bot_ids` (not `bot_ids`).
+- The "global" SSE stream only carries battle runner events (`battle_start`, `run_start`, `run_complete`, `battle_complete`). The `streamGlobalEvents` doc-comment lists `bot_submitted` / `evaluation_completed` / `rank_change` but no code path publishes those — verified by grepping every `Bus.Publish` call site.
+- `GET /v1/users/me` returns `id` (not `user_id`); `POST /v1/users` returns `user_id`. Inconsistency intentional or not, our server normalizes.
+- Several typed responses use Go's `sql.NullInt64` / `sql.NullString` JSON shape (`{Int64,Valid}` / `{String,Valid}`). Our server's client unwraps these.
+
 ## Conventions
 
 - All paths are under `http(s)://<host>:8080`.
