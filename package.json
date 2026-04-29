@@ -83,5 +83,10 @@
     "vite": "^5.4.11",
     "vitest": "^2.1.5",
     "vitest-axe": "^0.1.0"
+  },
+  "msw": {
+    "workerDirectory": [
+      "public"
+    ]
   }
 }

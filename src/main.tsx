@@ -6,15 +6,27 @@ import { createQueryClient } from '@/api/queryClient';
 import App from '@/App';
 import '@/styles/globals.css';
 
-const rootEl = document.getElementById('root');
-if (!rootEl) throw new Error('root element missing');
+async function bootstrap() {
+  if (import.meta.env.VITE_USE_MOCKS === 'true') {
+    const { worker } = await import('@/test/msw/browser');
+    await worker.start({
+      onUnhandledRequest: 'bypass',
+      serviceWorker: { url: '/mockServiceWorker.js' },
+    });
+  }
 
-const queryClient = createQueryClient();
+  const rootEl = document.getElementById('root');
+  if (!rootEl) throw new Error('root element missing');
 
-createRoot(rootEl).render(
-  <StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <App />
-    </QueryClientProvider>
-  </StrictMode>,
-);
+  const queryClient = createQueryClient();
+
+  createRoot(rootEl).render(
+    <StrictMode>
+      <QueryClientProvider client={queryClient}>
+        <App />
+      </QueryClientProvider>
+    </StrictMode>,
+  );
+}
+
+void bootstrap();
