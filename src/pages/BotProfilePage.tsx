@@ -10,6 +10,7 @@ import {
 import { ChampionBelt } from '@/components/design-system/ChampionBelt';
 import { HazardStripes } from '@/components/design-system/HazardStripes';
 import { AchievementIconStrip } from '@/components/fighter/AchievementIconStrip';
+import { BotBadge } from '@/components/fighter/BotBadge';
 import { FightHistoryTable } from '@/components/fighter/FightHistoryTable';
 import { PerformanceHeatmap } from '@/components/fighter/PerformanceHeatmap';
 import { ProfileTabs } from '@/components/fighter/ProfileTabs';
@@ -88,6 +89,10 @@ export default function BotProfilePage() {
 
       <div className="mt-6">
         <TaleOfTheTape fighterA={bot} fighterB={null} mode="static" />
+      </div>
+
+      <div className="mt-8">
+        <BotBadge botId={bot.id} />
       </div>
 
       <div className="mt-12">

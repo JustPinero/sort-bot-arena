@@ -81,13 +81,15 @@ Consumed via mutations + queries. MSW handlers cover the contract; backend Phase
 
 ## Phase 6 (homepage + polish)
 
-Will consume:
+Consumed via three queries + one SVG fetch. MSW handlers cover the contract.
 
-- `GET /v1/feed` — broadcast ticker feed (rank changes, submissions, KOs, tournaments).
-- `GET /v1/feed/events` — **SSE** for live broadcast feed.
-- `GET /v1/halloffame` — retired bots.
-- `GET /v1/achievements` — definitions + rarity stats.
-- `GET /v1/bots/:id/badge.svg` — embeddable shield.
+- `GET /v1/feed/snapshot` → `HomeSnapshot` — homepage payload (ticker, featured battle, rookie of the day, biggest upset, champion). Hook: `useHomeSnapshot()`.
+- `GET /v1/feed` → `CursorPage<FeedItem>` — paginated tail of recent events (used by `<EventsFeedPage />`; the homepage reads the same items from the snapshot's ticker for cache reuse).
+- `GET /v1/halloffame` → `Bot[]` — retired bots. Hook: `useHallOfFame()`.
+- `GET /v1/achievements` → `AchievementDefinition[]` — definitions with rarity stats. Hook: `useAchievementsCatalog()`.
+- `GET /v1/bots/:id/badge.svg` → SVG shield (image/svg+xml). Embedded directly via `<img src>` in `<BotBadge />`; the imageHost allow-list is checked before render.
+
+`GET /v1/feed/events` (SSE for live broadcast feed) deferred. The snapshot endpoint is enough for the demo; switching to live SSE is a one-line change in the homepage.
 
 ---
 

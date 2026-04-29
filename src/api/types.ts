@@ -222,6 +222,46 @@ export interface Tournament {
   participants: TournamentParticipant[];
 }
 
+export type FeedEventKind = 'rank_change' | 'submission' | 'ko' | 'tournament' | 'achievement';
+
+export interface FeedItem {
+  id: string;
+  kind: FeedEventKind;
+  ts: string;
+  text: string;
+  bot_id: string | null;
+  href: string | null;
+}
+
+export interface HomeSnapshot {
+  ticker: FeedItem[];
+  featured_battle_id: string | null;
+  rookie_of_the_day: {
+    bot_id: string;
+    nickname: string | null;
+    display_name: string;
+    language: string;
+    portrait_url: string | null;
+    record: { wins: number; losses: number; draws: number };
+  } | null;
+  biggest_upset: {
+    text: string;
+    battle_id: string;
+  } | null;
+  champion: {
+    bot_id: string;
+    nickname: string | null;
+    display_name: string;
+    language: string;
+    portrait_url: string | null;
+    record: { wins: number; losses: number; draws: number };
+  } | null;
+}
+
+export interface AchievementDefinition extends Achievement {
+  unlocked_pct: number;
+}
+
 export type BattleEvent =
   | { type: 'walkout'; bot_id: string; ts: string }
   | { type: 'fight_start'; ts: string }

@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from './client';
 
 import type {
+  AchievementDefinition,
   AnalysisResponse,
   Battle,
   Bot,
@@ -10,6 +11,7 @@ import type {
   BotSnapshot,
   CursorPage,
   HealthResponse,
+  HomeSnapshot,
   InputPerformance,
   InputSummary,
   LeaderboardEntry,
@@ -217,5 +219,29 @@ export function useTournament(id: string | undefined) {
       if (status && status >= 400 && status < 500) return false;
       return failureCount < 1;
     },
+  });
+}
+
+export function useHomeSnapshot() {
+  return useQuery({
+    queryKey: ['feed', 'snapshot'],
+    queryFn: () => apiClient.get<HomeSnapshot>('/v1/feed/snapshot'),
+    staleTime: 30 * 1000,
+  });
+}
+
+export function useHallOfFame() {
+  return useQuery({
+    queryKey: ['halloffame'],
+    queryFn: () => apiClient.get<Bot[]>('/v1/halloffame'),
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useAchievementsCatalog() {
+  return useQuery({
+    queryKey: ['achievements'],
+    queryFn: () => apiClient.get<AchievementDefinition[]>('/v1/achievements'),
+    staleTime: 5 * 60 * 1000,
   });
 }

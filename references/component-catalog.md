@@ -446,9 +446,39 @@ Round-grouped match grid (responsive columns). Champion belt callout when comple
 
 Browser-side helper in `src/lib/playMockEvaluation.ts` that emits a scripted `EvaluationEvent` sequence (`eval_start` → progress × N → `eval_complete`). Used by `<SubmitPage />` until backend ships the debut SSE endpoint.
 
-## Phase 6 — homepage + polish components (planned)
+## Phase 6 — homepage + polish components
 
-`<BroadcastTicker />`, `<FeaturedFightCard />`, `<RookieOfTheDayCard />`, `<BiggestUpsetCard />`, `<BotBadge />`. Specs land when Phase 6 starts.
+### `<HomePage />`
+
+The broadcast feed landing page. Three sections:
+
+1. **Top ticker** — duplicates the feed list and animates `translateX(0 → -50%)` over 60s for a seamless loop. `hover:[animation-play-state:paused]` so users can read items before they scroll past. `aria-label="Broadcast ticker"` exposes it as a landmark; individual items are `<Link>`s when `href` is set.
+2. **Three-up cards** — Champion's corner (gold + glow), Featured fight (current arena battle CTA), Biggest upset (combat-red border + replay CTA).
+3. **Rookie of the day** — corner-color badge + nickname + record + weight class chip.
+
+### `<HallOfFamePage />`
+
+Lists retired bots with grayscale + 0.9 opacity styling that lifts on hover. Each card shows nickname, record, weight class chip, and the algorithm.
+
+### `<AchievementsPage />`
+
+Catalog of achievement definitions with rarity tier label (Mythic <1%, Legendary <5%, Rare <20%, Common ≥20%). Champion-gold accent.
+
+### `<EventsFeedPage />`
+
+Vertical feed list mirroring the ticker shape but with rows instead of a horizontal scroller. Each row links to the related entity when `href` is set.
+
+### `<BotBadge />`
+
+Embeddable shield component on the bot profile page. Renders the SVG from `GET /v1/bots/:id/badge.svg`, then offers Markdown + HTML embed snippets with a copy-to-clipboard button each. Two-second "Copied" feedback.
+
+```tsx
+<BotBadge botId={string} className?={string} />
+```
+
+### `useHomeSnapshot()`, `useHallOfFame()`, `useAchievementsCatalog()`
+
+TanStack Query hooks in `src/api/queries.ts`. Stable cache keys, 30-second to 5-minute staleTime depending on volatility.
 
 ---
 

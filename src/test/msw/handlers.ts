@@ -1,13 +1,17 @@
 import { http, HttpResponse } from 'msw';
 
 import {
+  achievementsCatalog,
   allBattles,
   allBotsById,
   championAnalysis,
   championInputs,
   championRuns,
   championSnapshots,
+  hallOfFame,
+  homeSnapshot,
   leaderboardEntries,
+  liveFeedTail,
   myBots,
   perInputLeaderboard,
   sampleBattle,
@@ -178,5 +182,32 @@ export const defaultHandlers = [
       return HttpResponse.json({ error: 'not found', code: 'not_found' }, { status: 404 });
     }
     return HttpResponse.json(t);
+  }),
+
+  http.get(`${BASE}/v1/feed/snapshot`, () => HttpResponse.json(homeSnapshot)),
+
+  http.get(`${BASE}/v1/feed`, () => HttpResponse.json({ items: liveFeedTail, next_cursor: null })),
+
+  http.get(`${BASE}/v1/halloffame`, () => HttpResponse.json(hallOfFame)),
+
+  http.get(`${BASE}/v1/achievements`, () => HttpResponse.json(achievementsCatalog)),
+
+  http.get(`${BASE}/v1/bots/:botId/badge.svg`, ({ params }) => {
+    const botId = params.botId as string;
+    const bot = allBotsById[botId];
+    if (!bot) {
+      return new HttpResponse('not found', { status: 404 });
+    }
+    const headline = bot.nickname ?? bot.display_name;
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="220" height="40" role="img" aria-label="${headline}: ${bot.record.wins}-${bot.record.losses}-${bot.record.draws}">
+  <rect width="220" height="40" fill="#0a0a0a"/>
+  <rect x="0" y="0" width="220" height="6" fill="#facc15"/>
+  <text x="14" y="22" font-family="JetBrains Mono, monospace" font-size="11" fill="#a3a3a3">SORT-ARENA</text>
+  <text x="14" y="34" font-family="Bebas Neue, sans-serif" font-size="14" fill="#fafaf9">${headline} · ${bot.record.wins}-${bot.record.losses}-${bot.record.draws}</text>
+</svg>`;
+    return new HttpResponse(svg, {
+      status: 200,
+      headers: { 'Content-Type': 'image/svg+xml' },
+    });
   }),
 ];

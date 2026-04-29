@@ -1,8 +1,11 @@
 import type {
   Achievement,
+  AchievementDefinition,
   Bot,
   BotRun,
   BotSnapshot,
+  FeedItem,
+  HomeSnapshot,
   InputPerformance,
   InputSummary,
   LeaderboardEntry,
@@ -482,3 +485,80 @@ export const sampleTournaments: Tournament[] = [
 ];
 
 export const myBots = [championBot];
+
+export const homeSnapshot: HomeSnapshot = {
+  ticker: [
+    {
+      id: 'fi_1',
+      kind: 'ko',
+      ts: '2026-04-28T19:55:00Z',
+      text: `KNOCKOUT — ${championBot.nickname} dispatches ${veteranBot.nickname} in 5`,
+      bot_id: championBot.id,
+      href: `/bots/${championBot.id}`,
+    },
+    {
+      id: 'fi_2',
+      kind: 'rank_change',
+      ts: '2026-04-28T19:30:00Z',
+      text: `${championBot.nickname} retakes the throne — #1`,
+      bot_id: championBot.id,
+      href: `/bots/${championBot.id}`,
+    },
+    {
+      id: 'fi_3',
+      kind: 'submission',
+      ts: '2026-04-28T18:50:00Z',
+      text: `New fighter: ${rookieBot.display_name} debuts in lightweight`,
+      bot_id: rookieBot.id,
+      href: `/bots/${rookieBot.id}`,
+    },
+    {
+      id: 'fi_4',
+      kind: 'tournament',
+      ts: '2026-04-28T18:00:00Z',
+      text: 'Rumble in the Stack — round 1 underway',
+      bot_id: null,
+      href: '/tournaments/trn_active',
+    },
+    {
+      id: 'fi_5',
+      kind: 'achievement',
+      ts: '2026-04-28T17:30:00Z',
+      text: `${championBot.nickname} unlocks Giant Killer (2.1% rarity)`,
+      bot_id: championBot.id,
+      href: `/bots/${championBot.id}?tab=achievements`,
+    },
+  ],
+  featured_battle_id: sampleBattle.id,
+  rookie_of_the_day: {
+    bot_id: rookieBot.id,
+    nickname: rookieBot.nickname,
+    display_name: rookieBot.display_name,
+    language: rookieBot.language,
+    portrait_url: rookieBot.portrait_url,
+    record: { wins: 1, losses: 0, draws: 0 },
+  },
+  biggest_upset: {
+    text: `${rookieBot.display_name} drops top-15 fighter in debut`,
+    battle_id: sampleBattle.id,
+  },
+  champion: {
+    bot_id: championBot.id,
+    nickname: championBot.nickname,
+    display_name: championBot.display_name,
+    language: championBot.language,
+    portrait_url: championBot.portrait_url,
+    record: championBot.record,
+  },
+};
+
+export const liveFeedTail: FeedItem[] = homeSnapshot.ticker.slice(0, 8);
+
+export const achievementsCatalog: AchievementDefinition[] = [
+  { ...ACH_KO_KING, unlocked_pct: 6.8 },
+  { ...ACH_GIANT_KILLER, unlocked_pct: 2.1 },
+  { ...ACH_FIRST_BLOOD, unlocked_pct: 41.2 },
+  { ...ACH_PERFECT_DEBUT, unlocked_pct: 0.4 },
+];
+
+export const hallOfFame: Bot[] = [retiredBot];

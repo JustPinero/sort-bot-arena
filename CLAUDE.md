@@ -38,7 +38,7 @@ Prime → Plan → RED → GREEN → Validate.
 | 3     | `phase-3-leaderboard`        | shipped |
 | 4     | `phase-4-arena`              | shipped |
 | 5     | `phase-5-submit-tournaments` | shipped |
-| 6     | `phase-6-polish`             | pending |
+| 6     | `phase-6-polish`             | shipped |
 
 Phases merge to `main` only after `/phase-complete` passes.
 
