@@ -131,6 +131,9 @@ Backend: `python | node | binary`. Frontend: `python | node | go | binary`.
 8. **`.env.production` flips** to `VITE_API_BASE_URL=/api` (self-origin, hits the BFF). `VITE_USE_MOCKS=true` stays available as a dev/CI fallback when the backend is down. The BFF reads `BACKEND_URL` (server-only Vercel env var) for the upstream call.
 9. **Tournament SSE: poll, don't push.** Backend has no `/v1/tournaments/{id}/events`; BFF polls `/v1/tournaments/{id}` every 2s on subscription and emits derived events. Cheap, no backend change, acceptable UX.
 10. **Drop `go` from the frontend language enum.** Backend doesn't support it (`python | node | binary` only). Three places: `src/lib/weightClass.ts`, `src/components/submit/templates.ts`, fixtures. champion/veteran fixtures need to switch from `go`/`node` to `binary`/`node`.
+11. **Drop guest auto-provisioning. Require explicit sign-up with display_name + email.** Public routes (leaderboard, profile, arena, head-to-head, tournaments, hall of fame, achievements, events feed, home) stay open. `/submit` and `/me/fighters` gate behind a `<SignUpDialog />`. `useAuthStore` keeps its persist-to-localStorage shape — only the bootstrap call to `ensureGuestUser()` is removed. Login-as-existing-user is out of scope (backend has no login endpoint; returning users paste their stashed key manually if their localStorage was wiped). Backend already supports `email` on `POST /v1/users`.
+12. **Achievements catalog**: First Blood (1+ wins), KO King (10+ KOs — winner ≥80% of input runs), Giant Killer (beat top-3 ranked bot), Perfect Debut (won every input on first eval), Top 10 (best_rank ≤ 10). All derived from real backend data; no backend table.
+13. **Stay on `sort-bot-arena.vercel.app`** for the take-home demo. No custom domain.
 
 ---
 
@@ -325,15 +328,21 @@ PR for the frontend (BFF + .env flip), separate PR for backend (3-column migrati
    - 1 PR on `sort-bot-api` adding the 3 columns + Leonardo + persona endpoint.
 3. Both deployed. Frontend's live demo flips from "MSW-mocked everything" to "real backend, BFF-augmented." Visual experience identical.
 
-## What I need from you to start
+## All decisions locked
 
-- ✅ Leonardo API key — already in 1Password, fetched.
-- ✅ Drop `go` from frontend — locked (decision #10 above).
-- ✅ BFF in Vercel functions — locked (decision #1 above).
-- ✅ Tournament events via polling — locked (decision #9 above).
-- ❓ **Confirm backend deployment path** (open question #1 above). Most blocking question; I can't run Slice 1 without a `BACKEND_URL` to hit. Recommendation: deploy `sort-bot-api` to Railway, I can do this autonomously if you grant Railway CLI access (or you can deploy and paste the URL).
-- ❓ **Confirm achievements catalog** (open question #2 above).
-- ❓ **Confirm guest UX** (open question #3 above).
-- ❓ **Custom domain?** (open question #4 above).
+- ✅ Leonardo API key — fetched from 1Password.
+- ✅ BFF in Vercel functions (decision #1).
+- ✅ Persona migration (5 columns) on backend (decision #2).
+- ✅ Derive everything derivable in BFF (decision #3).
+- ✅ Battle event translator stateless in BFF (decision #4).
+- ✅ Stable seeds for synthesized fields (decision #5).
+- ✅ MSW handlers retained for tests (decision #7).
+- ✅ `.env.production` flips to `/api` self-origin (decision #8).
+- ✅ Tournament SSE via 2s polling (decision #9).
+- ✅ Drop `go` from frontend enum (decision #10).
+- ✅ Drop guest auto-provision — require explicit sign-up with email (decision #11).
+- ✅ Achievements catalog: 5 derived from real stats (decision #12).
+- ✅ Domain: `sort-bot-arena.vercel.app` (decision #13).
+- ✅ Backend deploy: Railway. CLI authenticated and ready.
 
-Once you answer those four, I run Slice 1 (sanity check the live backend) and report back with the captured shapes before any code changes.
+Ready to execute. Starting with Slice 0 (Railway deploy of `sort-bot-api`) since it unblocks the rest.
