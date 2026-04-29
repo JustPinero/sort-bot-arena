@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { serve } from '@hono/node-server';
 import { createClient } from '@libsql/client';
 import { createApp } from './app.js';
