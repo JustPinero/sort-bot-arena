@@ -1,10 +1,26 @@
 import { Hono } from 'hono';
+import type { Client } from '@libsql/client';
+import { z } from 'zod';
 import type { SortBotApiClient } from '../clients/sort-bot-api/index.js';
 import { SortBotApiError } from '../clients/sort-bot-api/index.js';
 import { synthesizeBot } from '../synthesize/bot.js';
-import type { AppContext } from '../auth/middleware.js';
+import { decryptString } from '../auth/encrypt.js';
+import { requireAuth, getUser, type AppContext } from '../auth/middleware.js';
+import { isUserOwnerOf, markRetired, recordUserBot } from '../store/user-bots.js';
 
-export function botsRoutes(deps: { sortBotApi: SortBotApiClient }): Hono<AppContext> {
+const submitSchema = z.object({
+  display_name: z.string().min(1).max(80),
+  language: z.enum(['python', 'node', 'binary']),
+  source: z.string().min(1).max(200_000),
+});
+
+const patchSchema = z.object({ display_name: z.string().min(1).max(80) });
+
+export function botsRoutes(deps: {
+  db: Client;
+  sortBotApi: SortBotApiClient;
+  sessionSecret: string;
+}): Hono<AppContext> {
   const r = new Hono<AppContext>();
 
   r.get('/:id', async (c) => {
@@ -72,6 +88,98 @@ export function botsRoutes(deps: { sortBotApi: SortBotApiClient }): Hono<AppCont
       throw err;
     }
   });
+
+  r.post(
+    '/',
+    requireAuth({ db: deps.db, sessionSecret: deps.sessionSecret }),
+    async (c) => {
+      const me = getUser(c);
+      const body = submitSchema.safeParse(await c.req.json().catch(() => null));
+      if (!body.success) {
+        return c.json({ error: 'bad_field', issues: body.error.issues }, 400);
+      }
+      const apiKey = decryptString(
+        me.sort_bot_api_key_encrypted,
+        deps.sessionSecret,
+      );
+      try {
+        const created = await deps.sortBotApi.submitBot(apiKey, {
+          display_name: body.data.display_name,
+          language: body.data.language,
+          source: new Blob([body.data.source], { type: 'text/plain' }),
+        });
+        await recordUserBot(deps.db, me.id, created.id);
+        const synth = synthesizeBot({ bot: created });
+        return c.json(synth, 201);
+      } catch (err) {
+        if (err instanceof SortBotApiError) {
+          const status = err.status >= 500 ? 502 : err.status;
+          return c.json(
+            { error: 'upstream_failure', upstream_status: err.status, code: err.code },
+            status as 502 | 400,
+          );
+        }
+        throw err;
+      }
+    },
+  );
+
+  r.patch(
+    '/:id',
+    requireAuth({ db: deps.db, sessionSecret: deps.sessionSecret }),
+    async (c) => {
+      const me = getUser(c);
+      const id = c.req.param('id');
+      if (!(await isUserOwnerOf(deps.db, me.id, id))) {
+        return c.json({ error: 'not_owner' }, 403);
+      }
+      const body = patchSchema.safeParse(await c.req.json().catch(() => null));
+      if (!body.success) {
+        return c.json({ error: 'bad_field', issues: body.error.issues }, 400);
+      }
+      const apiKey = decryptString(
+        me.sort_bot_api_key_encrypted,
+        deps.sessionSecret,
+      );
+      try {
+        const updated = await deps.sortBotApi.patchBot(apiKey, id, {
+          display_name: body.data.display_name,
+        });
+        return c.json(synthesizeBot({ bot: updated }));
+      } catch (err) {
+        if (err instanceof SortBotApiError) {
+          return c.json({ error: 'upstream_failure', upstream_status: err.status }, 502);
+        }
+        throw err;
+      }
+    },
+  );
+
+  r.delete(
+    '/:id',
+    requireAuth({ db: deps.db, sessionSecret: deps.sessionSecret }),
+    async (c) => {
+      const me = getUser(c);
+      const id = c.req.param('id');
+      if (!(await isUserOwnerOf(deps.db, me.id, id))) {
+        return c.json({ error: 'not_owner' }, 403);
+      }
+      const apiKey = decryptString(
+        me.sort_bot_api_key_encrypted,
+        deps.sessionSecret,
+      );
+      try {
+        await deps.sortBotApi.deleteBot(apiKey, id);
+        await markRetired(deps.db, me.id, id);
+        return c.body(null, 204);
+      } catch (err) {
+        if (err instanceof SortBotApiError) {
+          return c.json({ error: 'upstream_failure', upstream_status: err.status }, 502);
+        }
+        throw err;
+      }
+    },
+  );
 
   r.get('/:id/badge.svg', async (c) => {
     const id = c.req.param('id');

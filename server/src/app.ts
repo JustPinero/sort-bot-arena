@@ -6,6 +6,7 @@ import { authRoutes } from './routes/auth.js';
 import { botsRoutes } from './routes/bots.js';
 import { leaderboardRoutes } from './routes/leaderboard.js';
 import { statsRoutes } from './routes/stats.js';
+import { userRoutes } from './routes/users.js';
 import type { AppContext } from './auth/middleware.js';
 
 export interface AppDeps {
@@ -33,9 +34,24 @@ export function createApp(deps: AppDeps): Hono<AppContext> {
 
   app.get('/api/healthz', (c) => c.text('ok'));
   app.route('/api/v1/auth', authRoutes(deps));
-  app.route('/api/v1/bots', botsRoutes({ sortBotApi: deps.sortBotApi }));
+  app.route(
+    '/api/v1/bots',
+    botsRoutes({
+      db: deps.db,
+      sortBotApi: deps.sortBotApi,
+      sessionSecret: deps.sessionSecret,
+    }),
+  );
   app.route('/api/v1/leaderboard', leaderboardRoutes({ sortBotApi: deps.sortBotApi }));
   app.route('/api/v1/stats', statsRoutes({ sortBotApi: deps.sortBotApi }));
+  app.route(
+    '/api/v1/users',
+    userRoutes({
+      db: deps.db,
+      sortBotApi: deps.sortBotApi,
+      sessionSecret: deps.sessionSecret,
+    }),
+  );
   return app;
 }
 
