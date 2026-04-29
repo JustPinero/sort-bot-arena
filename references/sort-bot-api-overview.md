@@ -120,20 +120,25 @@ Rate limiting: shared `Limiter` (Redis-backed when `REDIS_URL` set, in-memory ot
 
 For your sanity, here's what the backend explicitly **does not have** (and what we need to fake / synthesize via the BFF):
 
-- ❌ Bot nickname column (only `display_name`)
-- ❌ Portrait URL column (Phase 7 plan adds this)
-- ❌ Trash talk column (Phase 7 plan adds this)
-- ❌ Bot W/L/D record column — battles aggregate up via `SELECT count(*) WHERE bot_a_id = X AND winner_bot_id = X`
-- ❌ KO percentage — derive from battles (winner won ≥80% of input runs?)
-- ❌ Recent form — last 5 battles ordered by `created_at DESC`
-- ❌ Signature input / Achilles heel — best/worst median time per bot, derive from runs or `/v1/bots/{id}/profile`
-- ❌ Achievements system at all (no table, no endpoint)
-- ❌ Battle "rounds" / hype meter / KO graphic — backend battles are short timing comparisons over input sets
+- ❌ Bot nickname (only `display_name`)
+- ❌ Portrait URL
+- ❌ Trash talk text
+- ❌ Bot W/L/D record column
+- ❌ KO percentage
+- ❌ Recent form
+- ❌ Signature input / Achilles heel as direct fields (derivable from `/v1/bots/{id}/profile`)
+- ❌ Achievements (no table, no concept)
+- ❌ Battle "rounds" / hype meter / KO graphic — backend battles are timing comparisons over input sets
 - ❌ Tournament SSE event stream (only per-battle and global)
 - ❌ Debut evaluation SSE stream — eval progress events go to `global`, not a dedicated `bot:{id}` topic
-- ❌ Feed snapshot endpoint — synthesize from `/v1/leaderboard` + `/v1/stats` + `/v1/events/stream`
-- ❌ Hall of fame endpoint — query `bots WHERE deleted_at IS NOT NULL`
+- ❌ Feed snapshot endpoint
+- ❌ Hall of fame endpoint
+- ❌ `GET /v1/users/me/bots`
+- ❌ `GET /v1/battles` (list)
+- ❌ `GET /v1/tournaments` (list)
 - ❌ `go` / `golang` language support
+
+**These gaps are filled by our own backend service (`sort-bot-arena/server/`)**, not by changes to `sort-bot-api`. See [`server-architecture.md`](./server-architecture.md) for our backend's design.
 
 ## Implementation drift vs spec
 
@@ -148,21 +153,8 @@ OpenAPI lives at `sort-bot-api/references/openapi.yaml` but a few details lag th
 
 When we ship the BFF, regenerate types from the spec; we'll need to manually augment for these drifts.
 
-## Where we hook our additions
+## How we use this service
 
-When we extend the backend in `phase-7-leonardo` (or its successor), here's where each change lands:
+**`sort-bot-api` is third-party** — we deploy it (Railway) and consume it as an HTTP/SSE dependency. We do not modify its source. All gaps it can't fill are filled by our own backend service in `sort-bot-arena/server/`. See [`server-architecture.md`](./server-architecture.md) for the divisions of responsibility.
 
-| Change | File / location |
-|---|---|
-| New columns on `bots` (nickname, portrait_url, trash_talk) | `migrations/0002_bot_persona.sql` |
-| Update `Bot` struct + every `SELECT` over `bots` | `internal/store/bots.go` |
-| Leonardo client | `internal/leonardo/{client,prompt,client_test,prompt_test}.go` |
-| Trash-talk generator (mirrors Analyzer pattern) | `internal/ai/trashtalk.go` (new file) or `internal/persona/trashtalk.go` |
-| Nickname generator (deterministic) | `internal/persona/nickname.go` (new package) |
-| Worker hook (post-evaluation) | `internal/evaluator/bot.go` end of `EvaluateBot` |
-| New endpoint `POST /v1/bots/{id}/trash-talk` | `internal/server/trashtalk.go` (new file) + register in `server.go` |
-| Server wiring (Leonardo client, trash-talk generator) | `internal/server/server.go` Server struct + `cmd/sort-bot-api/main.go` |
-| Config (`LEONARDO_API_KEY`) | `internal/config/config.go` |
-| OpenAPI updates | `internal/openapi/openapi.yaml` |
-
-The reconciliation plan in `requests/api-reconciliation-plan.md` is the load-bearing doc for how the BFF in this repo + the persona additions in `sort-bot-api` interlock.
+The reconciliation plan in `requests/api-reconciliation-plan.md` lays out the integration order.

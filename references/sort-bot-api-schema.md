@@ -212,28 +212,20 @@ const slugToId = Object.fromEntries(inputs.map(i => [slugFor(i), i.id]));
 
 Cache for the BFF function lifetime (cold start invalidates, which is fine — built-in inputs don't change).
 
-### Battles list
+### Battles & tournaments lists
 
-Backend has no `GET /v1/battles`. Two options:
-1. **Backend addition**: a `GET /v1/battles` handler that lists recent battles ordered by `created_at DESC`. Cheap; ~10 lines.
-2. **BFF self-tracks**: subscribe to global SSE, store recent battles in memory. Adds state to the BFF that doesn't survive restarts.
-
-Recommended: option 1. Same patch as the persona columns.
-
-### Tournaments list
-
-Same problem. Same recommendation.
+`sort-bot-api` has no `GET /v1/battles` or `GET /v1/tournaments` list endpoints (only individual GETs). Our server maintains `recent_battles` and `recent_tournaments` tables in Turso, populated by an always-on SSE listener subscribed to `sort-bot-api`'s `/v1/events/stream` (event types `battle_complete`, eventually a derived "tournament complete" we emit ourselves). On a fresh deploy with no historical data, the lists start empty and fill as new battles/tournaments complete.
 
 ### Hall of Fame
 
-The frontend's `useHallOfFame()` expects an array of retired bots. Backend exposes individual bots but no filtered-list endpoint. Add `GET /v1/halloffame` to backend (or `GET /v1/bots?retired=true`) that selects `bots WHERE deleted_at IS NOT NULL`. ~5 lines.
+`useHallOfFame()` expects retired bots. `sort-bot-api` supports soft-delete (`bots.deleted_at`) but exposes no filtered list endpoint. Our server tracks the user-initiated retire action: when a user calls `DELETE /api/v1/bots/{id}` against our server, we (a) call `DELETE /v1/bots/{id}` on `sort-bot-api` with the user's stashed key, (b) add the bot to `retired_bots` in Turso. Hall of Fame reads from that.
 
 ### Achievements
 
-Frontend's `useAchievementsCatalog()` returns achievement definitions with rarity stats. Backend has no concept. The BFF returns a hardcoded catalog and computes rarity from real data:
+`useAchievementsCatalog()` returns achievement definitions with rarity stats. Static catalog defined in our server:
 
 ```ts
-const ACHIEVEMENTS = [
+export const ACHIEVEMENTS = [
   { id: 'first_blood',   name: 'First Blood',   icon: 'sword',
     predicate: (stats) => stats.wins >= 1 },
   { id: 'ko_king',       name: 'KO King',       icon: 'crown',
@@ -241,23 +233,17 @@ const ACHIEVEMENTS = [
   { id: 'giant_killer',  name: 'Giant Killer',  icon: 'mountain',
     predicate: (stats) => stats.beat_top3_count >= 1 },
   { id: 'perfect_debut', name: 'Perfect Debut', icon: 'star',
-    predicate: (stats) => stats.first_eval_wins == stats.first_eval_runs },
+    predicate: (stats) => stats.first_eval_wins === stats.first_eval_runs },
   { id: 'top_10',        name: 'Top 10',        icon: 'award',
     predicate: (stats) => stats.best_rank <= 10 },
 ];
 ```
 
-Rarity is `count(bots-where-predicate-holds) / count(all-bots)`.
-
-The BFF derives a per-bot achievement list at `/api/v1/bots/{id}` time from real backend stats.
+Rarity is computed from real `sort-bot-api` data: `(bots that satisfy the predicate) / (total bots)`. Per-bot achievement membership is computed from real stats at request time.
 
 ### Tournament events
 
-No backend tournament SSE. Two options:
-1. **Backend addition**: `GET /v1/tournaments/{id}/events` SSE that emits `match_start | match_complete | tournament_complete` when battle terminal events on member battles fire.
-2. **BFF polling**: poll `/v1/tournaments/{id}` every 2s on subscription, diff state.
-
-Option 1 is the right model long-term but option 2 is cheap and sufficient for the take-home. Defer the backend addition to a later phase.
+`sort-bot-api` has no tournament SSE topic. Our server polls `/v1/tournaments/{id}` every 2s on subscription, diffs against the previous state, and emits derived events (`match_start`, `match_complete`, `tournament_complete`) over its own SSE stream at `/api/v1/tournaments/{id}/events`. Frontend consumes our endpoint, never `sort-bot-api`'s.
 
 ### Battle event translation
 
@@ -273,36 +259,16 @@ The translator is a stateless function in the BFF SSE proxy.
 
 ---
 
-## Phase 7 backend additions (consolidated)
+## What we keep in our own backend's database
 
-Pulling together everything the BFF needs from the backend that requires actual code changes there:
+Since we don't modify `sort-bot-api`, our own server (`sort-bot-arena/server/`) carries everything the third-party schema doesn't. Stored in **Turso (libSQL)**:
 
-```sql
--- migrations/0002_phase_7.sql
-ALTER TABLE bots ADD COLUMN nickname TEXT;
-ALTER TABLE bots ADD COLUMN portrait_url TEXT;
-ALTER TABLE bots ADD COLUMN portrait_generated_at INTEGER;
-ALTER TABLE bots ADD COLUMN trash_talk TEXT;
-ALTER TABLE bots ADD COLUMN trash_talk_generated_at INTEGER;
-CREATE INDEX idx_bots_deleted_at ON bots (deleted_at) WHERE deleted_at IS NOT NULL;
-```
+- `users` — our auth: id, email, display_name, password_hash (or magic-link tokens), created_at. The `sk_live_*` API key issued by `sort-bot-api` is stashed here too, never exposed to the browser.
+- `user_bots` — mapping our `users.id` → `sort_bot_api_bot_id` (so we can answer `GET /api/v1/users/me/bots` without sort-bot-api having a list endpoint).
+- `bot_personas` — bot_id, nickname, portrait_url, portrait_generated_at, trash_talk, trash_talk_generated_at. Populated by our worker after a bot is submitted.
+- `recent_battles` — id, bot_a_id, bot_b_id, winner_bot_id, completed_at. Maintained by an SSE listener subscribed to sort-bot-api's `/v1/events/stream`. Lets us serve `GET /api/v1/battles` (no such list on sort-bot-api).
+- `recent_tournaments` — same pattern.
+- `retired_bots` — set of bot_ids the user has chosen to retire (since sort-bot-api soft-delete doesn't let us list them). Lets us serve `GET /api/v1/halloffame`.
+- `event_log` — append-only ring-buffered global event index, populated by SSE listener. Source of `GET /api/v1/feed`.
 
-New endpoints:
-- `GET /v1/users/me/bots` — list bearer's bots
-- `GET /v1/battles` — list recent battles
-- `GET /v1/tournaments` — list recent tournaments
-- `GET /v1/halloffame` — bots WHERE deleted_at IS NOT NULL
-- `POST /v1/bots/{id}/trash-talk` — LLM-generates and caches
-
-New packages:
-- `internal/leonardo/` — Leonardo client (mirrors `internal/ai/`)
-- `internal/persona/` — nickname (deterministic) + trash-talk (LLM-cached) generators
-
-Worker hook: at end of `EvaluateBot` after `SetBotStatus(evaluated)`:
-- Compute and persist nickname (cheap, sync)
-- Spawn goroutine for portrait generation (Leonardo)
-- (Trash talk generation is lazy on first GET via the new endpoint, not eagerly post-eval)
-
-Config: `LEONARDO_API_KEY` env var. Empty disables.
-
-These additions consolidate the open Phase 7 plan with the BFF support requirements. See [api-reconciliation-plan.md](../requests/api-reconciliation-plan.md) for the full execution order.
+See [`server-architecture.md`](./server-architecture.md) for the full design.

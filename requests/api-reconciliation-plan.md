@@ -1,348 +1,227 @@
 # API Reconciliation — `sort-bot-arena` ↔ `sort-bot-api`
 
-**Branch:** `api-reconciliation` (frontend) + `phase-7-leonardo` on backend.
+**Branch:** `api-reconciliation` (frontend + new `server/` package).
 
 ## Why this exists
 
-The frontend was built against MSW mocks I authored from the kickoff prompt's narrative (BattleBots × UFC vibe). Those mocks invented a *richer* bot/battle shape than `sort-bot-api` actually exposes. We've now finished the demo end-to-end against fictional data — this plan reconciles that fiction with reality so the deployed app talks to the real backend.
+The frontend was built against MSW mocks I authored from the kickoff prompt's narrative (BattleBots × UFC vibe). Those mocks invented a *richer* bot/battle shape than `sort-bot-api` actually exposes. The deployed demo runs on those mocks; this plan reconciles the fiction with reality so the deployed app talks to a real backend.
 
-The user's directive: "build our own backend to fill in any blind spots." I'll call that layer the **BFF** (backend-for-frontend) — Vercel functions in the same repo, no new infrastructure.
+**Critical correction (locked):** `sort-bot-api` is a **third-party service** we integrate with. We do not modify it. All gaps it can't fill are filled by **our own backend service** at `sort-bot-arena/server/`, deployed independently to Railway. The frontend talks to our service; our service talks to `sort-bot-api`.
 
 ## Authoritative reference docs
 
-After auditing `sort-bot-api`'s actual code (not just OpenAPI), I produced three reference docs in this repo's `references/`:
+- [`sort-bot-api-overview.md`](../references/sort-bot-api-overview.md) — the third-party service, architecture summary
+- [`sort-bot-api-endpoints.md`](../references/sort-bot-api-endpoints.md) — its routes with actual response shapes
+- [`sort-bot-api-schema.md`](../references/sort-bot-api-schema.md) — its DB + the derivability matrix
+- [`server-architecture.md`](../references/server-architecture.md) — **our** backend service's design
+- [`api-contracts.md`](../references/api-contracts.md) — what our server exposes to the frontend (existing doc; will update once server ships)
 
-- [`backend-overview.md`](../references/backend-overview.md) — architecture summary, auth model, sandbox, async pipeline, LLM integration pattern
-- [`backend-endpoints.md`](../references/backend-endpoints.md) — every real endpoint with actual response shapes
-- [`backend-schema.md`](../references/backend-schema.md) — DB tables + the **derivability matrix** (where every frontend field comes from)
-
-Skim those before reading this plan; everything below assumes them.
-
----
-
-## The diff
-
-### Endpoints that line up cleanly (no work)
-
-| Frontend wants | Backend has | Notes |
-|---|---|---|
-| `POST /v1/users` → `{ id, display_name, api_key }` | `POST /v1/users` → `{ user_id, display_name, api_key }` | Field rename: `id` ↔ `user_id`. Trivial. |
-| `GET /v1/users/me` | `GET /v1/users/me` | ✅ |
-| `GET /v1/leaderboard` | `GET /v1/leaderboard` | Shape differs; see below. |
-| `GET /v1/leaderboard/inputs/{id}` | `GET /v1/leaderboard/inputs/{input_id}` | Backend uses **integer** input id; frontend uses string. Convertible. |
-| `GET /v1/bots/{id}` | `GET /v1/bots/{id}` | Bot schema differs significantly; see below. |
-| `PATCH /v1/bots/{id}` | `PATCH /v1/bots/{id}` | Backend only allows `display_name` mutation. No `retired` flag. |
-| `POST /v1/bots` | `POST /v1/bots` | Backend wants multipart with `python|node|binary`; frontend currently sends JSON with `python|node|go|binary`. Need to: (a) drop `go`, (b) restore multipart upload (already coded once; was reverted in P5 to work around jsdom). |
-| `GET /v1/tournaments` | `GET /v1/tournaments` | Backend response shape unknown; needs spot-check. |
-| `GET /v1/tournaments/{id}` | `GET /v1/tournaments/{id}` | Same. |
-| `GET /v1/battles` | (not in spec — only `POST`) | **Gap.** Backend has no list-battles endpoint. |
-| `GET /v1/battles/{id}` | `GET /v1/battles/{id}` | Backend battle is `{ a_wins, b_wins, ties, status }`; frontend expects `{ rounds_total, fighter_a, fighter_b, status (live/pre_fight) }`. |
-| `GET /v1/battles/{id}/events` (SSE) | `GET /v1/battles/{id}/events` (SSE) | Event vocabularies don't match. Backend: `battle_start, run_start, run_complete, battle_complete`. Frontend: `walkout, fight_start, round_start, round_progress, round_end, fighter_downed, commentary, fight_end`. |
-| `GET /v1/bots/{id}/badge.svg` | `GET /v1/bots/{id}/badge.svg` | ✅ |
-
-### Endpoints frontend uses that don't exist on backend
-
-| Frontend route | Reality | Strategy |
-|---|---|---|
-| `GET /v1/bots/{id}/snapshots` | Backend: `/v1/bots/{id}/rank-history` | Path rename. Pure proxy. |
-| `GET /v1/bots/{id}/inputs` (per-input perf) | Backend: `/v1/bots/{id}/profile` (composed) + `/v1/bots/{id}/runs` (per-run) | BFF aggregates `/runs` by input or pulls from `/profile`. |
-| `GET /v1/bots/{id}/analysis` | Exists on backend but response schema TBD | Spot-check the actual response; adapt frontend. |
-| `GET /v1/users/me/bots` | No such endpoint | Backend exposes `/v1/users/me`; BFF queries bots filtered by `user_id`. Or backend adds this endpoint (1-line addition). |
-| `GET /v1/feed/snapshot` | Pure invention | BFF synthesizes from `/v1/leaderboard`, `/v1/stats`, `/v1/events/stream`. |
-| `GET /v1/feed` | Pure invention | BFF reads global event stream and recent leaderboard changes. |
-| `GET /v1/halloffame` | No such concept | BFF computes from `bots WHERE deleted_at IS NOT NULL` (or `status = 'failed'` post-evaluation). |
-| `GET /v1/achievements` | No such system | BFF returns a hardcoded achievement catalog with derived "% of bots that have unlocked this" computed from real run / battle data. **Or** drop achievements UI entirely (reduce frontend scope). |
-| `GET /v1/bots/{id}/debut/events` (SSE) | No such endpoint | Backend has `/v1/events/stream`; BFF filters for `bot_id` events. **Or** the frontend's mock-driven debut sequence stays as-is, no backend coupling. |
-| `GET /v1/tournaments/{id}/events` (SSE) | No such endpoint | Backend has global stream; BFF filters by tournament_id. **Or** poll `/v1/tournaments/{id}` periodically. |
-
-### Bot record — the big one
-
-**Backend `Bot`:**
-```
-id, user_id, display_name, language (python|node|binary),
-status (pending|evaluating|evaluated|failed),
-submitted_at, evaluation_completed_at
-```
-
-**Frontend `Bot`:**
-```
-id, display_name, nickname, language, algorithm, portrait_url, rank,
-record { wins, losses, draws }, ko_percentage,
-signature_input, achilles_heel, recent_form, achievements,
-trash_talk, analysis_url, retired
-```
-
-Strategy per field:
-
-| Frontend field | Source of truth | How |
-|---|---|---|
-| `id`, `display_name`, `language` | Backend | passthrough |
-| `nickname` | **derived** | Deterministic hash on `bot.id` → entry in a curated nickname pool (e.g. "The Pivot", "Silver Bullet"). LLM-generated optional. |
-| `algorithm` | Backend `bot_analyses.algorithm` | passthrough when present, null when not |
-| `portrait_url` | **Backend addition needed** | Phase 7 of `sort-bot-api` (already drafted). Adds `bots.portrait_url` + Leonardo client. |
-| `rank` | Backend `leaderboard_snapshots` (latest) | BFF queries leaderboard, picks bot's row |
-| `record { wins, losses, draws }` | **derived** | BFF aggregates `battles WHERE bot_a_id = X OR bot_b_id = X`, counts wins by `winner_bot_id`. |
-| `ko_percentage` | **derived** | Of this bot's wins, what % were "blowouts" (≥80% rounds)? Compute from `battle_runs`. |
-| `signature_input` | **derived** | Best median-time input from `runs WHERE bot_id = X`. Pull from backend's `/profile`. |
-| `achilles_heel` | **derived** | Worst median-time input. Same source. |
-| `recent_form` | **derived** | Last 5 battles' outcomes. From `battles` ordered by `created_at DESC LIMIT 5`. |
-| `achievements` | **synthesized** | BFF returns achievements based on real stats: "First Blood" if wins ≥ 1, "KO King" if KOs ≥ 10, etc. No DB needed. |
-| `trash_talk` | **synthesized** | Either canned by language hash (cheap) or LLM call cached per bot (rich). Backend's Anthropic client is already wired — could expose a `/v1/bots/{id}/trash-talk` endpoint there. |
-| `analysis_url` | derived | URL to `/v1/bots/{id}/analysis` if available |
-| `retired` | derived | `bots.deleted_at IS NOT NULL` |
-
-### Battle event vocabulary
-
-**Backend events:** `battle_start`, `run_start`, `run_complete`, `battle_complete`.
-
-**Frontend events:** `walkout`, `fight_start`, `round_start`, `round_progress`, `round_end`, `fighter_downed`, `commentary`, `fight_end`.
-
-**Mapping:**
-
-| Backend event | Frontend translation |
-|---|---|
-| `battle_start` | Emit `walkout(bot_a)`, `walkout(bot_b)`, `fight_start` (3 events) |
-| `run_start` | `round_start { input_name from run.input_id, round = nth run }` |
-| `run_complete` | `round_end { winner_bot_id, a_time_seconds, b_time_seconds, delta_seconds }`. If a side timed out → also emit `fighter_downed`. |
-| `battle_complete` | `fight_end { outcome derived from a_wins/b_wins ratio: ko if ≥80% wins, decision otherwise }` |
-
-The translation layer is a stateless transformer in the BFF's SSE proxy.
-
-### Languages
-
-Backend: `python | node | binary`. Frontend: `python | node | go | binary`.
-
-**Decision**: drop `go` from the frontend. Three places to update:
-- `src/lib/weightClass.ts` — remove `go` mapping, keep as fallback to `UNRANKED`
-- `src/components/submit/templates.ts` — remove the `go` template (or keep but disabled)
-- Bot fixtures that use `go` (championBot, etc.) — switch to `node` or `binary`
+Read those before the rest of this plan.
 
 ---
 
-## Architecture decisions (locked after audit)
+## Architecture decisions (locked)
 
-1. **BFF lives in the frontend repo** at `api/` (Vercel Functions). Same deployment, no new auth path, no new CI.
-2. **Backend gets a minimum-viable persona migration**: `bots.{nickname,portrait_url,portrait_generated_at,trash_talk,trash_talk_generated_at}` columns + Leonardo client + a `POST /v1/bots/{id}/trash-talk` endpoint. Plus four new list endpoints the frontend can't synthesize without them: `GET /v1/users/me/bots`, `GET /v1/battles`, `GET /v1/tournaments`, `GET /v1/halloffame`.
-3. **Everything derivable is derived.** Record (W/L/D), KO%, recent_form, signature_input, achilles_heel, achievements all computed in the BFF from real backend data. See `backend-schema.md` for the exact derivation per field.
-4. **Battle event translator** is a stateless transformer in the BFF SSE proxy. Backend's 4-event vocabulary → frontend's 8-event dramatized version per the mapping in `backend-overview.md`.
-5. **Synthesized fields use stable seeds.** Nickname (deterministic from `bot.id` against a curated 100-name pool), achievement assignments (deterministic predicate), trash-talk fallback (per-language hash bucket) — same bot always shows the same fiction.
-6. **The BFF caches.** Per-function in-memory LRU; cold start = empty cache. For production we'd add Redis/CDN; in-process is fine for the take-home.
-7. **MSW handlers stay** for tests. They were already authored against the augmented (frontend) shape, which is what the BFF returns — so existing tests don't change.
-8. **`.env.production` flips** to `VITE_API_BASE_URL=/api` (self-origin, hits the BFF). `VITE_USE_MOCKS=true` stays available as a dev/CI fallback when the backend is down. The BFF reads `BACKEND_URL` (server-only Vercel env var) for the upstream call.
-9. **Tournament SSE: poll, don't push.** Backend has no `/v1/tournaments/{id}/events`; BFF polls `/v1/tournaments/{id}` every 2s on subscription and emits derived events. Cheap, no backend change, acceptable UX.
-10. **Drop `go` from the frontend language enum.** Backend doesn't support it (`python | node | binary` only). Three places: `src/lib/weightClass.ts`, `src/components/submit/templates.ts`, fixtures. champion/veteran fixtures need to switch from `go`/`node` to `binary`/`node`.
-11. **Drop guest auto-provisioning. Require explicit sign-up with display_name + email.** Public routes (leaderboard, profile, arena, head-to-head, tournaments, hall of fame, achievements, events feed, home) stay open. `/submit` and `/me/fighters` gate behind a `<SignUpDialog />`. `useAuthStore` keeps its persist-to-localStorage shape — only the bootstrap call to `ensureGuestUser()` is removed. Login-as-existing-user is out of scope (backend has no login endpoint; returning users paste their stashed key manually if their localStorage was wiped). Backend already supports `email` on `POST /v1/users`.
-12. **Achievements catalog**: First Blood (1+ wins), KO King (10+ KOs — winner ≥80% of input runs), Giant Killer (beat top-3 ranked bot), Perfect Debut (won every input on first eval), Top 10 (best_rank ≤ 10). All derived from real backend data; no backend table.
-13. **Stay on `sort-bot-arena.vercel.app`** for the take-home demo. No custom domain.
+1. **Our own backend service lives in `sort-bot-arena/server/`** (monorepo). Node + TypeScript + Hono, Turso for storage, deployed to Railway as a second service in the same project as `sort-bot-api`.
+2. **Frontend's `VITE_API_BASE_URL`** points exclusively at our server's Railway URL. The browser never sees `sort-bot-api`.
+3. **`sort-bot-api` is read-only to us.** No PRs, no migrations, no new endpoints. Operational config (how it's deployed) is fair game; source code is not.
+4. **Persona data (nickname, portrait, trash talk) lives in our DB**, not theirs. Our server generates and caches via Leonardo + Anthropic.
+5. **Synthesized fields** (record / KO% / recent_form / signature_input / achilles_heel / achievements) are computed in our server from real `sort-bot-api` data on each request, with caching where it matters.
+6. **Battle event translation** is a stateless transformer in our server's SSE proxy. Backend's 4-event vocabulary → frontend's 8-event dramatized version.
+7. **Tournament SSE** via 2s polling on our server (sort-bot-api has no tournament event stream).
+8. **Always-on listener** subscribes to sort-bot-api's `/v1/events/stream` and populates our `recent_battles`, `recent_tournaments`, `event_log`. Lets us answer list/feed endpoints sort-bot-api doesn't have.
+9. **Auth lives entirely on our side.** Users sign up on our server (email + display_name + password), we silently provision a `sk_live_*` key on sort-bot-api and stash it server-side, frontend gets a session token for our server only.
+10. **Drop `go` from frontend language enum.** sort-bot-api supports `python | node | binary` only.
+11. **Drop guest auto-provision.** Public routes stay open; `/submit` and `/me/fighters` gate behind `<SignUpDialog />`.
+12. **Achievements catalog** (5 derived in our server from real stats): First Blood (1+ wins), KO King (10+ KOs — winner ≥80% of input runs), Giant Killer (beat top-3 ranked bot), Perfect Debut (won every input on first eval), Top 10 (best_rank ≤ 10).
+13. **Stay on `sort-bot-arena.vercel.app`** for the take-home. No custom domain.
 
 ---
 
 ## Implementation slices
 
-### Slice 1 — sanity check the live backend
+### Slice 1 — capture sort-bot-api's actual response shapes
 
-**Goal**: confirm what `sort-bot-api` actually returns vs what the OpenAPI spec says.
+**Status:** ready to run; sort-bot-api is live at `https://sort-bot-api-production.up.railway.app`.
 
 ```sh
-cd /Users/justinpinero/Desktop/TakeHomeProjects/Layer/sort-bot-api
-docker-compose up -d
-# create a user
-curl -s -X POST http://localhost:8080/v1/users -H 'Content-Type: application/json' \
-    -d '{"display_name":"recon","email":null}' | tee /tmp/me.json
-# submit a python bot via testdata
+BASE=https://sort-bot-api-production.up.railway.app
+echo "=== /healthz" && curl -s $BASE/healthz; echo
+echo "=== /v1/inputs?limit=2" && curl -s "$BASE/v1/inputs?limit=2" | jq .
+echo "=== /v1/leaderboard?limit=5" && curl -s "$BASE/v1/leaderboard?limit=5" | jq .
+echo "=== /v1/stats" && curl -s "$BASE/v1/stats" | jq .
+
+# create a user, submit a python bot, capture the bot's life cycle
+curl -s -X POST "$BASE/v1/users" -H 'Content-Type: application/json' \
+  -d '{"display_name":"recon","email":"recon@example.com"}' | tee /tmp/me.json
 KEY=$(jq -r .api_key /tmp/me.json)
-curl -s -X POST http://localhost:8080/v1/bots \
-    -H "Authorization: Bearer $KEY" \
-    -F "display_name=Recon Bot" -F "language=python" \
-    -F "source=@./testdata/bots/python/correct.py" | jq .
-# wait, then dump every endpoint of interest
-sleep 30
-for path in /v1/leaderboard /v1/bots /v1/stats /v1/inputs ; do
-    echo "=== $path ==="
-    curl -s "http://localhost:8080$path" | jq . | head -30
-done
+USER_ID=$(jq -r .user_id /tmp/me.json)
+echo "=== /v1/users/me" && curl -s "$BASE/v1/users/me" -H "Authorization: Bearer $KEY" | jq .
+
+# clone sort-bot-api locally to grab a known-good source file
+SRC=/Users/justinpinero/Desktop/TakeHomeProjects/Layer/sort-bot-api/testdata/bots/python/correct.py
+curl -s -X POST "$BASE/v1/bots" \
+  -H "Authorization: Bearer $KEY" \
+  -F "display_name=Recon Bot" \
+  -F "language=python" \
+  -F "source=@$SRC" | tee /tmp/bot.json
+BOT_ID=$(jq -r .id /tmp/bot.json)
+
+# wait for evaluation, then capture every shape the frontend will need
+sleep 60
+echo "=== /v1/bots/{id}" && curl -s "$BASE/v1/bots/$BOT_ID" | jq .
+echo "=== /v1/bots/{id}/profile" && curl -s "$BASE/v1/bots/$BOT_ID/profile" | jq .
+echo "=== /v1/bots/{id}/runs" && curl -s "$BASE/v1/bots/$BOT_ID/runs?limit=10" | jq .
+echo "=== /v1/bots/{id}/rank-history" && curl -s "$BASE/v1/bots/$BOT_ID/rank-history" | jq .
+echo "=== /v1/bots/{id}/analysis" && curl -s "$BASE/v1/bots/$BOT_ID/analysis" | jq .
 ```
 
-Capture each response's actual shape into `requests/api-reconciliation-shapes.md`. This is the ground truth we adapt against.
+Capture each response into `requests/sort-bot-api-shapes.md`. Two purposes:
+1. Verify the OpenAPI spec matches reality (we already noted drift; this confirms or expands).
+2. Give our server's synthesis layer concrete fixtures to build against.
 
-### Slice 2 — backend additions to `sort-bot-api`
-
-Three columns + Leonardo + trash-talk. The Phase 7 plan I wrote already covers the migration + Leonardo wiring; extend it:
-
-- Migration `0002_bot_persona.sql`:
-  ```sql
-  ALTER TABLE bots ADD COLUMN nickname TEXT;
-  ALTER TABLE bots ADD COLUMN portrait_url TEXT;
-  ALTER TABLE bots ADD COLUMN portrait_generated_at INTEGER;
-  ALTER TABLE bots ADD COLUMN trash_talk TEXT;
-  ALTER TABLE bots ADD COLUMN trash_talk_generated_at INTEGER;
-  ```
-- `internal/leonardo/` (per Phase 7 plan).
-- `internal/persona/nickname.go`: deterministic nickname from `(bot.id, language)` over a 100-name pool.
-- `internal/persona/trashtalk.go`: lazy LLM call cached on `bots.trash_talk`. Endpoint: `POST /v1/bots/{id}/trash-talk` (idempotent — returns cached if present, generates + stores otherwise).
-- Worker hook: on bot evaluation completion, compute nickname (immediate), spawn portrait generation goroutine.
-- Update `Bot` schema in OpenAPI to include the three new fields.
-
-### Slice 3 — BFF scaffolding in the frontend repo
+### Slice 2 — scaffold our server (Hono + Turso + Hello World)
 
 ```
-sort-bot-arena/
-├── api/
-│   ├── _lib/
-│   │   ├── backend.ts           # backend client (auth, retry, error mapping)
-│   │   ├── synthesize.ts        # pure functions: record from battles, recent_form, etc.
-│   │   ├── achievements.ts      # achievement catalog + derivation rules
-│   │   ├── nickname.ts          # fallback nickname when backend doesn't yet have one
-│   │   └── trashtalk.ts         # canned taunts by language hash
-│   ├── v1/
-│   │   ├── bots/[id].ts         # GET / PATCH augmented bot
-│   │   ├── bots/[id]/snapshots.ts → maps to /rank-history
-│   │   ├── bots/[id]/inputs.ts  → aggregates /runs
-│   │   ├── leaderboard.ts       # augments rows with synthesized fields
-│   │   ├── leaderboard/inputs/[id].ts
-│   │   ├── feed/snapshot.ts     # NEW: synthesizes home page payload
-│   │   ├── feed.ts              # NEW: synthesizes ticker
-│   │   ├── halloffame.ts        # NEW: filters bots WHERE deleted_at NOT NULL
-│   │   ├── achievements.ts      # NEW: returns the curated catalog
-│   │   ├── tournaments.ts
-│   │   ├── tournaments/[id].ts
-│   │   ├── tournaments/[id]/events.ts  # SSE proxy with event translation (Phase 7-stretch)
-│   │   ├── battles.ts           # NEW: list battles (since backend lacks GET /v1/battles)
-│   │   ├── battles/[id].ts      # augments with frontend "battle" shape
-│   │   └── battles/[id]/events.ts  # SSE proxy + event translation
-│   └── healthz.ts                # BFF liveness
-├── vercel.json                   # add functions config
+server/
+├── package.json (Hono, libsql, drizzle, vitest, hono/testing, msw, bcrypt, jose)
+├── tsconfig.json
+├── src/
+│   ├── index.ts (Hono app, /api/healthz returns "ok")
+│   ├── env.ts (zod validation)
+│   ├── db/client.ts (libsql)
+│   └── lib/log.ts
+├── tests/
+└── Dockerfile
 ```
 
-`vercel.json` updates:
-```json
-{
-  "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api/$1" },  
-    { "source": "/(.*)", "destination": "/index.html" }
-  ],
-  "functions": {
-    "api/**/*.ts": { "runtime": "nodejs20.x", "memory": 512 }
-  }
-}
-```
+- **Smoke**: `pnpm --filter server dev`, `curl localhost:8080/api/healthz` → "ok".
+- **Turso provisioning**: Turso CLI is fast — `turso db create sort-bot-arena-server`, capture connection URL + auth token. Skip if user already has a preferred storage choice.
+- **Vitest** wired up; first test is a `GET /api/healthz` integration via `hono/testing`.
 
-`VITE_API_BASE_URL` becomes `https://sort-bot-arena.vercel.app/api` (i.e., self) and the BFF proxies to `BACKEND_URL` (a server-only env var).
+### Slice 3 — auth (sign up, session token, sort-bot-api key provisioning)
 
-### Slice 4 — synthesize helpers (RED-first)
+- `POST /api/v1/auth/signup` — accepts `{ email, display_name, password }`. zod-validated. bcrypt hashes the password. Calls `POST /v1/users` against sort-bot-api with `{ display_name, email }`, captures the returned `sk_live_*`, stashes in `users` row. Returns a session token.
+- Session token: signed JWT (using `jose`) carrying `{ user_id, exp }`, set as `Set-Cookie: session=<jwt>; HttpOnly; Secure; SameSite=Strict`.
+- Auth middleware in `auth/middleware.ts` reads the cookie, validates, attaches `c.var.user` to the Hono context.
+- Tests: signup happy path, duplicate email → 409, missing fields → 400, sort-bot-api returning 5xx → bubble as 502.
 
-Pure TS functions in `api/_lib/synthesize.ts` that transform real backend shapes into frontend shapes. Each gets a unit test (`api/_lib/synthesize.test.ts`) using captured real-shape fixtures.
+### Slice 4 — sort-bot-api client
 
-- `synthesizeBot(real, runs, profile, battles): FrontendBot`
-- `synthesizeLeaderboardRow(realRow, deriveData): FrontendLeaderboardEntry`
-- `deriveRecord(battles, botId): { wins, losses, draws }`
-- `deriveRecentForm(battles, botId): ('W'|'L'|'D')[]`
-- `deriveSignatureInput(profile): BotInputResult | null`
-- `deriveAchillesHeel(profile): BotInputResult | null`
-- `deriveKoPercentage(battles, botId): number`
-- `synthesizeAchievements(real, runs, battles): Achievement[]`
+- `src/clients/sort-bot-api.ts` — typed wrapper around fetch.
+- Methods mirror what we'll need: `getBot`, `getBotProfile`, `getBotRuns`, `getBotRankHistory`, `getBotAnalysis`, `getLeaderboard`, `getPerInputLeaderboard`, `getBattle`, `getBattleEvents` (returns an SSE EventSource-like stream), `getEventsStream`, `getStats`, `getInputs`, `postBot`, `patchBot`, `deleteBot`, `getHeadToHead`, `getTournament`.
+- AbortController timeouts (15s default), structured `ApiError` with `status`, `code`, `body`, `request_id`.
+- Tests: MSW fixtures for the upstream calls; assert pass-through and error mapping.
 
-### Slice 5 — `/api/v1/bots/{id}` BFF handler
+### Slice 5 — synthesis helpers (pure)
 
-Wires the synthesize helpers into a Vercel function. Calls real backend in parallel for `bot`, `profile`, `runs?limit=5`, `battles?bot=<id>` (this last one needs backend support — see Slice 2 — or list via BFF aggregation). Returns the augmented shape.
+- `synthesize/record.ts`: `deriveRecord(battles: Battle[], botId): { wins, losses, draws }`, `deriveKoPercentage(battles, botId)`, `deriveRecentForm(battles, botId)`.
+- `synthesize/bot.ts`: `synthesizeBot(realBot, profile, persona, ourBattles)` returns the rich frontend shape.
+- `synthesize/leaderboard.ts`: per-row augmentation.
+- `synthesize/battle-events.ts`: stateless `(backendEvent) => frontendEvent[]` translator.
+- 100% unit tests, no I/O.
 
-### Slice 6 — `/api/v1/leaderboard` BFF handler
+### Slice 6 — persona generators
 
-Calls real backend, augments each row.
+- `persona/nickname.ts`: pure deterministic. 100-name pool, hash on `bot.id` modulo pool size.
+- `persona/portrait.ts`: orchestrates Leonardo. Idempotent (skip if already in `bot_personas`). Failure non-fatal.
+- `persona/trash-talk.ts`: orchestrates Anthropic. Same idempotence. Fallback to language-keyed canned strings if the API is down or the key is missing.
+- `persona/achievements.ts`: catalog + per-bot evaluator + global rarity aggregator.
 
-### Slice 7 — synthesized invented endpoints
+### Slice 7 — global SSE listener
 
-`/api/v1/feed/snapshot`, `/api/v1/halloffame`, `/api/v1/achievements`. Each composes from real data + the catalog.
+- `listener/global-stream.ts`: connects to `${SORT_BOT_API_URL}/v1/events/stream`, parses event types, writes to `recent_battles` / `recent_tournaments` / `event_log` accordingly.
+- Reconnect with exponential backoff on disconnect.
+- Started by the Hono app at boot when `RUN_LISTENER=true`.
+- Test: feed canned event lines, assert DB writes.
 
-### Slice 8 — battle SSE event translator
+### Slice 8 — read endpoints (mostly proxy + augment)
 
-`api/v1/battles/[id]/events.ts` — proxies the backend SSE stream and translates each backend event into 1-N frontend events. Stateless per connection. Test against canned event sequences.
+- `routes/leaderboard.ts`: GET `/api/v1/leaderboard` — calls sort-bot-api, augments each row with persona/synthesized data.
+- `routes/bots.ts`:
+  - GET `/api/v1/bots/:id` — fans out to sort-bot-api `/bots/:id`, `/profile`, our `bot_personas`, our `recent_battles`. Returns rich shape.
+  - GET `/api/v1/bots/:id/snapshots` — passthrough rename to `/rank-history`.
+  - GET `/api/v1/bots/:id/inputs` — derived from `/profile`.
+  - GET `/api/v1/bots/:id/analysis` — passthrough.
+  - PATCH `/api/v1/bots/:id` — auth + ownership; passthrough.
+  - DELETE `/api/v1/bots/:id` — auth + ownership; passthrough + insert into `retired_bots`.
+- `routes/users.ts`:
+  - GET `/api/v1/users/me/bots` — read from `user_bots` joined to fresh sort-bot-api lookups.
+- `routes/halloffame.ts`: reads `retired_bots`.
+- `routes/achievements.ts`: returns the static catalog with rarity computed from sort-bot-api stats.
+- `routes/feed.ts`:
+  - GET `/api/v1/feed/snapshot` — composes leaderboard top 3 + stats + recent event_log.
+  - GET `/api/v1/feed` — recent event_log.
+- `routes/stats.ts`: passthrough to `/v1/stats`.
+- `routes/badge.ts`: passthrough proxy to `/v1/bots/:id/badge.svg`, sets `Cache-Control: public, max-age=300`.
+- `routes/h2h.ts`: GET `/api/v1/bots/:a/vs/:b` — passthrough.
 
-### Slice 9 — frontend `.env.production` flip + final integration smoke
+### Slice 9 — write endpoints (auth + sort-bot-api key proxy)
 
-Switch `VITE_API_BASE_URL` to `/api`, set `BACKEND_URL` in Vercel as an env var, deploy. Hit every page on the live site, verify the data flows from real backend → BFF → frontend.
+- POST `/api/v1/bots` — auth required. Calls sort-bot-api `POST /v1/bots` with the user's stashed key. Inserts into `user_bots`. Returns rich shape.
+- POST `/api/v1/battles` — auth required. Passthrough.
+- POST `/api/v1/tournaments` — auth required. Passthrough.
+- POST `/api/v1/inputs` — auth required. Passthrough.
+- POST `/api/v1/inputs/adversarial` — auth required. Passthrough.
 
-### Slice 10 — keep MSW for tests + dev-without-backend
+### Slice 10 — SSE endpoints
 
-`VITE_USE_MOCKS=true` stays available. The MSW handlers' shapes were already set up to match the *frontend* shape (the augmented one), so they keep working as the BFF's contract for tests.
+- `routes/battles.ts` GET `/api/v1/battles/:id/events`: subscribes to sort-bot-api's `/v1/battles/:id/events`, runs through `synthesize/battle-events.ts`, forwards to client.
+- `routes/bots.ts` GET `/api/v1/bots/:id/debut/events`: tails the global stream (already consumed by our listener) and emits eval-progress events filtered by `bot_id`. Implementation: a per-subscriber filter against an in-memory ring buffer that mirrors the listener's input.
+- `routes/tournaments.ts` GET `/api/v1/tournaments/:id/events`: 2s polling loop comparing previous tournament state to current; emits derived events.
 
-### Slice 11 — close-out
+### Slice 11 — frontend changes
 
-PR for the frontend (BFF + .env flip), separate PR for backend (3-column migration + Leonardo + persona). Update `references/architecture.md` on both sides.
+- `src/main.tsx`: drop `ensureGuestUser()` call from bootstrap.
+- New `<SignUpDialog />` component (or `/signup` route). Two fields: display_name, email. Password-less optional? For take-home, password is fine.
+- `<TopNav />` user-menu: shows "Sign up to submit" CTA when `useAuthStore.apiKey` is null. Profile menu otherwise.
+- `<SubmitPage />`, `<MyFightersPage />`: gate behind sign-up dialog.
+- `src/api/client.ts`: no changes (it already uses `VITE_API_BASE_URL` + `Authorization: Bearer`); we'll switch from API-key bearer to session-cookie auth, so `client.ts` needs to send `credentials: 'include'` and stop attaching `Authorization`.
+- Remove `go` from `src/lib/weightClass.ts`, `src/components/submit/templates.ts`, fixtures.
+- `useAuthStore`: replace `apiKey/userId/displayName` shape with `{ user, sessionLoaded }`. Auth state derived from a `/api/v1/users/me` round-trip on first load (cookie-based).
+
+### Slice 12 — `.env.production` flip + deploy
+
+- `VITE_API_BASE_URL=https://sort-bot-arena-server-production.up.railway.app`
+- `VITE_USE_MOCKS=false`
+- Push, Vercel rebuilds, full integration smoke on the deployed site.
+
+### Slice 13 — close-out
+
+- One PR on `sort-bot-arena` containing: server scaffold, sign-up flow, frontend env flip, MSW handler updates if any.
+- Update `CLAUDE.md` phase table to reflect "API reconciliation" as a shipped milestone.
+- Document deployment of our server in `references/deployment-landmines.md`.
 
 ---
 
 ## Tests
 
-### Frontend / BFF
-- **Unit (synthesize helpers)**: every derive function has table-driven tests against captured real backend fixtures.
-- **BFF handlers**: integration tests that mount the handler, mock `BACKEND_URL` via MSW (yes, MSW in the BFF too), assert response shape matches frontend's existing expectations.
-- **Existing component tests**: should pass unchanged because the frontend shape doesn't change.
-- **One smoke test per route via Playwright** (D-1 from `debt.md` finally pays off): hit /, /leaderboard, /bots/<seed>, /arena/<seed> against the deployed BFF + backend, screenshot.
-
-### Backend
-- **Migration tests**: nickname / portrait / trash-talk fields read back correctly.
-- **Persona unit tests**: nickname is deterministic, trash-talk caches correctly, Leonardo client polls correctly.
-- **Endpoint tests**: `POST /v1/bots/{id}/trash-talk` returns same string on second call.
+- **Unit (synthesis helpers, persona generators, battle-event translator)**: pure functions, table-driven tests against fixtures captured in Slice 1.
+- **Integration (server routes)**: `hono/testing` mounts the app, MSW provides fake `sort-bot-api`. Each route has a happy-path + error-path test.
+- **Existing component tests on the frontend**: should pass unchanged because the augmented shape is the same. Auth-related component tests need an update (sign-up dialog instead of auto-provision).
+- **End-to-end (Playwright)**: hit `/`, `/leaderboard`, `/bots/<seed>`, `/arena/<seed>`, sign up, submit a bot, watch evaluation, screenshot. Closes out D-1 in `debt.md`.
 
 ---
 
 ## Risks
 
-- **Real backend stability**. If `sort-bot-api` is flaky during reconciliation, BFF tests will be flaky too. Mitigation: BFF is testable in isolation via MSW-against-itself.
-- **Augmented response latency**. The `/api/v1/bots/{id}` handler fans out to 4 backend endpoints. Cold-start could be 500ms+. Mitigation: parallel `Promise.all`, per-edge in-memory cache for hot bots, precompute the augmentation in a worker (Phase 8).
-- **SSE proxy buffering**. Vercel's response buffering on functions defaults to off for streaming, but specific edge cases bite. Mitigation: test the SSE translator under real load before relying on it.
-- **Tournament event mismatch**. Backend doesn't have a tournament event stream at all. Cleanest path: BFF polls the backend every 2s and emits derived events. Slightly worse UX but simple.
-
-## Open questions (still need your input)
-
-1. **Where is `sort-bot-api` deployed**, if anywhere? We need a `BACKEND_URL` for the BFF. Three paths:
-   - It's already deployed somewhere → tell me the URL.
-   - It's not deployed → I deploy to Railway or Fly. (Recommended: Railway, since the backend already has a `docker-compose.yml` and Railway maps Dockerfile builds cleanly. Fly would also work.)
-   - We run the backend in the same Vercel project via Vercel's Go runtime → won't work for sandbox tests (Vercel functions can't fork sandboxed subprocesses), but acceptable if we disable sandbox runs and only return cached fixture data. Defer this option unless you specifically want a single-deploy story.
-
-2. **Achievements catalog confirm.** I'm proposing 5 derived from real stats:
-   - **First Blood** (1+ wins)
-   - **KO King** (10+ KOs — winner ≥80% of input runs in a battle)
-   - **Giant Killer** (beat a top-3 ranked bot)
-   - **Perfect Debut** (won every input on first evaluation — i.e. all `runs.status = success` AND `runs.duration_ms` median was best in field for that input on the first eval)
-   - **Top 10** (best_rank ≤ 10 across rank-history)
-   
-   Confirm or replace.
-
-3. **Anonymous "guest" UX.** Backend's `POST /v1/bots` accepts anonymous and attributes to `system` user. Frontend's `useAuthStore` auto-provisions a guest via `POST /v1/users` and stashes the key. Two paths:
-   - Keep auto-provision: every browser visitor gets a real user account. Slight privacy footprint but the take-home doesn't care.
-   - Drop auto-provision: send anonymous bot submissions, the bot belongs to `system`. Simpler but breaks `/me/fighters` (the user has no bots they own).
-   
-   Recommend: keep auto-provision.
-
-4. **Custom domain?** `sort-bot-arena.vercel.app` is fine for the take-home. Confirm or specify a custom domain you want to wire.
+- **Cold starts on Railway** can be 1–2s for our server. Acceptable for take-home; Vercel-side caching softens it.
+- **SSE connection limits**: Railway terminates idle connections. We add a 15s heartbeat in our SSE responses (matches sort-bot-api's pattern).
+- **Turso quota**: free tier is 9GB and 1B rows; we'll be in the kilobyte territory. No risk.
+- **sort-bot-api rate limits** apply to our server's calls; if we have many users, the `429` cascade hits. For take-home demo (1–10 users) it's fine.
+- **Listener crashes**: if the always-on listener dies, derived state stops updating. Mitigation: Railway auto-restart; Hono boot loop reconnects to `/v1/events/stream` with exponential backoff.
 
 ---
 
-## Deliverables
+## All decisions confirmed
 
-1. This plan committed (you're reading it).
-2. After approval:
-   - 1 PR on `sort-bot-arena` adding the BFF (`api/`), updating `.env.production`, updating MSW where it diverges from BFF.
-   - 1 PR on `sort-bot-api` adding the 3 columns + Leonardo + persona endpoint.
-3. Both deployed. Frontend's live demo flips from "MSW-mocked everything" to "real backend, BFF-augmented." Visual experience identical.
+- ✅ Leonardo API key fetched from 1Password.
+- ✅ Anthropic API key fetched from 1Password (separate key for our server's trash-talk generation).
+- ✅ sort-bot-api deployed at `https://sort-bot-api-production.up.railway.app`. CORS configured for `https://sort-bot-arena.vercel.app`. Healthz green.
+- ✅ Our server in `sort-bot-arena/server/` — Node + TypeScript + Hono, Turso storage, monorepo.
+- ✅ Achievements catalog: 5 canned, derived from real stats.
+- ✅ Drop guest auto-provision; require sign-up with email + password.
+- ✅ Drop `go` language from frontend.
+- ✅ Stay on `sort-bot-arena.vercel.app`.
 
-## All decisions locked
-
-- ✅ Leonardo API key — fetched from 1Password.
-- ✅ BFF in Vercel functions (decision #1).
-- ✅ Persona migration (5 columns) on backend (decision #2).
-- ✅ Derive everything derivable in BFF (decision #3).
-- ✅ Battle event translator stateless in BFF (decision #4).
-- ✅ Stable seeds for synthesized fields (decision #5).
-- ✅ MSW handlers retained for tests (decision #7).
-- ✅ `.env.production` flips to `/api` self-origin (decision #8).
-- ✅ Tournament SSE via 2s polling (decision #9).
-- ✅ Drop `go` from frontend enum (decision #10).
-- ✅ Drop guest auto-provision — require explicit sign-up with email (decision #11).
-- ✅ Achievements catalog: 5 derived from real stats (decision #12).
-- ✅ Domain: `sort-bot-arena.vercel.app` (decision #13).
-- ✅ Backend deploy: Railway. CLI authenticated and ready.
-
-Ready to execute. Starting with Slice 0 (Railway deploy of `sort-bot-api`) since it unblocks the rest.
+Ready to start Slice 1 on a tight loop.

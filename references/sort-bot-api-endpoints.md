@@ -1,8 +1,8 @@
-# Backend endpoints — sort-bot-api ground truth
+# sort-bot-api endpoints — ground truth
 
-Every route the running service exposes, with the actual response shape from the code (not the OpenAPI spec when they disagree). The frontend's BFF (`api/v1/...` Vercel functions) sits on top of these and either proxies or augments per the [reconciliation plan](../requests/api-reconciliation-plan.md).
+Every route the third-party `sort-bot-api` service exposes, with the actual response shape from the code (not the OpenAPI spec when they disagree). Our own backend (`sort-bot-arena/server/`) calls these as a client — see [`server-architecture.md`](./server-architecture.md) for our service's design and [the reconciliation plan](../requests/api-reconciliation-plan.md) for the integration order.
 
-Companion: [`backend-overview.md`](./backend-overview.md) for the architecture summary.
+Companion: [`sort-bot-api-overview.md`](./sort-bot-api-overview.md) for the architecture summary.
 
 ## Conventions
 
@@ -280,24 +280,22 @@ There is **no `GET /v1/tournaments` list endpoint** either. Same gap as battles.
 
 ---
 
-## Endpoints frontend wants that don't exist
+## Frontend-expected endpoints that don't exist on sort-bot-api
 
-The BFF synthesizes these. See [the reconciliation plan](../requests/api-reconciliation-plan.md) for the strategy per route.
+Our own backend (`sort-bot-arena/server/`) implements these — either by computing from real data, by maintaining derived state (subscribed to the global SSE stream), or by returning a synthesized payload. **No changes to `sort-bot-api`.**
 
-| Frontend path | Backend reality | BFF strategy |
+| Frontend path | sort-bot-api reality | Our server's strategy |
 |---|---|---|
-| `GET /v1/bots/{id}/snapshots` | rename of `/rank-history` | trivial proxy with path rewrite |
-| `GET /v1/bots/{id}/inputs` (per-input perf) | `/v1/bots/{id}/profile` (composed) or `/runs` aggregated | use `/profile` |
-| `GET /v1/users/me/bots` | none | call `/users/me` then... see note below |
-| `GET /v1/bots/{id}/debut/events` (SSE) | none (eval events go to `global`) | filter `/v1/events/stream` by `bot_id` |
-| `GET /v1/feed/snapshot` | invented | compose `/leaderboard` (top 3) + `/stats` + last N items from `/v1/events/stream` |
-| `GET /v1/feed` | invented | recent items from `/v1/events/stream` |
-| `GET /v1/halloffame` | invented | query bots WHERE `deleted_at IS NOT NULL` — but backend has no list endpoint with filter; needs a small backend addition |
-| `GET /v1/achievements` | none | BFF returns the curated catalog (no backend table) |
-| `GET /v1/tournaments/{id}/events` (SSE) | none | poll `/tournaments/{id}` every 2s |
-| `GET /v1/battles` (list) | none | needs a backend addition |
-| `GET /v1/tournaments` (list) | none | needs a backend addition |
+| `GET /v1/bots/{id}/snapshots` | rename of `/rank-history` | proxy with path rewrite |
+| `GET /v1/bots/{id}/inputs` (per-input perf) | `/v1/bots/{id}/profile` exposes per-input medians | proxy + reshape from `/profile` |
+| `GET /v1/users/me/bots` | none | our server keeps a user→bot index in Turso, populated as our auth layer issues `sk_live_*` keys against `sort-bot-api` for each user |
+| `GET /v1/bots/{id}/debut/events` (SSE) | eval events emit to `global` only | our server tails the global stream, filters by `bot_id`, re-emits as a per-bot stream |
+| `GET /v1/feed/snapshot` | n/a | compose from `/leaderboard` top N + `/stats` + recent items from our own event index |
+| `GET /v1/feed` | n/a | recent items from our event index (populated by SSE listener) |
+| `GET /v1/halloffame` | n/a | our server tracks bots whose owner soft-deleted them — derived from a `retired_bots` table populated when our auth layer's "retire" call fires |
+| `GET /v1/achievements` | n/a | static catalog returned from our server, with rarity computed from real backend stats |
+| `GET /v1/tournaments/{id}/events` (SSE) | n/a (only `battle:{id}` and `global` topics on sort-bot-api) | our server polls `/tournaments/{id}` on subscribe, diffs state, emits derived events |
+| `GET /v1/battles` (list) | n/a | our server keeps `recent_battles` in Turso, populated via global SSE on `battle_complete` events |
+| `GET /v1/tournaments` (list) | n/a | our server keeps `recent_tournaments` in Turso, populated similarly |
 
-The "needs a backend addition" lines mean: a few small Go handlers and store methods on `sort-bot-api`. Cheap; folded into the same backend PR as the persona columns.
-
-The `me/bots` case: easiest is to add `GET /v1/users/me/bots` to the backend; otherwise the BFF would need to subscribe to `bot_submitted` events and maintain an in-memory user→bot index, which adds operational complexity for no payoff.
+See [`server-architecture.md`](./server-architecture.md) for how our backend implements all of the above.
