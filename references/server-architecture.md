@@ -228,8 +228,8 @@ The frontend's MSW handlers stay valid — they were written against the augment
 ## What we're NOT building
 
 - Email verification / magic-link recovery (sort-bot-api doesn't expose a way to update user email; punt).
-- Password reset flow (acceptable for take-home).
+- Password reset flow (out of scope for v1).
 - Multi-tenant API key rotation (one key per user, never rotated).
 - An admin / dashboard surface for our own users.
 - Webhooks for sort-bot-api back to us (we use SSE).
-- Rate limiting on our server (sort-bot-api already rate-limits; we don't double up for take-home).
+- Rate limiting on our server (sort-bot-api already rate-limits; no double layer for v1).

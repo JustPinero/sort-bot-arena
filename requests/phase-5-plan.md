@@ -14,7 +14,7 @@ Two flows. **Submit**: register a fighter via a Monaco-editor-driven form; watch
 - Tournament bracket renders correctly for power-of-2 and non-power-of-2 participant counts (byes shown explicitly).
 - Live tournament events drive bracket state updates correctly.
 
-## Decisions (locked, given the take-home shape)
+## Decisions (locked, given the project shape)
 
 - **Monaco lazy-loaded.** `@monaco-editor/react` only on `/submit`. The bundle is ~600KB minified; we do not want it in the main shell.
 - **MSW-mocked submit + tournament endpoints.** Backend Phase 5+ doesn't ship the submission pipeline yet; debut evaluation is driven by the same `playMockBattle`-style scripted streamer ("playMockEvaluation").

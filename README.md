@@ -1,6 +1,6 @@
 # sort-arena-web
 
-Frontend for the [sort-bot-api](https://github.com/JustPinero/sort-bot-api) take-home — a BattleBots × UFC broadcast experience for sorting algorithms. Vite + React 18 + TypeScript strict, deployed as a static SPA on Vercel.
+Frontend for [sort-bot-api](https://github.com/JustPinero/sort-bot-api) — a BattleBots × UFC broadcast experience for sorting algorithms. Vite + React 18 + TypeScript strict, deployed as a static SPA on Vercel.
 
 See [`sort-bot-arena-kickoff.md`](./sort-bot-arena-kickoff.md) for the full project kickoff and [`CLAUDE.md`](./CLAUDE.md) for the agent brain.
 
@@ -64,4 +64,4 @@ Phase plans live in `requests/phase-N-plan.md`. Phases merge to `main` via `/pha
 
 ## License
 
-Take-home submission. No license declared.
+No license declared.

@@ -2,7 +2,7 @@
 
 ## What this repo is
 
-Frontend for the sort-bot-api take-home: a BattleBots × UFC broadcast experience for sorting algorithms. SPA built on Vite + React 18 + TS strict. Pure presentation layer — every server-side concern lives in [`sort-bot-api`](https://github.com/JustPinero/sort-bot-api).
+Frontend for sort-bot-api: a BattleBots × UFC broadcast experience for sorting algorithms. SPA built on Vite + React 18 + TS strict. Pure presentation layer — every server-side concern lives in [`sort-bot-api`](https://github.com/JustPinero/sort-bot-api).
 
 **Phases:** 1 foundation → 2 Tale of the Tape + profile → 3 leaderboard → 4 arena → 5 submit + tournaments → 6 polish + homepage. Full scope in [`sort-bot-arena-kickoff.md`](./sort-bot-arena-kickoff.md).
 

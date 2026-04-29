@@ -14,7 +14,7 @@ The Playwright config + `tests/e2e/` scaffold are in place from Phase 1 Slice 8.
 2. A `tests/e2e/bot-profile.spec.ts` for the full profile page in the champion + rookie variants.
 3. A CI job that runs `pnpm exec playwright test --grep @phase-2` and uploads diffs as artifacts.
 
-Why deferred: shipping the snapshots requires booting the dev server in CI (with MSW enabled), which in turn requires adding a Playwright workflow and tuning the `webServer` config so the CI run isn't flaky. Worth doing, but the visual contract is otherwise enforced by axe-clean smoke tests + the design tokens being consumed via CSS variables (no inline hex). The take-home is shippable without it.
+Why deferred: shipping the snapshots requires booting the dev server in CI (with MSW enabled), which in turn requires adding a Playwright workflow and tuning the `webServer` config so the CI run isn't flaky. Worth doing, but the visual contract is otherwise enforced by axe-clean smoke tests + the design tokens being consumed via CSS variables (no inline hex). The app is shippable without it.
 
 When activated: branch `phase-2-visual-regression` from main, add the two specs, gate them on `VITE_ENABLE_VISUAL_REGRESSION=true`, wire a Playwright job into `.github/workflows/ci.yml` that runs only on PR (not main) so a flaky snapshot doesn't block deploys.
 

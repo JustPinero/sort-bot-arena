@@ -34,7 +34,7 @@ Read those before the rest of this plan.
 10. **Drop `go` from frontend language enum.** sort-bot-api supports `python | node | binary` only.
 11. **Drop guest auto-provision.** Public routes stay open; `/submit` and `/me/fighters` gate behind `<SignUpDialog />`.
 12. **Achievements catalog** (5 derived in our server from real stats): First Blood (1+ wins), KO King (10+ KOs — winner ≥80% of input runs), Giant Killer (beat top-3 ranked bot), Perfect Debut (won every input on first eval), Top 10 (best_rank ≤ 10).
-13. **Stay on `sort-bot-arena.vercel.app`** for the take-home. No custom domain.
+13. **Stay on `sort-bot-arena.vercel.app`**. No custom domain.
 
 ---
 
@@ -59,7 +59,7 @@ USER_ID=$(jq -r .user_id /tmp/me.json)
 echo "=== /v1/users/me" && curl -s "$BASE/v1/users/me" -H "Authorization: Bearer $KEY" | jq .
 
 # clone sort-bot-api locally to grab a known-good source file
-SRC=/Users/justinpinero/Desktop/TakeHomeProjects/Layer/sort-bot-api/testdata/bots/python/correct.py
+SRC=../sort-bot-api/testdata/bots/python/correct.py
 curl -s -X POST "$BASE/v1/bots" \
   -H "Authorization: Bearer $KEY" \
   -F "display_name=Recon Bot" \
@@ -173,7 +173,7 @@ server/
 ### Slice 11 — frontend changes
 
 - `src/main.tsx`: drop `ensureGuestUser()` call from bootstrap.
-- New `<SignUpDialog />` component (or `/signup` route). Two fields: display_name, email. Password-less optional? For take-home, password is fine.
+- New `<SignUpDialog />` component (or `/signup` route). Two fields: display_name, email. Password is fine for v1.
 - `<TopNav />` user-menu: shows "Sign up to submit" CTA when `useAuthStore.apiKey` is null. Profile menu otherwise.
 - `<SubmitPage />`, `<MyFightersPage />`: gate behind sign-up dialog.
 - `src/api/client.ts`: no changes (it already uses `VITE_API_BASE_URL` + `Authorization: Bearer`); we'll switch from API-key bearer to session-cookie auth, so `client.ts` needs to send `credentials: 'include'` and stop attaching `Authorization`.
@@ -205,18 +205,17 @@ server/
 
 ## Risks
 
-- **Cold starts on Railway** can be 1–2s for our server. Acceptable for take-home; Vercel-side caching softens it.
+- **Cold starts on Railway** can be 1–2s for our server. Acceptable; Vercel-side caching softens it.
 - **SSE connection limits**: Railway terminates idle connections. We add a 15s heartbeat in our SSE responses (matches sort-bot-api's pattern).
 - **Turso quota**: free tier is 9GB and 1B rows; we'll be in the kilobyte territory. No risk.
-- **sort-bot-api rate limits** apply to our server's calls; if we have many users, the `429` cascade hits. For take-home demo (1–10 users) it's fine.
+- **sort-bot-api rate limits** apply to our server's calls; if we have many users, the `429` cascade hits. At demo scale (1–10 users) it's fine.
 - **Listener crashes**: if the always-on listener dies, derived state stops updating. Mitigation: Railway auto-restart; Hono boot loop reconnects to `/v1/events/stream` with exponential backoff.
 
 ---
 
 ## All decisions confirmed
 
-- ✅ Leonardo API key fetched from 1Password.
-- ✅ Anthropic API key fetched from 1Password (separate key for our server's trash-talk generation).
+- ✅ Leonardo + Anthropic API keys provisioned and stored in our backend's environment.
 - ✅ sort-bot-api deployed at `https://sort-bot-api-production.up.railway.app`. CORS configured for `https://sort-bot-arena.vercel.app`. Healthz green.
 - ✅ Our server in `sort-bot-arena/server/` — Node + TypeScript + Hono, Turso storage, monorepo.
 - ✅ Achievements catalog: 5 canned, derived from real stats.

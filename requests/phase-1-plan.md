@@ -337,7 +337,7 @@ Will be codified in `.claude/skills/coding-standards/SKILL.md`:
    - Recommendation: (a). The frontend doesn't need a live backend to prove the layout shell, design system, or theming. We get parity in Phase 2 once both repos converge.
 3. **OpenAPI consumption.** Plan: `scripts/generate-api-types.sh` reads from `../sort-bot-api/references/openapi.yaml` (relative path) when `BACKEND_REPO` env is unset, otherwise from `$BACKEND_REPO/references/openapi.yaml`. CI will skip generation and rely on a checked-in `src/api/types.ts` stub until backend OpenAPI stabilizes.
 4. **shadcn/ui CLI.** It scaffolds files into our `src/components/ui/` and edits `tailwind.config.ts`. I'll run it once and commit the result; future component additions go through the same CLI to stay in sync. Confirm OK with that workflow.
-5. **PR workflow.** Backend uses phase branches merged to `main` after `/phase-complete`. Same for frontend? Or do you want all phases on one long-lived branch until takehome submission?
+5. **PR workflow.** Backend uses phase branches merged to `main` after `/phase-complete`. Same for frontend? Or do you want all phases on one long-lived branch until project completion?
 
 ## Out of scope (Phase 2+)
 
