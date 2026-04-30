@@ -1,14 +1,16 @@
 import { Hono } from 'hono';
 import { streamSSE } from 'hono/streaming';
-import type { SortBotApiClient } from '../clients/sort-bot-api/index.js';
+
+import { log } from '../lib/log.js';
 import {
   translateBackendEvent,
   type BackendBattleEvent,
   type FrontendBattleEvent,
   type TranslateContext,
 } from '../synthesize/battle-events.js';
+
 import type { AppContext } from '../auth/middleware.js';
-import { log } from '../lib/log.js';
+import type { SortBotApiClient } from '../clients/sort-bot-api/index.js';
 
 // GET /api/v1/battles/:id/events
 // Subscribes to sort-bot-api's per-battle SSE feed, runs each event through
@@ -113,9 +115,13 @@ async function proxyUpstream(
   let pendingType: BackendBattleEvent['type'] | '' = '';
   let pendingData = '';
 
-  while (true) {
+  let streamDone = false;
+  while (!streamDone) {
     const { value, done } = await reader.read();
-    if (done) break;
+    if (done) {
+      streamDone = true;
+      break;
+    }
     buf += decoder.decode(value, { stream: true });
     let idx;
     while ((idx = buf.indexOf('\n')) !== -1) {

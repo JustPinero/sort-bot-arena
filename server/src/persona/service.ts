@@ -2,10 +2,9 @@
 // is wrapped in try/catch so a Leonardo or Anthropic outage never
 // breaks our /api/v1/bots POST flow.
 
-import type { Client } from '@libsql/client';
 import { log } from '../lib/log.js';
-import { AnthropicClient } from './anthropic.js';
-import { LeonardoClient, buildPortraitPrompt } from './leonardo.js';
+
+import { buildPortraitPrompt } from './leonardo.js';
 import { nicknameFor } from './nicknames.js';
 import {
   ensurePersonaRow,
@@ -17,6 +16,10 @@ import {
   setTrashTalkFailed,
   type BotPersonaRow,
 } from './store.js';
+
+import type { AnthropicClient } from './anthropic.js';
+import type { LeonardoClient } from './leonardo.js';
+import type { Client } from '@libsql/client';
 
 export interface PersonaServiceConfig {
   db: Client;
@@ -55,10 +58,7 @@ export class PersonaService {
   // Same logic, awaitable — used in tests + for synchronous flows.
   async generate(bot: BotIdentity): Promise<BotPersonaRow | null> {
     await ensurePersonaRow(this.cfg.db, bot.bot_id);
-    await Promise.allSettled([
-      this.generatePortrait(bot),
-      this.generateTrashTalk(bot),
-    ]);
+    await Promise.allSettled([this.generatePortrait(bot), this.generateTrashTalk(bot)]);
     return getPersona(this.cfg.db, bot.bot_id);
   }
 

@@ -1,14 +1,13 @@
 // Combines a sort-bot-api ApiBot + BotProfileResponse + our persona +
 // our battle history into the rich frontend shape.
 
-import type {
-  ApiBot,
-  BotProfileResponse,
-} from '../clients/sort-bot-api/index.js';
 import { nicknameFor } from '../persona/nicknames.js';
-import type { BotPersonaRow } from '../persona/store.js';
+
 import { deriveKoPercentage, deriveRecentForm, deriveRecord } from './record.js';
+
 import type { BattleForBot } from './types.js';
+import type { ApiBot, BotProfileResponse } from '../clients/sort-bot-api/index.js';
+import type { BotPersonaRow } from '../persona/store.js';
 
 export interface SynthesizedBotInputResult {
   input_id: string;

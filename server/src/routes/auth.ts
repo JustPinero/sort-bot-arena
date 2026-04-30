@@ -1,16 +1,15 @@
 import { Hono } from 'hono';
-import type { Client } from '@libsql/client';
 import { z } from 'zod';
-import { SortBotApiClient, SortBotApiError } from '../clients/sort-bot-api/index.js';
+
 import { encryptString } from '../auth/encrypt.js';
-import { hashPassword, verifyPassword } from '../auth/passwords.js';
-import {
-  buildLogoutCookie,
-  buildSessionCookie,
-  signSession,
-} from '../auth/sessions.js';
 import { requireAuth, type AppContext, getUser } from '../auth/middleware.js';
+import { hashPassword, verifyPassword } from '../auth/passwords.js';
+import { buildLogoutCookie, buildSessionCookie, signSession } from '../auth/sessions.js';
+import { SortBotApiError } from '../clients/sort-bot-api/index.js';
 import { createUser, getUserByEmail } from '../store/users.js';
+
+import type { SortBotApiClient } from '../clients/sort-bot-api/index.js';
+import type { Client } from '@libsql/client';
 
 interface Deps {
   db: Client;
@@ -67,10 +66,7 @@ export function authRoutes(deps: Deps): Hono<AppContext> {
 
     const token = await signSession({ user_id: user.id }, deps.sessionSecret);
     c.header('Set-Cookie', buildSessionCookie(token, { secure: deps.cookieSecure }));
-    return c.json(
-      { id: user.id, display_name: user.display_name, email: user.email },
-      201,
-    );
+    return c.json({ id: user.id, display_name: user.display_name, email: user.email }, 201);
   });
 
   r.post('/login', async (c) => {
@@ -94,14 +90,10 @@ export function authRoutes(deps: Deps): Hono<AppContext> {
     return c.body(null, 204);
   });
 
-  r.get(
-    '/me',
-    requireAuth({ db: deps.db, sessionSecret: deps.sessionSecret }),
-    (c) => {
-      const u = getUser(c);
-      return c.json({ id: u.id, display_name: u.display_name, email: u.email });
-    },
-  );
+  r.get('/me', requireAuth({ db: deps.db, sessionSecret: deps.sessionSecret }), (c) => {
+    const u = getUser(c);
+    return c.json({ id: u.id, display_name: u.display_name, email: u.email });
+  });
 
   return r;
 }

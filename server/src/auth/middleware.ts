@@ -1,7 +1,9 @@
-import type { Context, MiddlewareHandler } from 'hono';
-import type { Client } from '@libsql/client';
 import { getUserById, type UserRow } from '../store/users.js';
+
 import { readSessionCookie, verifySession } from './sessions.js';
+
+import type { Client } from '@libsql/client';
+import type { Context, MiddlewareHandler } from 'hono';
 
 export interface AuthVariables {
   user: UserRow;
@@ -11,10 +13,7 @@ export interface AppContext {
   Variables: AuthVariables;
 }
 
-export function requireAuth(opts: {
-  db: Client;
-  sessionSecret: string;
-}): MiddlewareHandler {
+export function requireAuth(opts: { db: Client; sessionSecret: string }): MiddlewareHandler {
   return async (c, next) => {
     const token = readSessionCookie(c.req.header('cookie'));
     if (!token) return c.json({ error: 'unauthenticated' }, 401);

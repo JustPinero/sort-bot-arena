@@ -4,7 +4,7 @@
 
 ## Why this exists
 
-The frontend was built against MSW mocks I authored from the kickoff prompt's narrative (BattleBots × UFC vibe). Those mocks invented a *richer* bot/battle shape than `sort-bot-api` actually exposes. The deployed demo runs on those mocks; this plan reconciles the fiction with reality so the deployed app talks to a real backend.
+The frontend was built against MSW mocks I authored from the kickoff prompt's narrative (BattleBots × UFC vibe). Those mocks invented a _richer_ bot/battle shape than `sort-bot-api` actually exposes. The deployed demo runs on those mocks; this plan reconciles the fiction with reality so the deployed app talks to a real backend.
 
 **Critical correction (locked):** `sort-bot-api` is a **third-party service** we integrate with. We do not modify it. All gaps it can't fill are filled by **our own backend service** at `sort-bot-arena/server/`, deployed independently to Railway. The frontend talks to our service; our service talks to `sort-bot-api`.
 
@@ -30,7 +30,7 @@ Read those before the rest of this plan.
 6. **Battle event translation** is a stateless transformer in our server's SSE proxy. Backend's 4-event vocabulary → frontend's 8-event dramatized version.
 7. **Tournament SSE** via 2s polling on our server (sort-bot-api has no tournament event stream).
 8. **Always-on listener** subscribes to sort-bot-api's `/v1/events/stream` and populates our `recent_battles`, `recent_tournaments`, `event_log`. Lets us answer list/feed endpoints sort-bot-api doesn't have.
-9. **Auth lives entirely on our side.** Users sign up on our server (email + display_name + password), we silently provision a `sk_live_*` key on sort-bot-api and stash it server-side, frontend gets a session token for our server only.
+9. **Auth lives entirely on our side.** Users sign up on our server (email + display*name + password), we silently provision a `sk_live*\*` key on sort-bot-api and stash it server-side, frontend gets a session token for our server only.
 10. **Drop `go` from frontend language enum.** sort-bot-api supports `python | node | binary` only.
 11. **Drop guest auto-provision.** Public routes stay open; `/submit` and `/me/fighters` gate behind `<SignUpDialog />`.
 12. **Achievements catalog** (5 derived in our server from real stats): First Blood (1+ wins), KO King (10+ KOs — winner ≥80% of input runs), Giant Killer (beat top-3 ranked bot), Perfect Debut (won every input on first eval), Top 10 (best_rank ≤ 10).
@@ -79,6 +79,7 @@ echo "=== /v1/bots/{id}/analysis" && curl -s "$BASE/v1/bots/$BOT_ID/analysis" | 
 ```
 
 Capture each response into `requests/sort-bot-api-shapes.md`. Two purposes:
+
 1. Verify the OpenAPI spec matches reality (we already noted drift; this confirms or expands).
 2. Give our server's synthesis layer concrete fixtures to build against.
 

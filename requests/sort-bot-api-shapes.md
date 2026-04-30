@@ -220,9 +220,9 @@ After eval finishes, `status` flips from `"pending"` to `"evaluated"`
       "run_number": 1,
       "status": "success",
       "duration_ms": { "Int64": 32, "Valid": true },
-      "cpu_ms":      { "Int64": 0,  "Valid": false },
-      "error_msg":   { "String": "", "Valid": false },
-      "started_at":   "2026-04-29T22:01:09.662018858Z",
+      "cpu_ms": { "Int64": 0, "Valid": false },
+      "error_msg": { "String": "", "Valid": false },
+      "started_at": "2026-04-29T22:01:09.662018858Z",
       "completed_at": "2026-04-29T22:01:09.699594413Z"
     }
   ],
@@ -292,8 +292,7 @@ Example body:
   "b_wins": 14,
   "ties": 34,
   "per_input": [
-    { "input_id": 16, "size_class": "small",
-      "a_median_ms": 7, "b_median_ms": 7, "winner": "tie" }
+    { "input_id": 16, "size_class": "small", "a_median_ms": 7, "b_median_ms": 7, "winner": "tie" }
   ]
 }
 ```
@@ -372,12 +371,12 @@ before submitting the battle, or fall back to the materialized
 
 Event types published by `internal/battle/runner.go`:
 
-| event type        | data fields                                                                                       |
-| ----------------- | ------------------------------------------------------------------------------------------------- |
-| `battle_start`    | `battle_id`, `bot_a`, `bot_b`, `inputs[]`                                                         |
-| `run_start`       | `battle_id`, `input_id`                                                                           |
+| event type        | data fields                                                                                                        |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `battle_start`    | `battle_id`, `bot_a`, `bot_b`, `inputs[]`                                                                          |
+| `run_start`       | `battle_id`, `input_id`                                                                                            |
 | `run_complete`    | `battle_id`, `input_id`, `bot_a_status`, `bot_b_status`, `bot_a_duration_ms`, `bot_b_duration_ms`, `winner_bot_id` |
-| `battle_complete` | `battle_id`, `winner_bot_id`, `bot_a_wins`, `bot_b_wins`, `ties`                                  |
+| `battle_complete` | `battle_id`, `winner_bot_id`, `bot_a_wins`, `bot_b_wins`, `ties`                                                   |
 
 Wire format (standard SSE):
 
@@ -406,10 +405,7 @@ Response:
   "participant_count": 2,
   "status": "pending",
   "created_at": "...",
-  "bracket": [
-    [ { "Round": 1, "BracketPosition": 0,
-        "BotA": "...", "BotB": "..." } ]
-  ]
+  "bracket": [[{ "Round": 1, "BracketPosition": 0, "BotA": "...", "BotB": "..." }]]
 }
 ```
 
@@ -435,11 +431,11 @@ Response:
       "tournament_id": "...",
       "round": 1,
       "bracket_position": 0,
-      "bot_a_id":  { "String": "...", "Valid": true },
-      "bot_b_id":  { "String": "...", "Valid": true },
+      "bot_a_id": { "String": "...", "Valid": true },
+      "bot_b_id": { "String": "...", "Valid": true },
       "winner_bot_id": { "String": "", "Valid": false },
-      "battle_id":     { "String": "", "Valid": false },
-      "completed_at":  { "String": "", "Valid": false }
+      "battle_id": { "String": "", "Valid": false },
+      "completed_at": { "String": "", "Valid": false }
     }
   ]
 }
@@ -485,15 +481,15 @@ Slice 8/9.
 
 Findings here that differ from `references/sort-bot-api-endpoints.md`:
 
-| Was documented as                       | Reality                                         |
-| --------------------------------------- | ----------------------------------------------- |
-| `/v1/per-input-leaderboard?input_id=N`  | `/v1/leaderboard/inputs/{input_id}`             |
-| `/v1/inputs/{id}`                       | 404 (no such route)                             |
-| Battle status `"completed"`             | `"evaluated"` for bots, `"complete"` for battles|
-| `POST /v1/battles` body `bot_a_id`/`bot_b_id` | `bot_a` / `bot_b`                         |
-| `POST /v1/tournaments` body `bot_ids`   | `participant_bot_ids`                           |
-| Global SSE emits 4 event families       | Only emits the 4 battle event types             |
-| `GET /v1/users/me` returns `user_id`    | Returns `id` (POST returns `user_id`)           |
+| Was documented as                             | Reality                                          |
+| --------------------------------------------- | ------------------------------------------------ |
+| `/v1/per-input-leaderboard?input_id=N`        | `/v1/leaderboard/inputs/{input_id}`              |
+| `/v1/inputs/{id}`                             | 404 (no such route)                              |
+| Battle status `"completed"`                   | `"evaluated"` for bots, `"complete"` for battles |
+| `POST /v1/battles` body `bot_a_id`/`bot_b_id` | `bot_a` / `bot_b`                                |
+| `POST /v1/tournaments` body `bot_ids`         | `participant_bot_ids`                            |
+| Global SSE emits 4 event families             | Only emits the 4 battle event types              |
+| `GET /v1/users/me` returns `user_id`          | Returns `id` (POST returns `user_id`)            |
 
 Reference doc updates land alongside this commit so the next read of
 `references/sort-bot-api-endpoints.md` matches reality.

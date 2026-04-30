@@ -10,6 +10,8 @@ export default function LeaderboardPage() {
   const { data, isLoading, isError } = useLeaderboard(filters);
 
   const entries = data?.items ?? [];
+  const isStale = data?.stale === true;
+  const staleMinutes = data?.stale_age_ms ? Math.round(data.stale_age_ms / 60_000) : 0;
 
   return (
     <section className="mx-auto max-w-6xl px-4 py-8">
@@ -20,6 +22,18 @@ export default function LeaderboardPage() {
           Pound for pound — across every weight class
         </p>
       </header>
+
+      {isStale ? (
+        <div
+          role="status"
+          data-testid="stale-indicator"
+          className="mt-6 inline-flex items-center gap-2 rounded-sm border border-hazard/40 bg-hazard/10 px-3 py-1.5 font-mono text-xs uppercase tracking-wide text-hazard"
+        >
+          <span className="h-2 w-2 rounded-full bg-hazard" aria-hidden="true" />
+          Showing cached rankings
+          {staleMinutes > 0 ? ` (${staleMinutes}m old)` : null}
+        </div>
+      ) : null}
 
       <FilterChips
         className="mt-8"

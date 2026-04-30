@@ -1,5 +1,9 @@
+import { breakerKeyFor } from './breaker-key.js';
+import { BreakerRegistry, type CircuitBreakerOptions } from './circuit-breaker.js';
 import { SortBotApiError, type SortBotApiErrorBody } from './error.js';
+import { withRetry, type RetryOptions } from './retry.js';
 import { nullInt, nullStr } from './unwrap.js';
+
 import type {
   ApiBot,
   ApiUser,
@@ -24,6 +28,9 @@ interface ClientOptions {
   baseUrl: string;
   defaultTimeoutMs?: number;
   fetchImpl?: typeof fetch;
+  retry?: Partial<RetryOptions>;
+  breaker?: Partial<CircuitBreakerOptions> | BreakerRegistry;
+  disableResilience?: boolean;
 }
 
 type Query = Record<string, string | number | undefined> | undefined;
@@ -43,6 +50,9 @@ export class SortBotApiClient {
   readonly baseUrl: string;
   readonly defaultTimeoutMs: number;
   readonly fetchImpl: typeof fetch;
+  private readonly retryOpts: Partial<RetryOptions> | undefined;
+  readonly breakers: BreakerRegistry | undefined;
+  private readonly resilienceDisabled: boolean;
 
   constructor(opts: ClientOptions) {
     this.baseUrl = opts.baseUrl.replace(/\/$/, '');
@@ -50,9 +60,31 @@ export class SortBotApiClient {
     // Resolve fetch lazily so test runners (MSW) that patch globalThis.fetch
     // after this client is instantiated still get intercepted.
     this.fetchImpl = opts.fetchImpl ?? ((input, init) => globalThis.fetch(input, init));
+    this.resilienceDisabled = opts.disableResilience ?? false;
+    this.retryOpts = opts.retry;
+    if (this.resilienceDisabled) {
+      this.breakers = undefined;
+    } else if (opts.breaker instanceof BreakerRegistry) {
+      this.breakers = opts.breaker;
+    } else {
+      this.breakers = new BreakerRegistry(opts.breaker);
+    }
   }
 
   private async request<T>(opts: RequestOptions): Promise<T> {
+    const method = (opts.method ?? 'GET').toUpperCase();
+    const idempotent = method === 'GET' || method === 'HEAD';
+    const exec = () => this.requestOnce<T>(opts);
+
+    if (this.resilienceDisabled) return exec();
+
+    const wrapped = idempotent ? () => withRetry(exec, this.retryOpts) : exec;
+    if (!this.breakers) return wrapped();
+    const breaker = this.breakers.for(breakerKeyFor(method, opts.path));
+    return breaker.run(wrapped);
+  }
+
+  private async requestOnce<T>(opts: RequestOptions): Promise<T> {
     const url = new URL(this.baseUrl + opts.path);
     if (opts.query) {
       for (const [k, v] of Object.entries(opts.query)) {
@@ -76,8 +108,10 @@ export class SortBotApiClient {
       () => controller.abort(new Error('upstream timeout')),
       opts.timeoutMs ?? this.defaultTimeoutMs,
     );
-    if (opts.signal) {
-      opts.signal.addEventListener('abort', () => controller.abort(opts.signal?.reason));
+    const callerSignal = opts.signal;
+    const onCallerAbort = callerSignal ? () => controller.abort(callerSignal.reason) : undefined;
+    if (callerSignal && onCallerAbort) {
+      callerSignal.addEventListener('abort', onCallerAbort, { once: true });
     }
 
     let res: Response;
@@ -95,6 +129,9 @@ export class SortBotApiClient {
       });
     } finally {
       clearTimeout(timeout);
+      if (callerSignal && onCallerAbort) {
+        callerSignal.removeEventListener('abort', onCallerAbort);
+      }
     }
 
     const requestId = res.headers.get('x-request-id') ?? undefined;
@@ -166,7 +203,10 @@ export class SortBotApiClient {
     return this.request<BotProfileResponse>({ path: `/v1/bots/${id}/profile` });
   }
 
-  async getBotRuns(id: string, query?: { limit?: number; offset?: number }): Promise<BotRunsResponse> {
+  async getBotRuns(
+    id: string,
+    query?: { limit?: number; offset?: number },
+  ): Promise<BotRunsResponse> {
     const raw = await this.request<{
       bot_id: string;
       runs: Array<Record<string, unknown>>;

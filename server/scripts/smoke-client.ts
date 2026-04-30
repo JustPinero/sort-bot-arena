@@ -1,6 +1,7 @@
 // One-off live smoke for the sort-bot-api client. Hits the deployed
 // service. Run via:
 //   pnpm --filter @sort-bot-arena/server tsx scripts/smoke-client.ts
+/* eslint-disable no-console */
 
 import { SortBotApiClient } from '../src/clients/sort-bot-api/index.js';
 
@@ -23,11 +24,14 @@ async function main(): Promise<void> {
       worst_input: profile.worst_input,
     });
     const runs = await client.getBotRuns(first.bot_id, { limit: 3 });
-    console.log('first 3 runs:', runs.runs.map((r) => ({
-      input_id: r.input_id,
-      duration_ms: r.duration_ms,
-      status: r.status,
-    })));
+    console.log(
+      'first 3 runs:',
+      runs.runs.map((r) => ({
+        input_id: r.input_id,
+        duration_ms: r.duration_ms,
+        status: r.status,
+      })),
+    );
   }
 }
 

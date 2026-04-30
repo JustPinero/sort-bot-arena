@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import {
   deriveKoPercentage,
   deriveRecentForm,
@@ -7,9 +8,13 @@ import {
   translateBackendEvent,
   type BattleForBot,
 } from '../src/synthesize/index.js';
+
 import type { BattleResponse } from '../src/clients/sort-bot-api/index.js';
 
-function makeBattle(overrides: Partial<BattleResponse['battle']>, runs: BattleResponse['runs'] = []): BattleResponse {
+function makeBattle(
+  overrides: Partial<BattleResponse['battle']>,
+  runs: BattleResponse['runs'] = [],
+): BattleResponse {
   const battle: BattleResponse['battle'] = {
     id: 'bat_1',
     bot_a_id: 'a',
@@ -40,42 +45,36 @@ function bb(overrides: Partial<BattleForBot>): BattleForBot {
 
 describe('toBattleForBot', () => {
   it('marks a win, opponent crashed → KO', () => {
-    const b = makeBattle(
-      { winner_bot_id: 'a' },
-      [
-        {
-          id: 1,
-          battle_id: 'bat_1',
-          input_id: 1,
-          bot_a_duration_ms: 10,
-          bot_b_duration_ms: null,
-          bot_a_status: 'success',
-          bot_b_status: 'crash',
-          winner_bot_id: 'a',
-          completed_at: 'T',
-        },
-      ],
-    );
+    const b = makeBattle({ winner_bot_id: 'a' }, [
+      {
+        id: 1,
+        battle_id: 'bat_1',
+        input_id: 1,
+        bot_a_duration_ms: 10,
+        bot_b_duration_ms: null,
+        bot_a_status: 'success',
+        bot_b_status: 'crash',
+        winner_bot_id: 'a',
+        completed_at: 'T',
+      },
+    ]);
     expect(toBattleForBot('a', b)).toMatchObject({ outcome: 'win', is_ko: true });
   });
 
   it('decision win (opponent succeeded every run, just slower) is NOT a KO', () => {
-    const b = makeBattle(
-      { winner_bot_id: 'a' },
-      [
-        {
-          id: 1,
-          battle_id: 'bat_1',
-          input_id: 1,
-          bot_a_duration_ms: 9,
-          bot_b_duration_ms: 10,
-          bot_a_status: 'success',
-          bot_b_status: 'success',
-          winner_bot_id: 'a',
-          completed_at: 'T',
-        },
-      ],
-    );
+    const b = makeBattle({ winner_bot_id: 'a' }, [
+      {
+        id: 1,
+        battle_id: 'bat_1',
+        input_id: 1,
+        bot_a_duration_ms: 9,
+        bot_b_duration_ms: 10,
+        bot_a_status: 'success',
+        bot_b_status: 'success',
+        winner_bot_id: 'a',
+        completed_at: 'T',
+      },
+    ]);
     expect(toBattleForBot('a', b)).toMatchObject({ outcome: 'win', is_ko: false });
   });
 
@@ -164,7 +163,10 @@ describe('translateBackendEvent', () => {
 
   it('run_start derives round number from input position', () => {
     const ctx = { inputs: [10, 20, 30], bot_a: 'a', bot_b: 'b', ts: 'T' };
-    const r = translateBackendEvent({ type: 'run_start', data: { battle_id: 'bat', input_id: 20 } }, ctx);
+    const r = translateBackendEvent(
+      { type: 'run_start', data: { battle_id: 'bat', input_id: 20 } },
+      ctx,
+    );
     expect(r.events).toEqual([
       { type: 'round_start', round: 2, input_id: '20', input_name: 'Input #20', ts: 'T' },
     ]);
@@ -190,13 +192,13 @@ describe('translateBackendEvent', () => {
     const types = r.events.map((e) => e.type);
     expect(types).toContain('fighter_downed');
     const downed = r.events.find((e) => e.type === 'fighter_downed')! as Extract<
-      typeof r.events[number],
+      (typeof r.events)[number],
       { type: 'fighter_downed' }
     >;
     expect(downed.bot_id).toBe('b');
     expect(downed.reason).toBe('crash');
     const roundEnd = r.events.find((e) => e.type === 'round_end')! as Extract<
-      typeof r.events[number],
+      (typeof r.events)[number],
       { type: 'round_end' }
     >;
     expect(roundEnd.round).toBe(1);

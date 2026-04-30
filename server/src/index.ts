@@ -1,17 +1,26 @@
 import 'dotenv/config';
 import { serve } from '@hono/node-server';
 import { createClient } from '@libsql/client';
+
 import { createApp } from './app.js';
+import { SortBotApiClient } from './clients/sort-bot-api/index.js';
 import { runMigrations } from './db/migrate.js';
 import { loadEnv } from './env.js';
+import { CACHE_PRUNE_INTERVAL_MS } from './lib/cache-ttl.js';
 import { log } from './lib/log.js';
-import { SortBotApiClient } from './clients/sort-bot-api/index.js';
+import { initSentry } from './lib/sentry.js';
 import { AnthropicClient } from './persona/anthropic.js';
 import { LeonardoClient } from './persona/leonardo.js';
 import { PersonaService } from './persona/service.js';
+import { pruneExpired } from './store/upstream-cache.js';
 
 async function bootstrap(): Promise<void> {
   const env = loadEnv();
+  initSentry({
+    dsn: env.SENTRY_DSN,
+    environment: env.SENTRY_ENVIRONMENT,
+    ...(env.SENTRY_RELEASE !== undefined && { release: env.SENTRY_RELEASE }),
+  });
   const db = createClient(
     env.DATABASE_AUTH_TOKEN
       ? { url: env.DATABASE_URL, authToken: env.DATABASE_AUTH_TOKEN }
@@ -41,8 +50,21 @@ async function bootstrap(): Promise<void> {
     persona,
     sessionSecret: env.SESSION_SECRET,
     cookieSecure: process.env['NODE_ENV'] === 'production',
-    allowedOrigins: env.ALLOWED_ORIGINS.split(',').map((s) => s.trim()).filter(Boolean),
+    allowedOrigins: env.ALLOWED_ORIGINS.split(',')
+      .map((s) => s.trim())
+      .filter(Boolean),
   });
+
+  const pruneHandle = setInterval(() => {
+    pruneExpired(db)
+      .then((deleted) => {
+        if (deleted > 0) log.info({ deleted }, 'pruned expired cache rows');
+      })
+      .catch((err) => {
+        log.warn({ err: (err as Error).message }, 'cache prune failed');
+      });
+  }, CACHE_PRUNE_INTERVAL_MS);
+  pruneHandle.unref();
 
   serve({ fetch: app.fetch, port: env.PORT }, (info) => {
     log.info({ port: info.port }, 'sort-bot-arena server listening');

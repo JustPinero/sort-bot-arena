@@ -1,13 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
-import { ApiError } from '@/api/client';
 import { login, signup } from '@/api/auth';
+import { ApiError } from '@/api/client';
 import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogTrigger,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/dialog';
 import { cn } from '@/lib/cn';
 
 type Mode = 'signup' | 'login';
@@ -17,10 +13,7 @@ interface SignUpDialogProps {
   triggerClassName?: string;
 }
 
-export function SignUpDialog({
-  triggerLabel = 'Sign up',
-  triggerClassName,
-}: SignUpDialogProps) {
+export function SignUpDialog({ triggerLabel = 'Sign up', triggerClassName }: SignUpDialogProps) {
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<Mode>('signup');
   const [displayName, setDisplayName] = useState('');
@@ -90,7 +83,7 @@ export function SignUpDialog({
               required
               minLength={1}
               maxLength={80}
-              autoFocus
+              focusOnMount
             />
           )}
           <Field
@@ -99,7 +92,7 @@ export function SignUpDialog({
             value={email}
             onChange={setEmail}
             required
-            autoFocus={mode === 'login'}
+            focusOnMount={mode === 'login'}
           />
           <Field
             label="Password"
@@ -112,10 +105,7 @@ export function SignUpDialog({
           />
 
           {error ? (
-            <p
-              role="alert"
-              className="rounded-sm bg-hazard/10 px-3 py-2 text-sm text-hazard"
-            >
+            <p role="alert" className="rounded-sm bg-hazard/10 px-3 py-2 text-sm text-hazard">
               {error}
             </p>
           ) : null}
@@ -149,7 +139,7 @@ interface FieldProps {
   required?: boolean;
   minLength?: number;
   maxLength?: number;
-  autoFocus?: boolean;
+  focusOnMount?: boolean;
 }
 
 function Field({
@@ -160,21 +150,25 @@ function Field({
   required,
   minLength,
   maxLength,
-  autoFocus,
+  focusOnMount,
 }: FieldProps) {
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (focusOnMount) inputRef.current?.focus();
+  }, [focusOnMount]);
+
   return (
     <label className="flex flex-col gap-1">
-      <span className="font-mono text-xs uppercase tracking-wide text-text-secondary">
-        {label}
-      </span>
+      <span className="font-mono text-xs uppercase tracking-wide text-text-secondary">{label}</span>
       <input
+        ref={inputRef}
         type={type}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         required={required}
         minLength={minLength}
         maxLength={maxLength}
-        autoFocus={autoFocus}
         className="rounded-sm border bg-surface-2 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-hazard"
       />
     </label>

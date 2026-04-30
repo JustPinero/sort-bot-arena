@@ -56,11 +56,7 @@ export async function setLeonardoGenerationId(
   });
 }
 
-export async function setPortrait(
-  db: Client,
-  botId: string,
-  url: string,
-): Promise<void> {
+export async function setPortrait(db: Client, botId: string, url: string): Promise<void> {
   await db.execute({
     sql: `UPDATE bot_personas
              SET portrait_url = ?,

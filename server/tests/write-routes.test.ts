@@ -1,6 +1,7 @@
 import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+
 import { makeTestApp } from './helpers/test-app.js';
 
 const UPSTREAM = 'http://api.test';
@@ -58,7 +59,12 @@ describe('POST /api/v1/bots', () => {
 
   it('forwards multipart to sort-bot-api with the user key, records ownership', async () => {
     const { t, cookie } = await signedUpApp();
-    let captured: { auth: string | null; displayName: string | null; lang: string | null; sourceText: string } | null = null;
+    let captured: {
+      auth: string | null;
+      displayName: string | null;
+      lang: string | null;
+      sourceText: string;
+    } | null = null;
     server.use(
       http.post(`${UPSTREAM}/v1/bots`, async ({ request }) => {
         const fd = await request.formData();
@@ -102,9 +108,7 @@ describe('POST /api/v1/bots', () => {
 
   it('GET /me/bots returns the synthesized list of the authed user bots', async () => {
     const { t, cookie } = await signedUpApp();
-    server.use(
-      http.post(`${UPSTREAM}/v1/bots`, () => HttpResponse.json(upstreamCreatedBot)),
-    );
+    server.use(http.post(`${UPSTREAM}/v1/bots`, () => HttpResponse.json(upstreamCreatedBot)));
     const submit = await t.app.request('/api/v1/bots', {
       method: 'POST',
       headers: { 'content-type': 'application/json', cookie },
@@ -174,9 +178,7 @@ describe('PATCH/DELETE /api/v1/bots/:id', () => {
 
   it('DELETE marks user_bots.retired_at', async () => {
     const { t, cookie } = await signedUpApp();
-    server.use(
-      http.post(`${UPSTREAM}/v1/bots`, () => HttpResponse.json(upstreamCreatedBot)),
-    );
+    server.use(http.post(`${UPSTREAM}/v1/bots`, () => HttpResponse.json(upstreamCreatedBot)));
     await t.app.request('/api/v1/bots', {
       method: 'POST',
       headers: { 'content-type': 'application/json', cookie },

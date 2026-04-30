@@ -1,7 +1,8 @@
 import { createClient, type Client } from '@libsql/client';
+
 import { createApp } from '../../src/app.js';
-import { runMigrations } from '../../src/db/migrate.js';
 import { SortBotApiClient } from '../../src/clients/sort-bot-api/index.js';
+import { runMigrations } from '../../src/db/migrate.js';
 import { PersonaService } from '../../src/persona/service.js';
 
 export interface TestApp {
