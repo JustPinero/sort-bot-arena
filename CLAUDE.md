@@ -40,6 +40,7 @@ Prime → Plan → RED → GREEN → Validate.
 | 5     | `phase-5-submit-tournaments` | shipped |
 | 6     | `phase-6-polish`             | shipped |
 | 7     | `api-reconciliation`         | shipped |
+| 8     | `phase-8-resilience`         | shipped |
 
 Phases merge to `main` only after `/phase-complete` passes.
 
@@ -50,6 +51,13 @@ out to the third-party `sort-bot-api` and adds persona generation
 (Leonardo + Anthropic) on top. See `requests/api-reconciliation-plan.md`
 for the full slice-by-slice ship log and `references/server-architecture.md`
 for the deployed server's design.
+
+Phase 8 (resilience) wrapped every server→sort-bot-api call in a
+per-endpoint circuit breaker + retry, added a `withStaleFallback` cache
+on listing endpoints (`upstream_cache` table), an `/api/readyz` for
+breaker visibility, a `/api/v1/battles/:id/replay` synthesized payload,
+a top-level `<ErrorBoundary>` and SSE→polling fallback on the frontend,
+plus optional Sentry in both halves.
 
 ## Invariants (do not violate)
 
