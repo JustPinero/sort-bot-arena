@@ -5,7 +5,10 @@ import { createRoot } from 'react-dom/client';
 import { ensureSessionLoaded } from '@/api/auth';
 import { createQueryClient } from '@/api/queryClient';
 import App from '@/App';
+import { initSentry } from '@/lib/sentry';
 import '@/styles/globals.css';
+
+initSentry();
 
 async function bootstrap() {
   if (import.meta.env.VITE_USE_MOCKS === 'true') {

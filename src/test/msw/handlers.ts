@@ -135,7 +135,9 @@ export const defaultHandlers = [
     HttpResponse.json({ items: sampleInputs, next_cursor: null }),
   ),
 
-  http.get(`${BASE}/api/v1/battles`, () => HttpResponse.json({ items: allBattles, next_cursor: null })),
+  http.get(`${BASE}/api/v1/battles`, () =>
+    HttpResponse.json({ items: allBattles, next_cursor: null }),
+  ),
 
   http.get(`${BASE}/api/v1/battles/:battleId`, ({ params }) => {
     const battleId = params.battleId as string;
@@ -196,7 +198,9 @@ export const defaultHandlers = [
 
   http.get(`${BASE}/api/v1/feed/snapshot`, () => HttpResponse.json(homeSnapshot)),
 
-  http.get(`${BASE}/api/v1/feed`, () => HttpResponse.json({ items: liveFeedTail, next_cursor: null })),
+  http.get(`${BASE}/api/v1/feed`, () =>
+    HttpResponse.json({ items: liveFeedTail, next_cursor: null }),
+  ),
 
   http.get(`${BASE}/api/v1/halloffame`, () => HttpResponse.json(hallOfFame)),
 

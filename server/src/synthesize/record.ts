@@ -1,5 +1,5 @@
-import type { BattleResponse } from '../clients/sort-bot-api/index.js';
 import type { BattleForBot, Record, RecentFormEntry } from './types.js';
+import type { BattleResponse } from '../clients/sort-bot-api/index.js';
 
 // A KO is a battle the bot won where the opponent had at least one
 // non-success run (crash, timeout, wrong_answer, etc.). Pure timing

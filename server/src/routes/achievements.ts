@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
-import type { SortBotApiClient } from '../clients/sort-bot-api/index.js';
+
 import type { AppContext } from '../auth/middleware.js';
+import type { SortBotApiClient } from '../clients/sort-bot-api/index.js';
 
 interface AchievementDefinition {
   id: string;
@@ -56,7 +57,8 @@ export function achievementsRoutes(deps: { sortBotApi: SortBotApiClient }): Hono
     const totalBots = stats?.total_bots ?? 0;
     const items: AchievementDefinition[] = CATALOG.map((a) => ({
       ...a,
-      unlocked_pct: totalBots > 0 ? Math.min(100, Math.round((1 / Math.max(totalBots, 5)) * 100)) : 0,
+      unlocked_pct:
+        totalBots > 0 ? Math.min(100, Math.round((1 / Math.max(totalBots, 5)) * 100)) : 0,
     }));
     return c.json({ items });
   });

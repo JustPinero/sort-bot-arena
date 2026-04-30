@@ -1,6 +1,6 @@
-import { ApiError } from './client';
-import { apiClient } from './client';
 import { useAuthStore, type SessionUser } from '@/stores/auth';
+
+import { ApiError, apiClient } from './client';
 
 export interface SignupInput {
   email: string;

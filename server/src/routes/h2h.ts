@@ -1,7 +1,9 @@
 import { Hono } from 'hono';
-import type { SortBotApiClient } from '../clients/sort-bot-api/index.js';
+
 import { SortBotApiError } from '../clients/sort-bot-api/index.js';
+
 import type { AppContext } from '../auth/middleware.js';
+import type { SortBotApiClient } from '../clients/sort-bot-api/index.js';
 
 export function h2hRoutes(deps: { sortBotApi: SortBotApiClient }): Hono<AppContext> {
   const r = new Hono<AppContext>();

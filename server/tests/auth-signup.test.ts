@@ -1,6 +1,7 @@
 import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+
 import { makeTestApp } from './helpers/test-app.js';
 
 const UPSTREAM = 'http://api.test';
@@ -53,11 +54,8 @@ describe('POST /api/v1/auth/signup', () => {
       args: ['recon@example.com'],
     });
     expect(row.rows[0]?.['sort_bot_api_user_id']).toBe('sba_user_1');
-    const raw = row.rows[0]?.['sort_bot_api_key_encrypted'] as
-      | Uint8Array
-      | ArrayBuffer;
-    const keyBlob =
-      raw instanceof Uint8Array ? Buffer.from(raw) : Buffer.from(new Uint8Array(raw));
+    const raw = row.rows[0]?.['sort_bot_api_key_encrypted'] as Uint8Array | ArrayBuffer;
+    const keyBlob = raw instanceof Uint8Array ? Buffer.from(raw) : Buffer.from(new Uint8Array(raw));
     // ciphertext layout: 12-byte IV + 16-byte tag + ciphertext, never the
     // plaintext key
     expect(keyBlob.byteLength).toBeGreaterThan(28);

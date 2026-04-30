@@ -176,9 +176,7 @@ function roundOf(inputs: number[], inputId: number): number {
   return idx === -1 ? 0 : idx + 1;
 }
 
-function downedReason(
-  status: string,
-): 'timeout' | 'crash' | 'oom' | null {
+function downedReason(status: string): 'timeout' | 'crash' | 'oom' | null {
   switch (status) {
     case 'timeout':
     case 'time_limit':

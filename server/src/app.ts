@@ -1,21 +1,24 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
-import type { Client } from '@libsql/client';
-import { SortBotApiClient } from './clients/sort-bot-api/index.js';
-import { authRoutes } from './routes/auth.js';
-import { botsRoutes } from './routes/bots.js';
-import { leaderboardRoutes } from './routes/leaderboard.js';
-import { statsRoutes } from './routes/stats.js';
-import { userRoutes } from './routes/users.js';
-import { inputsRoutes } from './routes/inputs.js';
-import { perInputLeaderboardRoutes } from './routes/per-input-leaderboard.js';
-import { hallOfFameRoutes } from './routes/halloffame.js';
+
 import { achievementsRoutes } from './routes/achievements.js';
+import { authRoutes } from './routes/auth.js';
+import { battlesReplayRoutes } from './routes/battles-replay.js';
+import { battlesSseRoutes } from './routes/battles-sse.js';
+import { botsRoutes } from './routes/bots.js';
 import { feedRoutes } from './routes/feed.js';
 import { h2hRoutes } from './routes/h2h.js';
-import { battlesSseRoutes } from './routes/battles-sse.js';
+import { hallOfFameRoutes } from './routes/halloffame.js';
+import { inputsRoutes } from './routes/inputs.js';
+import { leaderboardRoutes } from './routes/leaderboard.js';
+import { perInputLeaderboardRoutes } from './routes/per-input-leaderboard.js';
+import { statsRoutes } from './routes/stats.js';
+import { userRoutes } from './routes/users.js';
+
 import type { AppContext } from './auth/middleware.js';
+import type { SortBotApiClient } from './clients/sort-bot-api/index.js';
 import type { PersonaService } from './persona/service.js';
+import type { Client } from '@libsql/client';
 
 export interface AppDeps {
   db: Client;
@@ -43,6 +46,39 @@ export function createApp(deps: AppDeps): Hono<AppContext> {
   }
 
   app.get('/api/healthz', (c) => c.text('ok'));
+  app.get('/api/readyz', async (c) => {
+    const breakers = deps.sortBotApi.breakers?.states() ?? {};
+    const anyBreakerOpen = deps.sortBotApi.breakers?.anyOpen() ?? false;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 2_000);
+    try {
+      const res = await fetch(`${deps.sortBotApiUpstreamUrl}/healthz`, {
+        signal: controller.signal,
+      });
+      const upstreamOk = res.ok;
+      const ready = upstreamOk && !anyBreakerOpen;
+      return c.json(
+        {
+          ready,
+          upstream: upstreamOk ? 'ok' : `http_${res.status}`,
+          breakers,
+        },
+        ready ? 200 : 503,
+      );
+    } catch (err) {
+      return c.json(
+        {
+          ready: false,
+          upstream: 'unreachable',
+          breakers,
+          error: (err as Error).message,
+        },
+        503,
+      );
+    } finally {
+      clearTimeout(timeout);
+    }
+  });
   app.route('/api/v1/auth', authRoutes(deps));
   app.route(
     '/api/v1/bots',
@@ -55,14 +91,14 @@ export function createApp(deps: AppDeps): Hono<AppContext> {
   );
   app.route(
     '/api/v1/leaderboard',
-    leaderboardRoutes({ sortBotApi: deps.sortBotApi, persona: deps.persona }),
+    leaderboardRoutes({ db: deps.db, sortBotApi: deps.sortBotApi, persona: deps.persona }),
   );
   app.route(
     '/api/v1/leaderboard',
     perInputLeaderboardRoutes({ sortBotApi: deps.sortBotApi, persona: deps.persona }),
   );
-  app.route('/api/v1/stats', statsRoutes({ sortBotApi: deps.sortBotApi }));
-  app.route('/api/v1/inputs', inputsRoutes({ sortBotApi: deps.sortBotApi }));
+  app.route('/api/v1/stats', statsRoutes({ db: deps.db, sortBotApi: deps.sortBotApi }));
+  app.route('/api/v1/inputs', inputsRoutes({ db: deps.db, sortBotApi: deps.sortBotApi }));
   app.route('/api/v1/feed', feedRoutes({ sortBotApi: deps.sortBotApi, persona: deps.persona }));
   app.route(
     '/api/v1/halloffame',
@@ -77,6 +113,7 @@ export function createApp(deps: AppDeps): Hono<AppContext> {
       upstreamBaseUrl: deps.sortBotApiUpstreamUrl,
     }),
   );
+  app.route('/api/v1/battles', battlesReplayRoutes({ sortBotApi: deps.sortBotApi }));
   app.route(
     '/api/v1/users',
     userRoutes({

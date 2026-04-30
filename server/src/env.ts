@@ -11,6 +11,9 @@ const schema = z.object({
   RUN_LISTENER: z.coerce.boolean().default(false),
   ALLOWED_ORIGINS: z.string().min(1),
   LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal']).default('info'),
+  SENTRY_DSN: z.string().optional(),
+  SENTRY_ENVIRONMENT: z.string().default('development'),
+  SENTRY_RELEASE: z.string().optional(),
 });
 
 export type Env = z.infer<typeof schema>;

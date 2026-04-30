@@ -47,4 +47,21 @@ export const migrations: ReadonlyArray<{ id: string; sql: string }> = [
       );
     `,
   },
+  {
+    id: '0004_upstream_cache',
+    sql: `
+      CREATE TABLE IF NOT EXISTS upstream_cache (
+        cache_key TEXT PRIMARY KEY,
+        body_json TEXT NOT NULL,
+        stored_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP)
+      );
+    `,
+  },
+  {
+    id: '0005_upstream_cache_expiry',
+    sql: `
+      ALTER TABLE upstream_cache ADD COLUMN expires_at TEXT;
+      CREATE INDEX IF NOT EXISTS idx_upstream_cache_expires ON upstream_cache(expires_at);
+    `,
+  },
 ];

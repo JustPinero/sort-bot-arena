@@ -1,8 +1,10 @@
 import { Hono } from 'hono';
+
+import { nicknameFor } from '../persona/nicknames.js';
+
+import type { AppContext } from '../auth/middleware.js';
 import type { SortBotApiClient } from '../clients/sort-bot-api/index.js';
 import type { PersonaService } from '../persona/service.js';
-import { nicknameFor } from '../persona/nicknames.js';
-import type { AppContext } from '../auth/middleware.js';
 
 export function perInputLeaderboardRoutes(deps: {
   sortBotApi: SortBotApiClient;

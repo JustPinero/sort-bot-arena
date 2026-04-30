@@ -21,9 +21,7 @@ export class AnthropicClient {
     language: string;
     algorithm: string | null;
   }): Promise<string> {
-    const algoBit = opts.algorithm
-      ? `It is built around the algorithm: ${opts.algorithm}.`
-      : '';
+    const algoBit = opts.algorithm ? `It is built around the algorithm: ${opts.algorithm}.` : '';
     const prompt = `You are writing pre-fight smack talk for a sorting-algorithm BattleBots / UFC mashup.
 
 The fighter:

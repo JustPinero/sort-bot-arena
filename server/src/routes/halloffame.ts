@@ -1,9 +1,11 @@
 import { Hono } from 'hono';
-import type { Client } from '@libsql/client';
+
+import { synthesizeBot } from '../synthesize/bot.js';
+
+import type { AppContext } from '../auth/middleware.js';
 import type { SortBotApiClient } from '../clients/sort-bot-api/index.js';
 import type { PersonaService } from '../persona/service.js';
-import { synthesizeBot } from '../synthesize/bot.js';
-import type { AppContext } from '../auth/middleware.js';
+import type { Client } from '@libsql/client';
 
 export function hallOfFameRoutes(deps: {
   db: Client;

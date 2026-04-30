@@ -1,7 +1,8 @@
 import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
-import { SortBotApiClient, SortBotApiError } from '../src/clients/sort-bot-api/index.js';
+
+import { SortBotApiClient } from '../src/clients/sort-bot-api/index.js';
 
 const BASE = 'http://api.test';
 

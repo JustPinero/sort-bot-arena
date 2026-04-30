@@ -101,10 +101,15 @@ function leaderboardPath(filters: LeaderboardFilters): string {
   return `/api/v1/leaderboard${suffix ? `?${suffix}` : ''}`;
 }
 
+export interface LeaderboardResponse extends CursorPage<LeaderboardEntry> {
+  stale?: boolean;
+  stale_age_ms?: number;
+}
+
 export function useLeaderboard(filters: LeaderboardFilters) {
   return useQuery({
     queryKey: ['leaderboard', filters],
-    queryFn: () => apiClient.get<CursorPage<LeaderboardEntry>>(leaderboardPath(filters)),
+    queryFn: () => apiClient.get<LeaderboardResponse>(leaderboardPath(filters)),
     staleTime: 60 * 1000,
   });
 }
@@ -118,7 +123,8 @@ export interface PerInputLeaderboardResponse {
 export function usePerInputLeaderboard(inputId: string | undefined) {
   return useQuery({
     queryKey: ['leaderboard', 'inputs', inputId],
-    queryFn: () => apiClient.get<PerInputLeaderboardResponse>(`/api/v1/leaderboard/inputs/${inputId}`),
+    queryFn: () =>
+      apiClient.get<PerInputLeaderboardResponse>(`/api/v1/leaderboard/inputs/${inputId}`),
     enabled: Boolean(inputId),
     staleTime: 60 * 1000,
     retry: (failureCount, err) => {

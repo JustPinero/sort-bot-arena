@@ -1,8 +1,13 @@
 import { Hono } from 'hono';
-import type { SortBotApiClient } from '../clients/sort-bot-api/index.js';
+
+import { SortBotApiError, type SortBotApiClient } from '../clients/sort-bot-api/index.js';
+import { CACHE_TTL_MS } from '../lib/cache-ttl.js';
+import { withStaleFallback } from '../lib/upstream-fallback.js';
 import { nicknameFor } from '../persona/nicknames.js';
-import type { PersonaService } from '../persona/service.js';
+
 import type { AppContext } from '../auth/middleware.js';
+import type { PersonaService } from '../persona/service.js';
+import type { Client } from '@libsql/client';
 
 export interface LeaderboardEntry {
   bot_id: string;
@@ -19,7 +24,15 @@ export interface LeaderboardEntry {
   retired: boolean;
 }
 
+interface LeaderboardPayload {
+  entries: LeaderboardEntry[];
+  total_inputs: number;
+  stale?: boolean;
+  stale_age_ms?: number;
+}
+
 export function leaderboardRoutes(deps: {
+  db: Client;
   sortBotApi: SortBotApiClient;
   persona: PersonaService;
 }): Hono<AppContext> {
@@ -29,32 +42,52 @@ export function leaderboardRoutes(deps: {
     const limitParam = c.req.query('limit');
     const limit = limitParam ? Math.max(1, Math.min(100, Number(limitParam))) : 50;
     const language = c.req.query('language');
+    const cacheKey = `leaderboard:${limit}:${language ?? 'all'}`;
 
-    const lb = await deps.sortBotApi.getLeaderboard({
-      limit,
-      ...(language && { language }),
-    });
+    try {
+      const result = await withStaleFallback<LeaderboardPayload>({
+        db: deps.db,
+        cacheKey,
+        ttlMs: CACHE_TTL_MS.leaderboard,
+        fetch: async () => {
+          const lb = await deps.sortBotApi.getLeaderboard({
+            limit,
+            ...(language && { language }),
+          });
+          const personas = await Promise.all(lb.bots.map((b) => deps.persona.get(b.bot_id)));
+          const entries: LeaderboardEntry[] = lb.bots.map((b, i) => {
+            const p = personas[i] ?? null;
+            return {
+              bot_id: b.bot_id,
+              rank: b.rank,
+              trend: 'new',
+              display_name: b.display_name,
+              nickname: p?.nickname ?? nicknameFor(b.bot_id),
+              language: b.language,
+              portrait_url: p?.portrait_url ?? null,
+              record: { wins: 0, losses: 0, draws: 0 },
+              ko_percentage: 0,
+              signature_input: null,
+              last_fight_at: null,
+              retired: false,
+            };
+          });
+          return { entries, total_inputs: lb.total_inputs };
+        },
+      });
 
-    const personas = await Promise.all(lb.bots.map((b) => deps.persona.get(b.bot_id)));
-    const entries: LeaderboardEntry[] = lb.bots.map((b, i) => {
-      const p = personas[i] ?? null;
-      return {
-        bot_id: b.bot_id,
-        rank: b.rank,
-        trend: 'new',
-        display_name: b.display_name,
-        nickname: p?.nickname ?? nicknameFor(b.bot_id),
-        language: b.language,
-        portrait_url: p?.portrait_url ?? null,
-        record: { wins: 0, losses: 0, draws: 0 },
-        ko_percentage: 0,
-        signature_input: null,
-        last_fight_at: null,
-        retired: false,
-      };
-    });
-
-    return c.json({ entries, total_inputs: lb.total_inputs });
+      if (result.stale) {
+        c.header('X-Stale', 'true');
+        c.header('X-Stale-Age-Ms', String(result.ageMs));
+        return c.json({ ...result.body, stale: true, stale_age_ms: result.ageMs });
+      }
+      return c.json(result.body);
+    } catch (err) {
+      if (err instanceof SortBotApiError) {
+        return c.json({ error: 'upstream_failure', upstream_status: err.status }, 502);
+      }
+      throw err;
+    }
   });
 
   return r;
