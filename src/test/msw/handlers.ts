@@ -22,27 +22,37 @@ import {
 const BASE = 'http://api.test';
 
 export const defaultHandlers = [
-  http.get(`${BASE}/healthz`, () =>
+  http.get(`${BASE}/api/healthz`, () =>
     HttpResponse.json({ status: 'ok' }, { headers: { 'X-Request-Id': 'req-health-1' } }),
   ),
 
-  http.post(`${BASE}/v1/users`, async ({ request }) => {
-    const body = (await request.json()) as { display_name?: string };
+  http.post(`${BASE}/api/v1/auth/signup`, async ({ request }) => {
+    const body = (await request.json()) as { display_name?: string; email?: string };
     return HttpResponse.json(
       {
         id: 'usr_test_1',
-        display_name: body.display_name ?? 'anonymous-test-0000',
-        api_key: 'key_test_abc123',
+        display_name: body.display_name ?? 'Test User',
+        email: body.email ?? 'test@example.com',
       },
-      { headers: { 'X-Request-Id': 'req-users-1' } },
+      { status: 201, headers: { 'Set-Cookie': 'session=test-jwt; HttpOnly; Path=/' } },
     );
   }),
 
-  http.get(`${BASE}/v1/users/me`, () =>
-    HttpResponse.json({ id: 'usr_test_1', display_name: 'anonymous-test-0000' }),
+  http.post(`${BASE}/api/v1/auth/login`, async ({ request }) => {
+    const body = (await request.json()) as { email?: string };
+    return HttpResponse.json(
+      { id: 'usr_test_1', display_name: 'Test User', email: body.email ?? 'test@example.com' },
+      { headers: { 'Set-Cookie': 'session=test-jwt; HttpOnly; Path=/' } },
+    );
+  }),
+
+  http.post(`${BASE}/api/v1/auth/logout`, () => new HttpResponse(null, { status: 204 })),
+
+  http.get(`${BASE}/api/v1/auth/me`, () =>
+    HttpResponse.json({ id: 'usr_test_1', display_name: 'Test User', email: 'test@example.com' }),
   ),
 
-  http.get(`${BASE}/v1/bots/:botId`, ({ params }) => {
+  http.get(`${BASE}/api/v1/bots/:botId`, ({ params }) => {
     const botId = params.botId as string;
     const bot = allBotsById[botId];
     if (!bot) {
@@ -51,7 +61,7 @@ export const defaultHandlers = [
     return HttpResponse.json(bot);
   }),
 
-  http.get(`${BASE}/v1/bots/:botId/runs`, ({ params }) => {
+  http.get(`${BASE}/api/v1/bots/:botId/runs`, ({ params }) => {
     const botId = params.botId as string;
     if (!allBotsById[botId]) {
       return HttpResponse.json({ error: 'bot not found', code: 'not_found' }, { status: 404 });
@@ -59,7 +69,7 @@ export const defaultHandlers = [
     return HttpResponse.json({ items: championRuns, next_cursor: null });
   }),
 
-  http.get(`${BASE}/v1/bots/:botId/snapshots`, ({ params }) => {
+  http.get(`${BASE}/api/v1/bots/:botId/snapshots`, ({ params }) => {
     const botId = params.botId as string;
     if (!allBotsById[botId]) {
       return HttpResponse.json({ error: 'bot not found', code: 'not_found' }, { status: 404 });
@@ -67,7 +77,7 @@ export const defaultHandlers = [
     return HttpResponse.json(championSnapshots);
   }),
 
-  http.get(`${BASE}/v1/bots/:botId/inputs`, ({ params }) => {
+  http.get(`${BASE}/api/v1/bots/:botId/inputs`, ({ params }) => {
     const botId = params.botId as string;
     if (!allBotsById[botId]) {
       return HttpResponse.json({ error: 'bot not found', code: 'not_found' }, { status: 404 });
@@ -75,7 +85,7 @@ export const defaultHandlers = [
     return HttpResponse.json(championInputs);
   }),
 
-  http.get(`${BASE}/v1/bots/:botId/analysis`, ({ params }) => {
+  http.get(`${BASE}/api/v1/bots/:botId/analysis`, ({ params }) => {
     const botId = params.botId as string;
     const bot = allBotsById[botId];
     if (!bot) {
@@ -90,7 +100,7 @@ export const defaultHandlers = [
     return HttpResponse.json(championAnalysis);
   }),
 
-  http.get(`${BASE}/v1/leaderboard`, ({ request }) => {
+  http.get(`${BASE}/api/v1/leaderboard`, ({ request }) => {
     const url = new URL(request.url);
     const weight = url.searchParams.get('weight') ?? 'all';
     const language = url.searchParams.get('language');
@@ -112,7 +122,7 @@ export const defaultHandlers = [
     return HttpResponse.json({ items: filtered, next_cursor: null });
   }),
 
-  http.get(`${BASE}/v1/leaderboard/inputs/:inputId`, ({ params }) => {
+  http.get(`${BASE}/api/v1/leaderboard/inputs/:inputId`, ({ params }) => {
     const inputId = params.inputId as string;
     const input = sampleInputs.find((i) => i.id === inputId);
     if (!input) {
@@ -121,13 +131,13 @@ export const defaultHandlers = [
     return HttpResponse.json({ input, items: perInputLeaderboard, next_cursor: null });
   }),
 
-  http.get(`${BASE}/v1/inputs`, () =>
+  http.get(`${BASE}/api/v1/inputs`, () =>
     HttpResponse.json({ items: sampleInputs, next_cursor: null }),
   ),
 
-  http.get(`${BASE}/v1/battles`, () => HttpResponse.json({ items: allBattles, next_cursor: null })),
+  http.get(`${BASE}/api/v1/battles`, () => HttpResponse.json({ items: allBattles, next_cursor: null })),
 
-  http.get(`${BASE}/v1/battles/:battleId`, ({ params }) => {
+  http.get(`${BASE}/api/v1/battles/:battleId`, ({ params }) => {
     const battleId = params.battleId as string;
     if (battleId !== sampleBattle.id) {
       return HttpResponse.json({ error: 'battle not found', code: 'not_found' }, { status: 404 });
@@ -135,7 +145,7 @@ export const defaultHandlers = [
     return HttpResponse.json(sampleBattle);
   }),
 
-  http.post(`${BASE}/v1/bots`, async ({ request }) => {
+  http.post(`${BASE}/api/v1/bots`, async ({ request }) => {
     const body = (await request.json()) as { display_name?: string; source?: string };
     if (!body.display_name) {
       return HttpResponse.json(
@@ -160,9 +170,9 @@ export const defaultHandlers = [
     return HttpResponse.json({ bot_id: 'bot_new_debut' }, { status: 202 });
   }),
 
-  http.get(`${BASE}/v1/users/me/bots`, () => HttpResponse.json(myBots)),
+  http.get(`${BASE}/api/v1/users/me/bots`, () => HttpResponse.json(myBots)),
 
-  http.patch(`${BASE}/v1/bots/:botId`, async ({ params, request }) => {
+  http.patch(`${BASE}/api/v1/bots/:botId`, async ({ params, request }) => {
     const botId = params.botId as string;
     if (!allBotsById[botId]) {
       return HttpResponse.json({ error: 'not found', code: 'not_found' }, { status: 404 });
@@ -171,11 +181,11 @@ export const defaultHandlers = [
     return HttpResponse.json({ ...allBotsById[botId], ...body });
   }),
 
-  http.get(`${BASE}/v1/tournaments`, () =>
+  http.get(`${BASE}/api/v1/tournaments`, () =>
     HttpResponse.json({ items: sampleTournaments, next_cursor: null }),
   ),
 
-  http.get(`${BASE}/v1/tournaments/:id`, ({ params }) => {
+  http.get(`${BASE}/api/v1/tournaments/:id`, ({ params }) => {
     const id = params.id as string;
     const t = sampleTournaments.find((x) => x.id === id);
     if (!t) {
@@ -184,15 +194,15 @@ export const defaultHandlers = [
     return HttpResponse.json(t);
   }),
 
-  http.get(`${BASE}/v1/feed/snapshot`, () => HttpResponse.json(homeSnapshot)),
+  http.get(`${BASE}/api/v1/feed/snapshot`, () => HttpResponse.json(homeSnapshot)),
 
-  http.get(`${BASE}/v1/feed`, () => HttpResponse.json({ items: liveFeedTail, next_cursor: null })),
+  http.get(`${BASE}/api/v1/feed`, () => HttpResponse.json({ items: liveFeedTail, next_cursor: null })),
 
-  http.get(`${BASE}/v1/halloffame`, () => HttpResponse.json(hallOfFame)),
+  http.get(`${BASE}/api/v1/halloffame`, () => HttpResponse.json(hallOfFame)),
 
-  http.get(`${BASE}/v1/achievements`, () => HttpResponse.json(achievementsCatalog)),
+  http.get(`${BASE}/api/v1/achievements`, () => HttpResponse.json(achievementsCatalog)),
 
-  http.get(`${BASE}/v1/bots/:botId/badge.svg`, ({ params }) => {
+  http.get(`${BASE}/api/v1/bots/:botId/badge.svg`, ({ params }) => {
     const botId = params.botId as string;
     const bot = allBotsById[botId];
     if (!bot) {

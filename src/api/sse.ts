@@ -36,7 +36,7 @@ export function useBattleEvents(
     setEvents([]);
     setError(null);
 
-    const url = `${config.apiBaseUrl}/v1/battles/${battleId}/events`;
+    const url = `${config.apiBaseUrl}/api/v1/battles/${battleId}/events`;
     const es = new EventSource(url);
 
     es.onopen = () => setConnected(true);

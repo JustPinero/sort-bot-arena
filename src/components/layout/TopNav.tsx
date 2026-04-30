@@ -1,6 +1,8 @@
 import { Moon, Sun, SunMoon } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 
+import { logout } from '@/api/auth';
+import { SignUpDialog } from '@/components/auth/SignUpDialog';
 import { cn } from '@/lib/cn';
 import { useAuthStore } from '@/stores/auth';
 import { useThemeStore } from '@/stores/theme';
@@ -19,7 +21,8 @@ interface TopNavProps {
 export function TopNav({ forceThemeLocked }: TopNavProps) {
   const mode = useThemeStore((s) => s.mode);
   const setMode = useThemeStore((s) => s.setMode);
-  const displayName = useAuthStore((s) => s.displayName);
+  const user = useAuthStore((s) => s.user);
+  const displayName = user?.display_name ?? null;
 
   const cycleTheme = () => {
     setMode(mode === 'system' ? 'light' : mode === 'light' ? 'dark' : 'system');
@@ -74,12 +77,28 @@ export function TopNav({ forceThemeLocked }: TopNavProps) {
           <ThemeIcon className="h-4 w-4" aria-hidden="true" />
         </button>
 
-        <span
-          className="hidden font-mono text-xs uppercase tracking-wide text-text-tertiary md:inline"
-          data-testid="user-display-name"
-        >
-          {displayName ?? 'guest'}
-        </span>
+        {displayName ? (
+          <div className="flex items-center gap-2">
+            <span
+              className="hidden font-mono text-xs uppercase tracking-wide text-text-tertiary md:inline"
+              data-testid="user-display-name"
+            >
+              {displayName}
+            </span>
+            <button
+              type="button"
+              onClick={() => void logout()}
+              className="font-mono text-xs uppercase tracking-wide text-text-tertiary hover:text-text-primary"
+              data-testid="logout"
+            >
+              Sign out
+            </button>
+          </div>
+        ) : (
+          <span data-testid="user-display-name">
+            <SignUpDialog />
+          </span>
+        )}
       </nav>
     </header>
   );

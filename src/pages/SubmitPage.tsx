@@ -13,18 +13,17 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/cn';
 import { playMockEvaluation } from '@/lib/playMockEvaluation';
 
-type Language = 'python' | 'node' | 'go' | 'binary';
+type Language = 'python' | 'node' | 'binary';
 
 const LANGUAGE_LABEL: Record<Language, string> = {
   python: 'Lightweight (Python)',
   node: 'Middleweight (Node)',
-  go: 'Cruiserweight (Go)',
   binary: 'Heavyweight (Binary)',
 };
 
 const formSchema = z.object({
   display_name: z.string().min(1, 'Pick a fighter name').max(40, 'Keep it under 40 chars'),
-  language: z.enum(['python', 'node', 'go', 'binary']),
+  language: z.enum(['python', 'node', 'binary']),
   source: z.string().min(10, 'Source must be at least 10 characters'),
 });
 type FormValues = z.infer<typeof formSchema>;

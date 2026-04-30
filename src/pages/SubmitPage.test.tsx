@@ -51,9 +51,9 @@ describe('<SubmitPage />', () => {
 
   it('switches templates when language changes', async () => {
     renderPage();
-    await userEvent.click(screen.getByRole('button', { name: /cruiser/i }));
+    await userEvent.click(screen.getByRole('button', { name: /middleweight/i }));
     const editor = screen.getByTestId('mock-monaco') as HTMLTextAreaElement;
-    expect(editor.value).toMatch(/package main/);
+    expect(editor.value).toMatch(/readFileSync/);
   });
 
   it('shows a validation error when display_name is empty', async () => {
