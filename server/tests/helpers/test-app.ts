@@ -29,6 +29,7 @@ export async function makeTestApp(opts?: {
   const app = createApp({
     db,
     sortBotApi,
+    sortBotApiUpstreamUrl: opts?.sortBotApiBaseUrl ?? 'http://api.test',
     persona,
     sessionSecret,
     cookieSecure: false,

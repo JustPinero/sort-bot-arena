@@ -37,6 +37,7 @@ async function bootstrap(): Promise<void> {
   const app = createApp({
     db,
     sortBotApi,
+    sortBotApiUpstreamUrl: env.SORT_BOT_API_URL,
     persona,
     sessionSecret: env.SESSION_SECRET,
     cookieSecure: process.env['NODE_ENV'] === 'production',

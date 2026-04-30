@@ -13,12 +13,14 @@ import { hallOfFameRoutes } from './routes/halloffame.js';
 import { achievementsRoutes } from './routes/achievements.js';
 import { feedRoutes } from './routes/feed.js';
 import { h2hRoutes } from './routes/h2h.js';
+import { battlesSseRoutes } from './routes/battles-sse.js';
 import type { AppContext } from './auth/middleware.js';
 import type { PersonaService } from './persona/service.js';
 
 export interface AppDeps {
   db: Client;
   sortBotApi: SortBotApiClient;
+  sortBotApiUpstreamUrl: string;
   persona: PersonaService;
   sessionSecret: string;
   cookieSecure: boolean;
@@ -68,6 +70,13 @@ export function createApp(deps: AppDeps): Hono<AppContext> {
   );
   app.route('/api/v1/achievements', achievementsRoutes({ sortBotApi: deps.sortBotApi }));
   app.route('/api/v1/bots', h2hRoutes({ sortBotApi: deps.sortBotApi }));
+  app.route(
+    '/api/v1/battles',
+    battlesSseRoutes({
+      sortBotApi: deps.sortBotApi,
+      upstreamBaseUrl: deps.sortBotApiUpstreamUrl,
+    }),
+  );
   app.route(
     '/api/v1/users',
     userRoutes({

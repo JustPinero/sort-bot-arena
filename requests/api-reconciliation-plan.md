@@ -40,6 +40,8 @@ Read those before the rest of this plan.
 
 ## Implementation slices
 
+> **Ship status (2026-04-29):** Slices 1–6, 8, 9, 10, 11, 12 shipped on `api-reconciliation`. Slice 7 (global SSE listener) deferred — see [`debt.md` D-8](../debt.md). Slice 13 (this close-out) shipped via this plan update + the merge to `main`.
+
 ### Slice 1 — capture sort-bot-api's actual response shapes
 
 **Status:** ready to run; sort-bot-api is live at `https://sort-bot-api-production.up.railway.app`.

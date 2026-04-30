@@ -2,6 +2,14 @@
 
 Entries from `/defer`. Resurface via `/activate <id>`.
 
+## D-8 (2026-04-29) — api-reconciliation / slice 7 deferred
+
+Global SSE listener — subscribes to sort-bot-api's `/v1/events/stream` and persists `battle_complete` events into a local `recent_battles` table so per-bot record / KO% / recent_form derive from real history instead of returning zeros.
+
+Why deferred: at demo scale (a handful of bots, no automated traffic) the records that the listener populates would still be near-zero. The synthesis layer + DB schema are ready (`src/synthesize/record.ts`, `BattleForBot`, `recent_battles` table is the only addition); the listener itself is the only missing piece. Frontend renders 0-0-0 records cleanly.
+
+When activated: add `0004_recent_battles` migration, write `src/listener/global-stream.ts` (consume upstream SSE, write each `battle_complete` row), boot it from `src/index.ts` when `RUN_LISTENER=true`. Wire `getBattleHistoryFor(botId)` from the new table into `synthesizeBot`'s `history` arg in routes/bots.ts and routes/users.ts.
+
 ## D-1 (2026-04-28) — phase-2-fighter-profile / 40a38da
 
 Visual regression Playwright snapshots for Tale of the Tape variants and the full BotProfilePage are out of Phase 2's shipped scope.
