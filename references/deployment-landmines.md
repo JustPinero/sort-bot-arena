@@ -1,6 +1,21 @@
 # Deployment Landmines — sort-arena-web
 
-Stack: Vercel + Vite + React SPA + sort-bot-api on a separate host (Railway/Fly).
+Stack: Vercel + Vite + React SPA, our own backend at `sort-bot-arena/server/` on Railway, the third-party `sort-bot-api` also on Railway.
+
+## Our backend on Railway
+
+- Service: `sort-bot-arena-server` in the `sort-bot-api` Railway project. Public URL: `https://sort-bot-arena-server-production.up.railway.app`.
+- Build: `railway.json` at repo root points at `server/Dockerfile`. The Dockerfile builds with the workspace context (root has `pnpm-workspace.yaml`), runs `tsc -p tsconfig.build.json`, then `pnpm --filter ... deploy --prod /tmp/deploy` to materialize a self-contained production bundle. The run stage copies `dist/` from build + `node_modules` + `package.json` from the `pnpm deploy` output.
+- **Watch out:** the original Dockerfile copied `server/node_modules` into the run stage, but pnpm workspaces use symlinks into `.pnpm`, so the run image had no real deps and Node exited silently. Always use `pnpm deploy` for production extraction.
+- DB: ephemeral SQLite at `file:/tmp/sortbot-arena.db` (fine for the demo; switching to Turso requires `DATABASE_URL=libsql://...` + `DATABASE_AUTH_TOKEN`).
+- Required env: `SORT_BOT_API_URL`, `DATABASE_URL`, `SESSION_SECRET`, `LEONARDO_API_KEY`, `ANTHROPIC_API_KEY`, `ALLOWED_ORIGINS`. Railway provides `PORT`.
+- CORS: `ALLOWED_ORIGINS=https://sort-bot-arena.vercel.app` exactly. The frontend sends `credentials: 'include'`, so `Access-Control-Allow-Credentials: true` matters and the origin can't be `*`.
+
+## Cookie auth across origins
+
+- Session cookie set as `HttpOnly; Secure; SameSite=Lax`. Both the frontend (Vercel `*.vercel.app`) and the server (Railway `*.up.railway.app`) must be HTTPS in production for `Secure` to allow the cookie.
+- `SameSite=Lax` lets the browser attach the cookie on top-level navigations and same-site requests. `fetch()` from the SPA needs `credentials: 'include'` to forward it.
+- If the cookie disappears in the network tab on a deployed build, double-check that Vercel and Railway both serve over HTTPS and that the `Secure` flag isn't being downgraded by a proxy.
 
 ## Vercel
 

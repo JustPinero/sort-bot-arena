@@ -73,7 +73,7 @@ Doubled validation: the frontend zod schema mirrors the backend's. UX wins from 
 
 ## What we deliberately do not do
 
-- **WebAuthn / 2FA.** Out of scope for the takehome.
+- **WebAuthn / 2FA.** Out of scope.
 - **httpOnly cookies for auth.** Bearer-in-localStorage is the contract; document its limits and move on.
 - **Server-side rendering.** Keeping all logic client-side simplifies the threat model — there's no SSR cache poisoning surface.
 - **Custom HTML sanitizer.** Better to render plain text or use a vetted library than to write our own.

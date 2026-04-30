@@ -178,7 +178,7 @@ export type BattleEvent =
 ## Decisions (locked)
 
 - **Audio**: deferred entirely. The audio store + lazy-load wrapper exist from Phase 1, so plugging in cues later is straightforward. Sourcing royalty-free walkout audio is a content problem, not a code problem; Slice 7 moves to `debt.md` (D-4).
-- **Particle beam**: CSS keyframes only. Cheaper than SVG/canvas, GPU-accelerated, and the take-home doesn't need physics-grade particles.
+- **Particle beam**: CSS keyframes only. Cheaper than SVG/canvas, GPU-accelerated, and the demo doesn't need physics-grade particles.
 - **Hype meter**: frontend-computed. Derived state in the battle reducer — `hype = clamp(recent_dramatic_events_count / 5, 0, 1)` over the last 10 events. Backend doesn't need a special event for this.
 - **LiveBattle scope** trimmed. Polish items the kickoff explicitly tags as "extras" move to debt:
   - Special move callouts on dramatic round wins (D-5)

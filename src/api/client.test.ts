@@ -1,7 +1,6 @@
 import { http, HttpResponse, delay } from 'msw';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { useAuthStore } from '@/stores/auth';
 import { server } from '@/test/msw/server';
 
 import { ApiError, apiClient } from './client';
@@ -9,39 +8,21 @@ import { ApiError, apiClient } from './client';
 const BASE = 'http://api.test';
 
 describe('apiClient', () => {
-  beforeEach(() => {
-    useAuthStore.getState().clear();
-  });
-
   afterEach(() => {
     vi.useRealTimers();
   });
 
-  describe('auth header', () => {
-    it('attaches Authorization: Bearer when authStore has a key', async () => {
-      useAuthStore.getState().setKey('key_attach', 'usr_1', 'Alice');
-      let received: string | null = null;
-      server.use(
-        http.get(`${BASE}/v1/echo`, ({ request }) => {
-          received = request.headers.get('Authorization');
-          return HttpResponse.json({ ok: true });
-        }),
-      );
-
-      await apiClient.get('/v1/echo');
-      expect(received).toBe('Bearer key_attach');
-    });
-
-    it('omits Authorization when no key is in the store', async () => {
+  describe('cookie auth', () => {
+    it('does not attach an Authorization header (cookie session model)', async () => {
       let received: string | null = 'unset';
       server.use(
-        http.get(`${BASE}/v1/echo`, ({ request }) => {
+        http.get(`${BASE}/api/api/v1/echo`, ({ request }) => {
           received = request.headers.get('Authorization');
           return HttpResponse.json({ ok: true });
         }),
       );
 
-      await apiClient.get('/v1/echo');
+      await apiClient.get('/api/api/v1/echo');
       expect(received).toBeNull();
     });
   });
@@ -49,13 +30,13 @@ describe('apiClient', () => {
   describe('timeout', () => {
     it('aborts and throws timeout ApiError after the configured ms', async () => {
       server.use(
-        http.get(`${BASE}/v1/slow`, async () => {
+        http.get(`${BASE}/api/v1/slow`, async () => {
           await delay(2000);
           return HttpResponse.json({ ok: true });
         }),
       );
 
-      await expect(apiClient.get('/v1/slow', { timeoutMs: 50 })).rejects.toMatchObject({
+      await expect(apiClient.get('/api/v1/slow', { timeoutMs: 50 })).rejects.toMatchObject({
         name: 'ApiError',
         code: 'timeout',
         retryable: true,
@@ -66,7 +47,7 @@ describe('apiClient', () => {
   describe('error normalization', () => {
     it('4xx → ApiError with code, message, request_id, fields', async () => {
       server.use(
-        http.post(`${BASE}/v1/bots`, () =>
+        http.post(`${BASE}/api/v1/bots`, () =>
           HttpResponse.json(
             {
               error: 'invalid input',
@@ -79,7 +60,7 @@ describe('apiClient', () => {
         ),
       );
 
-      const promise = apiClient.post('/v1/bots', { display_name: '' });
+      const promise = apiClient.post('/api/v1/bots', { display_name: '' });
       await expect(promise).rejects.toBeInstanceOf(ApiError);
       try {
         await promise;
@@ -97,7 +78,7 @@ describe('apiClient', () => {
 
     it('5xx → ApiError flagged retryable', async () => {
       server.use(
-        http.get(`${BASE}/v1/leaderboard`, () =>
+        http.get(`${BASE}/api/v1/leaderboard`, () =>
           HttpResponse.json(
             { error: 'oops', code: 'internal' },
             { status: 503, headers: { 'X-Request-Id': 'req-503' } },
@@ -105,7 +86,7 @@ describe('apiClient', () => {
         ),
       );
 
-      const promise = apiClient.get('/v1/leaderboard');
+      const promise = apiClient.get('/api/v1/leaderboard');
       await expect(promise).rejects.toMatchObject({
         status: 503,
         retryable: true,
@@ -115,7 +96,7 @@ describe('apiClient', () => {
 
   describe('happy path', () => {
     it('returns the parsed JSON body on 2xx', async () => {
-      const body = await apiClient.get<{ status: string }>('/healthz');
+      const body = await apiClient.get<{ status: string }>('/api/healthz');
       expect(body.status).toBe('ok');
     });
 
@@ -123,14 +104,14 @@ describe('apiClient', () => {
       let received: { display_name?: string } | null = null;
       let contentType: string | null = null;
       server.use(
-        http.post(`${BASE}/v1/echo`, async ({ request }) => {
+        http.post(`${BASE}/api/v1/echo`, async ({ request }) => {
           contentType = request.headers.get('Content-Type');
           received = (await request.json()) as { display_name?: string };
           return HttpResponse.json({ ok: true });
         }),
       );
 
-      await apiClient.post('/v1/echo', { display_name: 'test' });
+      await apiClient.post('/api/v1/echo', { display_name: 'test' });
       expect(contentType).toContain('application/json');
       expect(received).toEqual({ display_name: 'test' });
     });

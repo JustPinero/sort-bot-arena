@@ -6,7 +6,7 @@ This is the load-bearing senior doc. Every other reference defers to this one. U
 
 ## Mission
 
-Turn sort-bot-api's API responses into a BattleBots × UFC broadcast experience. The site exists to make the API legible and entertaining, demonstrate end-to-end product thinking alongside the backend takehome, and expose every backend endpoint behind a UI that feels designed rather than scaffolded.
+Turn sort-bot-api's API responses into a BattleBots × UFC broadcast experience. The site exists to make the API legible and entertaining, demonstrate end-to-end product thinking alongside the backend, and expose every backend endpoint behind a UI that feels designed rather than scaffolded.
 
 ---
 

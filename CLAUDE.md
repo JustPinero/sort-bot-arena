@@ -2,7 +2,7 @@
 
 ## What this repo is
 
-Frontend for the sort-bot-api take-home: a BattleBots × UFC broadcast experience for sorting algorithms. SPA built on Vite + React 18 + TS strict. Pure presentation layer — every server-side concern lives in [`sort-bot-api`](https://github.com/JustPinero/sort-bot-api).
+Frontend for sort-bot-api: a BattleBots × UFC broadcast experience for sorting algorithms. SPA built on Vite + React 18 + TS strict. Pure presentation layer — every server-side concern lives in [`sort-bot-api`](https://github.com/JustPinero/sort-bot-api).
 
 **Phases:** 1 foundation → 2 Tale of the Tape + profile → 3 leaderboard → 4 arena → 5 submit + tournaments → 6 polish + homepage. Full scope in [`sort-bot-arena-kickoff.md`](./sort-bot-arena-kickoff.md).
 
@@ -39,13 +39,23 @@ Prime → Plan → RED → GREEN → Validate.
 | 4     | `phase-4-arena`              | shipped |
 | 5     | `phase-5-submit-tournaments` | shipped |
 | 6     | `phase-6-polish`             | shipped |
+| 7     | `api-reconciliation`         | shipped |
 
 Phases merge to `main` only after `/phase-complete` passes.
 
+Phase 7 (API reconciliation) replaced MSW-only browser mocks with a real
+backend at `sort-bot-arena/server/`. The frontend now talks to our
+Hono+Turso server (cookie-auth sessions, `/api/v1/*` paths), which fans
+out to the third-party `sort-bot-api` and adds persona generation
+(Leonardo + Anthropic) on top. See `requests/api-reconciliation-plan.md`
+for the full slice-by-slice ship log and `references/server-architecture.md`
+for the deployed server's design.
+
 ## Invariants (do not violate)
 
-- **`VITE_API_BASE_URL` is required.** `src/api/client.ts` throws at module load if unset.
+- **`VITE_API_BASE_URL` is required.** `src/api/client.ts` throws at module load if unset. Points at our Railway-deployed server, not at sort-bot-api directly.
 - **All fetches go through `src/api/client.ts`.** Direct `fetch()` outside that module is an eslint error.
+- **Cookie-only session auth.** Browser never holds the sort-bot-api `sk_live_*` key — that lives encrypted in our server's Turso DB and only travels server→sort-bot-api. The frontend just attaches `credentials: 'include'`.
 - **State boundaries:** server state via TanStack Query, client state via Zustand, component state via `useState`. Never the wrong tool for the wrong category.
 - **No `dangerouslySetInnerHTML`** on anything, including AI-generated trash talk and analysis.
 - **No frontend secrets.** Anthropic + Leonardo keys live exclusively on the backend.

@@ -1,5 +1,5 @@
 export const LANGUAGE_TEMPLATES: Record<
-  'python' | 'node' | 'go' | 'binary',
+  'python' | 'node' | 'binary',
   { language: string; filename: string; source: string }
 > = {
   python: {
@@ -32,39 +32,6 @@ const out = input
   .sort((a, b) => a - b)
   .join('\\n');
 process.stdout.write(out);
-`,
-  },
-  go: {
-    language: 'go',
-    filename: 'bot.go',
-    source: `// Sort bot — read whitespace-separated integers from stdin,
-// write them sorted ascending, one per line, to stdout.
-package main
-
-import (
-\t"bufio"
-\t"fmt"
-\t"os"
-\t"sort"
-)
-
-func main() {
-\tvar nums []int
-\tscanner := bufio.NewScanner(os.Stdin)
-\tscanner.Buffer(make([]byte, 1<<20), 1<<24)
-\tscanner.Split(bufio.ScanWords)
-\tfor scanner.Scan() {
-\t\tvar n int
-\t\tfmt.Sscan(scanner.Text(), &n)
-\t\tnums = append(nums, n)
-\t}
-\tsort.Ints(nums)
-\twriter := bufio.NewWriter(os.Stdout)
-\tdefer writer.Flush()
-\tfor _, n := range nums {
-\t\tfmt.Fprintln(writer, n)
-\t}
-}
 `,
   },
   binary: {

@@ -2,6 +2,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 
+import { ensureSessionLoaded } from '@/api/auth';
 import { createQueryClient } from '@/api/queryClient';
 import App from '@/App';
 import '@/styles/globals.css';
@@ -14,6 +15,8 @@ async function bootstrap() {
       serviceWorker: { url: '/mockServiceWorker.js' },
     });
   }
+
+  await ensureSessionLoaded();
 
   const rootEl = document.getElementById('root');
   if (!rootEl) throw new Error('root element missing');

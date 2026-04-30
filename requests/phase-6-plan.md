@@ -4,7 +4,7 @@
 
 ## Scope
 
-The take-home's last-mile polish. Replace the four remaining placeholder routes (`/`, `/halloffame`, `/achievements`, `/events`) with real implementations. Land the embeddable badge. Run the perf pass and tighten the budgets.
+Last-mile polish. Replace the four remaining placeholder routes (`/`, `/halloffame`, `/achievements`, `/events`) with real implementations. Land the embeddable badge. Run the perf pass and tighten the budgets.
 
 ## Exit criteria (from kickoff §4 Phase 6)
 
@@ -16,7 +16,7 @@ The take-home's last-mile polish. Replace the four remaining placeholder routes 
 
 ## Decisions (locked, given session shape)
 
-- **Audio** stays deferred (D-4). The take-home demo doesn't need audio; the store + lazy-load shape is already in place.
+- **Audio** stays deferred (D-4). The demo doesn't need audio; the store + lazy-load shape is already in place.
 - **`<HoverPreviewPanel />`** stays deferred (D-2). Click-through to profiles already works.
 - **Visual regression** stays deferred (D-1). Snapshot infrastructure is ready in Playwright config + scaffold.
 - **PPV promo card generator** stays deferred (D-7).
@@ -33,7 +33,7 @@ The take-home's last-mile polish. Replace the four remaining placeholder routes 
 
 ## Out of scope (carried forward as documented debt)
 
-Items previously deferred (D-1 through D-7) remain deferred. None are on the critical path for "the take-home is shippable."
+Items previously deferred (D-1 through D-7) remain deferred. None are on the critical path for "the app is shippable."
 
 ## Risks
 

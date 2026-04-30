@@ -44,8 +44,8 @@ describe('<TopNav />', () => {
     expect(screen.getByRole('button', { name: /theme/i })).toBeDisabled();
   });
 
-  it('shows "guest" when no display name in auth store', () => {
+  it('shows "Sign up" when no user in auth store', () => {
     render(withRouter(<TopNav />));
-    expect(screen.getByTestId('user-display-name')).toHaveTextContent('guest');
+    expect(screen.getByTestId('user-display-name')).toHaveTextContent('Sign up');
   });
 });

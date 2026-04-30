@@ -10,7 +10,7 @@ interface BotBadgeProps {
 }
 
 export function BotBadge({ botId, className }: BotBadgeProps) {
-  const badgeUrl = `${config.apiBaseUrl}/v1/bots/${botId}/badge.svg`;
+  const badgeUrl = `${config.apiBaseUrl}/api/v1/bots/${botId}/badge.svg`;
   const profileUrl = `${typeof window === 'undefined' ? '' : window.location.origin}/bots/${botId}`;
   const markdown = `[![sort-arena](${badgeUrl})](${profileUrl})`;
   const html = `<a href="${profileUrl}"><img src="${badgeUrl}" alt="sort-arena badge"/></a>`;

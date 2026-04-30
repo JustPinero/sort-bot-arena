@@ -35,7 +35,7 @@ describe('usePing', () => {
 
   it('surfaces ApiError on backend failure', async () => {
     server.use(
-      http.get('http://api.test/healthz', () =>
+      http.get('http://api.test/api/healthz', () =>
         HttpResponse.json({ error: 'down', code: 'unavailable' }, { status: 503 }),
       ),
     );

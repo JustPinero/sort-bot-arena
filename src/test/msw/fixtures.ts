@@ -52,7 +52,7 @@ const ACH_PERFECT_DEBUT: Achievement = {
 
 export const championBot: Bot = {
   id: 'bot_champ',
-  display_name: 'Justin Pinero',
+  display_name: 'Champion Coder',
   nickname: 'The Algorithm',
   language: 'go',
   algorithm: 'Introsort',

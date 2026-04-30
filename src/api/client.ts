@@ -1,5 +1,3 @@
-import { useAuthStore } from '@/stores/auth';
-
 import { config } from './config';
 
 const DEFAULT_TIMEOUT_MS = 15_000;
@@ -67,16 +65,15 @@ async function request<T>(
   const isFormData = typeof FormData !== 'undefined' && body instanceof FormData;
   if (body !== undefined && !isFormData) headers.set('Content-Type', 'application/json');
 
-  if (!opts?.skipAuth) {
-    const apiKey = useAuthStore.getState().apiKey;
-    if (apiKey) headers.set('Authorization', `Bearer ${apiKey}`);
-  }
-
   let response: Response;
   try {
     response = await fetch(`${config.apiBaseUrl}${path}`, {
       method,
       headers,
+      // Cookie auth — backend reads the `session` HttpOnly cookie. Browsers
+      // require credentials: 'include' for cross-origin cookies even with
+      // Access-Control-Allow-Credentials on the server.
+      credentials: 'include',
       body: body === undefined ? undefined : isFormData ? (body as FormData) : JSON.stringify(body),
       signal: controller.signal,
     });
