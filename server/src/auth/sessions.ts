@@ -35,12 +35,21 @@ export async function verifySession(token: string, secret: string): Promise<Sess
   return { user_id: payload['user_id'] as string };
 }
 
+// Cross-site fetches (Vercel frontend → Railway backend) require
+// `SameSite=None; Secure` to attach the cookie. In local dev both
+// halves run on http://localhost so `Secure` isn't allowed; we fall
+// back to `SameSite=Lax`. Distinguished by the `secure` flag the
+// bootstrap sets from NODE_ENV.
+function sameSiteFor(secure: boolean): string {
+  return secure ? 'SameSite=None' : 'SameSite=Lax';
+}
+
 export function buildSessionCookie(token: string, opts: { secure: boolean }): string {
   const parts = [
     `${SESSION_COOKIE}=${token}`,
     'Path=/',
     'HttpOnly',
-    'SameSite=Lax',
+    sameSiteFor(opts.secure),
     `Max-Age=${TTL_SECONDS}`,
   ];
   if (opts.secure) parts.push('Secure');
@@ -48,7 +57,13 @@ export function buildSessionCookie(token: string, opts: { secure: boolean }): st
 }
 
 export function buildLogoutCookie(opts: { secure: boolean }): string {
-  const parts = [`${SESSION_COOKIE}=`, 'Path=/', 'HttpOnly', 'SameSite=Lax', 'Max-Age=0'];
+  const parts = [
+    `${SESSION_COOKIE}=`,
+    'Path=/',
+    'HttpOnly',
+    sameSiteFor(opts.secure),
+    'Max-Age=0',
+  ];
   if (opts.secure) parts.push('Secure');
   return parts.join('; ');
 }
