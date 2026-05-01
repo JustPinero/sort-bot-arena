@@ -206,11 +206,67 @@ export function useRetireBot() {
   });
 }
 
+export interface StartBattleInput {
+  bot_a: string;
+  bot_b: string;
+  input_ids?: string[];
+  count?: number;
+}
+
+export interface StartBattleResponse {
+  battle_id: string;
+}
+
+export function useStartBattle() {
+  return useMutation({
+    mutationFn: (input: StartBattleInput) =>
+      apiClient.post<StartBattleResponse>('/api/v1/battles', input),
+  });
+}
+
+export interface UploadInputInput {
+  values: number[];
+  format: 'comma' | 'space' | 'newline';
+  display_name?: string;
+}
+
+export function useUploadInput() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: UploadInputInput) => apiClient.post<InputSummary>('/api/v1/inputs', input),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['inputs'] });
+    },
+  });
+}
+
 export function useTournaments() {
   return useQuery({
     queryKey: ['tournaments'],
     queryFn: () => apiClient.get<CursorPage<Tournament>>('/api/v1/tournaments'),
     staleTime: 60 * 1000,
+  });
+}
+
+export interface StartTournamentInput {
+  participant_bot_ids: string[];
+  count: number;
+  // Slice 9 frontend records these client-side; server-side persistence
+  // of bracket_size + input_mode on `recent_tournaments` is a follow-up
+  // (sort-bot-api doesn't surface them today). Fields are still POSTed
+  // so the server slice can pick them up without another contract change.
+  bracket_size: number;
+  input_mode: 'flat_random' | 'escalation';
+}
+
+export function useStartTournament() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: StartTournamentInput) =>
+      apiClient.post<Tournament>('/api/v1/tournaments', input),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tournaments'] });
+    },
   });
 }
 

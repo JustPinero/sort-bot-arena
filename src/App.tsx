@@ -2,8 +2,8 @@ import { lazy, Suspense } from 'react';
 import { BrowserRouter, Route, Routes } from 'react-router-dom';
 
 import { ErrorBoundary } from '@/components/ErrorBoundary';
-import { LoadingGear } from '@/components/LoadingGear';
 import { AppShell } from '@/components/layout/AppShell';
+import { LoadingGear } from '@/components/LoadingGear';
 
 const HomePage = lazy(() => import('@/pages/HomePage'));
 const ArenaIndexPage = lazy(() => import('@/pages/ArenaIndexPage'));

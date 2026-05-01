@@ -3,6 +3,9 @@ import { Link } from 'react-router-dom';
 import { useBattles } from '@/api/queries';
 import type { Battle } from '@/api/types';
 import { HazardStripes } from '@/components/design-system/HazardStripes';
+import { MatchSetupModal } from '@/components/match/MatchSetupModal';
+import { QuickFightButton } from '@/components/match/QuickFightButton';
+import { TournamentSetupModal } from '@/components/tournament/TournamentSetupModal';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { fmtRelativeDate } from '@/lib/format';
@@ -25,6 +28,11 @@ export default function ArenaIndexPage() {
         <p className="mt-2 font-mono text-xs uppercase tracking-widest text-text-tertiary">
           Live battles. Highlights. Upsets.
         </p>
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <MatchSetupModal />
+          <QuickFightButton />
+          <TournamentSetupModal />
+        </div>
       </header>
 
       {isError ? (

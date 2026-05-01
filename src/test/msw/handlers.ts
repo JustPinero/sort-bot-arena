@@ -135,6 +135,44 @@ export const defaultHandlers = [
     HttpResponse.json({ items: sampleInputs, next_cursor: null }),
   ),
 
+  http.post(`${BASE}/api/v1/inputs`, async ({ request }) => {
+    const body = (await request.json()) as {
+      values?: number[];
+      format?: string;
+      display_name?: string;
+    };
+    if (!body.values || body.values.length === 0) {
+      return HttpResponse.json(
+        { error: 'invalid input', code: 'validation_failed' },
+        { status: 400 },
+      );
+    }
+    return HttpResponse.json(
+      {
+        id: 'in_uploaded_test',
+        name: body.display_name ?? 'Custom Input',
+        size: body.values.length,
+      },
+      { status: 201 },
+    );
+  }),
+
+  http.post(`${BASE}/api/v1/battles`, async ({ request }) => {
+    const body = (await request.json()) as {
+      bot_a?: string;
+      bot_b?: string;
+      input_ids?: string[];
+      count?: number;
+    };
+    if (!body.bot_a || !body.bot_b || body.bot_a === body.bot_b) {
+      return HttpResponse.json(
+        { error: 'invalid input', code: 'validation_failed' },
+        { status: 400 },
+      );
+    }
+    return HttpResponse.json({ battle_id: 'bat_started_default' }, { status: 200 });
+  }),
+
   http.get(`${BASE}/api/v1/battles`, () =>
     HttpResponse.json({ items: allBattles, next_cursor: null }),
   ),
@@ -186,6 +224,41 @@ export const defaultHandlers = [
   http.get(`${BASE}/api/v1/tournaments`, () =>
     HttpResponse.json({ items: sampleTournaments, next_cursor: null }),
   ),
+
+  http.post(`${BASE}/api/v1/tournaments`, async ({ request }) => {
+    const body = (await request.json()) as {
+      participant_bot_ids?: string[];
+      count?: number;
+      bracket_size?: number;
+      input_mode?: string;
+    };
+    const ids = body.participant_bot_ids ?? [];
+    if (!ids.length) {
+      return HttpResponse.json(
+        {
+          error: 'participant_bot_ids required',
+          code: 'validation_failed',
+          fields: [{ path: 'participant_bot_ids', message: 'must not be empty' }],
+        },
+        { status: 400 },
+      );
+    }
+    const tournament = {
+      id: 'trn_new_1',
+      name: 'New Tournament',
+      status: 'upcoming' as const,
+      participant_count: ids.length,
+      weight_class_filter: null,
+      prize_description: null,
+      scheduled_at: '2026-04-29T20:00:00Z',
+      rounds_total: Math.ceil(Math.log2(ids.length)),
+      current_round: 0,
+      champion_bot_id: null,
+      participants: [],
+      matches: [],
+    };
+    return HttpResponse.json(tournament, { status: 201 });
+  }),
 
   http.get(`${BASE}/api/v1/tournaments/:id`, ({ params }) => {
     const id = params.id as string;
