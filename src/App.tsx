@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react';
 import { BrowserRouter, Route, Routes } from 'react-router-dom';
 
 import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { LoadingGear } from '@/components/LoadingGear';
 import { AppShell } from '@/components/layout/AppShell';
 
 const HomePage = lazy(() => import('@/pages/HomePage'));
@@ -25,10 +26,8 @@ const VISUAL_REGRESSION_ENABLED = import.meta.env.VITE_ENABLE_VISUAL_REGRESSION 
 
 function RouteFallback() {
   return (
-    <div className="mx-auto max-w-3xl px-4 py-12" aria-busy="true" aria-live="polite">
-      <div className="hazard-stripes-thin h-2 w-full" aria-hidden="true" />
-      <div className="mt-6 h-8 w-48 animate-pulse rounded-sm bg-surface-2" />
-      <div className="mt-2 h-3 w-32 animate-pulse rounded-sm bg-surface-2" />
+    <div className="mx-auto flex min-h-[60vh] max-w-3xl items-center justify-center px-4">
+      <LoadingGear size="h-32 w-32" label="Loading…" />
     </div>
   );
 }
