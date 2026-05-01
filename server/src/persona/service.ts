@@ -6,6 +6,7 @@ import { log } from '../lib/log.js';
 
 import { buildPortraitPrompt } from './leonardo.js';
 import { nicknameFor } from './nicknames.js';
+import { Semaphore } from './semaphore.js';
 import {
   ensurePersonaRow,
   getPersona,
@@ -28,6 +29,10 @@ export interface PersonaServiceConfig {
   // Polling cadence for Leonardo's async generation. Tests can shorten.
   pollIntervalMs?: number;
   pollMaxAttempts?: number;
+  // Cap simultaneous background generations; default 3.
+  backfillConcurrency?: number;
+  // Maximum queued backfill requests before drop-with-warn; default 30.
+  backfillMaxQueue?: number;
 }
 
 export interface BotIdentity {
@@ -38,21 +43,46 @@ export interface BotIdentity {
 }
 
 export class PersonaService {
-  constructor(private readonly cfg: PersonaServiceConfig) {}
+  private readonly semaphore: Semaphore;
+
+  constructor(private readonly cfg: PersonaServiceConfig) {
+    this.semaphore = new Semaphore(cfg.backfillConcurrency ?? 3, {
+      ...(cfg.backfillMaxQueue !== undefined && { maxQueue: cfg.backfillMaxQueue }),
+    });
+  }
 
   async get(botId: string): Promise<BotPersonaRow | null> {
     return getPersona(this.cfg.db, botId);
   }
 
   // Kicks off generation in the background and returns immediately.
-  // Safe to call repeatedly; existing rows are not regenerated.
+  // Acquires a slot from the semaphore so we never exceed
+  // `backfillConcurrency` simultaneous generations. If the queue is over
+  // capacity (default 30 waiters) the request is dropped with a warn — the
+  // safety valve prevents unbounded growth if Leonardo/Anthropic hangs.
+  // Idempotency is enforced inside `generatePortrait`/`generateTrashTalk`,
+  // so repeated calls for the same bot remain no-ops.
   startBackgroundGeneration(bot: BotIdentity): void {
-    void this.generate(bot).catch((err) => {
-      log.warn(
-        { bot_id: bot.bot_id, err: err instanceof Error ? err.message : String(err) },
-        'persona generation failed',
-      );
-    });
+    void (async () => {
+      const release = await this.semaphore.acquire();
+      if (!release) {
+        log.warn(
+          { bot_id: bot.bot_id, pending: this.semaphore.pendingCount() },
+          'persona backfill dropped: semaphore queue full',
+        );
+        return;
+      }
+      try {
+        await this.generate(bot);
+      } catch (err) {
+        log.warn(
+          { bot_id: bot.bot_id, err: err instanceof Error ? err.message : String(err) },
+          'persona generation failed',
+        );
+      } finally {
+        release();
+      }
+    })();
   }
 
   // Same logic, awaitable — used in tests + for synchronous flows.
@@ -68,14 +98,13 @@ export class PersonaService {
     if (existing?.portrait_url || existing?.portrait_status === 'in_flight') return;
 
     try {
-      const start = await this.cfg.leonardo.startGeneration(
-        buildPortraitPrompt({
-          display_name: bot.display_name,
-          language: bot.language,
-          ...(bot.algorithm !== undefined && { algorithm: bot.algorithm }),
-        }),
-      );
-      await setLeonardoGenerationId(this.cfg.db, bot.bot_id, start.generation_id);
+      const { prompt, style } = buildPortraitPrompt({
+        display_name: bot.display_name,
+        language: bot.language,
+        ...(bot.algorithm !== undefined && { algorithm: bot.algorithm }),
+      });
+      const start = await this.cfg.leonardo.startGeneration(prompt);
+      await setLeonardoGenerationId(this.cfg.db, bot.bot_id, start.generation_id, style);
 
       const interval = this.cfg.pollIntervalMs ?? 5_000;
       const max = this.cfg.pollMaxAttempts ?? 24; // ~2 minutes

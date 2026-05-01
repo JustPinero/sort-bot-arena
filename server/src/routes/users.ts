@@ -27,6 +27,15 @@ export function userRoutes(deps: {
           deps.persona.get(id),
         ]);
         if (!bot) return null;
+        // Backfill persona for any of my bots that never got one generated.
+        if (!persona) {
+          deps.persona.startBackgroundGeneration({
+            bot_id: bot.id,
+            display_name: bot.display_name,
+            language: bot.language,
+            algorithm: null,
+          });
+        }
         return synthesizeBot({ bot, profile, persona });
       }),
     );

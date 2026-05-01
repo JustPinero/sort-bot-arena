@@ -11,6 +11,7 @@ export interface BotPersonaRow {
   leonardo_generation_id: string | null;
   portrait_status: PortraitStatus;
   trash_talk_status: TrashTalkStatus;
+  style: string | null;
 }
 
 function rowToPersona(row: Record<string, unknown>): BotPersonaRow {
@@ -22,6 +23,7 @@ function rowToPersona(row: Record<string, unknown>): BotPersonaRow {
     leonardo_generation_id: (row['leonardo_generation_id'] as string | null) ?? null,
     portrait_status: (row['portrait_status'] as PortraitStatus) ?? 'pending',
     trash_talk_status: (row['trash_talk_status'] as TrashTalkStatus) ?? 'pending',
+    style: (row['style'] as string | null) ?? null,
   };
 }
 
@@ -45,7 +47,23 @@ export async function setLeonardoGenerationId(
   db: Client,
   botId: string,
   generationId: string,
+  style?: string,
 ): Promise<void> {
+  // Backward-compatible: callers that pass no style leave the column as-is.
+  // When a style is supplied (phase 9 path), persist it in the same UPDATE
+  // so the row's leonardo_generation_id and style stay in lockstep.
+  if (style !== undefined) {
+    await db.execute({
+      sql: `UPDATE bot_personas
+               SET leonardo_generation_id = ?,
+                   style = ?,
+                   portrait_status = 'in_flight',
+                   updated_at = CURRENT_TIMESTAMP
+             WHERE bot_id = ?`,
+      args: [generationId, style, botId],
+    });
+    return;
+  }
   await db.execute({
     sql: `UPDATE bot_personas
              SET leonardo_generation_id = ?,

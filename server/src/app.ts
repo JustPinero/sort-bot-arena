@@ -100,7 +100,14 @@ export function createApp(deps: AppDeps): Hono<AppContext> {
     perInputLeaderboardRoutes({ sortBotApi: deps.sortBotApi, persona: deps.persona }),
   );
   app.route('/api/v1/stats', statsRoutes({ db: deps.db, sortBotApi: deps.sortBotApi }));
-  app.route('/api/v1/inputs', inputsRoutes({ db: deps.db, sortBotApi: deps.sortBotApi }));
+  app.route(
+    '/api/v1/inputs',
+    inputsRoutes({
+      db: deps.db,
+      sortBotApi: deps.sortBotApi,
+      sessionSecret: deps.sessionSecret,
+    }),
+  );
   app.route('/api/v1/feed', feedRoutes({ sortBotApi: deps.sortBotApi, persona: deps.persona }));
   app.route(
     '/api/v1/halloffame',
@@ -120,7 +127,12 @@ export function createApp(deps: AppDeps): Hono<AppContext> {
   app.route('/api/v1/battles', battlesReplayRoutes({ sortBotApi: deps.sortBotApi }));
   app.route(
     '/api/v1/battles',
-    battlesRoutes({ sortBotApi: deps.sortBotApi, persona: deps.persona }),
+    battlesRoutes({
+      db: deps.db,
+      sortBotApi: deps.sortBotApi,
+      persona: deps.persona,
+      sessionSecret: deps.sessionSecret,
+    }),
   );
   app.route(
     '/api/v1/tournaments',
