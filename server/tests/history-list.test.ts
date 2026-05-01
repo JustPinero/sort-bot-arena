@@ -37,9 +37,7 @@ function botFixture(id: string, displayName = id, language = 'python') {
 
 function stubBots(ids: string[]) {
   for (const id of ids) {
-    server.use(
-      http.get(`${UPSTREAM}/v1/bots/${id}`, () => HttpResponse.json(botFixture(id))),
-    );
+    server.use(http.get(`${UPSTREAM}/v1/bots/${id}`, () => HttpResponse.json(botFixture(id))));
   }
 }
 
@@ -156,7 +154,10 @@ describe('GET /api/v1/battles (list)', () => {
 
     const res = await t.app.request('/api/v1/battles');
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { items: Array<Record<string, unknown>>; next_cursor: string | null };
+    const body = (await res.json()) as {
+      items: Array<Record<string, unknown>>;
+      next_cursor: string | null;
+    };
     expect(body.items).toHaveLength(3);
     expect(body.next_cursor).toBeNull();
     expect(body.items.map((b) => b['id'])).toEqual(['bat_3', 'bat_2', 'bat_1']);
@@ -227,7 +228,10 @@ describe('GET /api/v1/battles (list)', () => {
         : '/api/v1/battles?limit=10';
       const res = await t.app.request(url);
       expect(res.status).toBe(200);
-      const body = (await res.json()) as { items: Array<Record<string, unknown>>; next_cursor: string | null };
+      const body = (await res.json()) as {
+        items: Array<Record<string, unknown>>;
+        next_cursor: string | null;
+      };
       for (const item of body.items) drained.push(item['id'] as string);
       cursor = body.next_cursor;
       if (cursor === null) {
@@ -336,7 +340,10 @@ describe('GET /api/v1/tournaments (list)', () => {
 
     const res = await t.app.request('/api/v1/tournaments');
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { items: Array<Record<string, unknown>>; next_cursor: string | null };
+    const body = (await res.json()) as {
+      items: Array<Record<string, unknown>>;
+      next_cursor: string | null;
+    };
     expect(body.items).toHaveLength(3);
     expect(body.next_cursor).toBeNull();
     expect(body.items.map((i) => i['id'])).toEqual(['tour_3', 'tour_2', 'tour_1']);
@@ -396,7 +403,10 @@ describe('GET /api/v1/tournaments (list)', () => {
         : '/api/v1/tournaments?limit=10';
       const res = await t.app.request(url);
       expect(res.status).toBe(200);
-      const body = (await res.json()) as { items: Array<Record<string, unknown>>; next_cursor: string | null };
+      const body = (await res.json()) as {
+        items: Array<Record<string, unknown>>;
+        next_cursor: string | null;
+      };
       for (const item of body.items) drained.push(item['id'] as string);
       cursor = body.next_cursor;
       if (cursor === null) {

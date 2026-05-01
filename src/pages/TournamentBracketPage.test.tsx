@@ -64,9 +64,7 @@ describe('<TournamentBracketPage />', () => {
 
   it('shows BYE matches as a single fighter advancing on bye', async () => {
     renderAt('/tournaments/trn_completed');
-    await waitFor(() =>
-      expect(screen.getByText(/advances on bye/i)).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText(/advances on bye/i)).toBeInTheDocument());
     // The participant who got the bye must still be named on the card.
     const byeCopy = screen.getByText(/advances on bye/i);
     const card = byeCopy.closest('article');

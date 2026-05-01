@@ -240,36 +240,33 @@ describe('POST /api/v1/tournaments', () => {
       expect(r['status']).toBe('running');
     });
 
-    it.each([4, 6, 8, 12])(
-      'accepts bracket_size=%i with matching participants',
-      async (size) => {
-        const { t, cookie } = await signedUpApp();
-        server.use(
-          http.post(`${UPSTREAM}/v1/tournaments`, () =>
-            HttpResponse.json(upstreamCreateTournamentResponse(`tour_${size}`, size)),
-          ),
-        );
-        const res = await t.app.request('/api/v1/tournaments', {
-          method: 'POST',
-          headers: { 'content-type': 'application/json', cookie },
-          body: JSON.stringify({
-            participant_bot_ids: ids(size),
-            count: 3,
-            bracket_size: size,
-            input_mode: 'flat_random',
-          }),
-        });
-        expect([200, 201]).toContain(res.status);
-        const row = await t.db.execute({
-          sql: 'SELECT bracket_size, participant_count FROM recent_tournaments WHERE tournament_id = ?',
-          args: [`tour_${size}`],
-        });
-        expect(row.rows).toHaveLength(1);
-        const r = row.rows[0] as unknown as Record<string, unknown>;
-        expect(Number(r['bracket_size'])).toBe(size);
-        expect(Number(r['participant_count'])).toBe(size);
-      },
-    );
+    it.each([4, 6, 8, 12])('accepts bracket_size=%i with matching participants', async (size) => {
+      const { t, cookie } = await signedUpApp();
+      server.use(
+        http.post(`${UPSTREAM}/v1/tournaments`, () =>
+          HttpResponse.json(upstreamCreateTournamentResponse(`tour_${size}`, size)),
+        ),
+      );
+      const res = await t.app.request('/api/v1/tournaments', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', cookie },
+        body: JSON.stringify({
+          participant_bot_ids: ids(size),
+          count: 3,
+          bracket_size: size,
+          input_mode: 'flat_random',
+        }),
+      });
+      expect([200, 201]).toContain(res.status);
+      const row = await t.db.execute({
+        sql: 'SELECT bracket_size, participant_count FROM recent_tournaments WHERE tournament_id = ?',
+        args: [`tour_${size}`],
+      });
+      expect(row.rows).toHaveLength(1);
+      const r = row.rows[0] as unknown as Record<string, unknown>;
+      expect(Number(r['bracket_size'])).toBe(size);
+      expect(Number(r['participant_count'])).toBe(size);
+    });
   });
 
   describe('upstream error envelopes', () => {

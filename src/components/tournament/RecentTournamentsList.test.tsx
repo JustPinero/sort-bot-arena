@@ -63,11 +63,7 @@ describe('<RecentTournamentsList />', () => {
       ),
     );
     renderList();
-    await waitFor(() =>
-      expect(
-        screen.getByText(/no recent tournaments yet/i),
-      ).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText(/no recent tournaments yet/i)).toBeInTheDocument());
   });
 
   it('renders cards for each recent tournament with name, participants, status and link', async () => {
@@ -94,9 +90,7 @@ describe('<RecentTournamentsList />', () => {
     );
     renderList();
 
-    await waitFor(() =>
-      expect(screen.getByText(/tournament alpha-1/i)).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText(/tournament alpha-1/i)).toBeInTheDocument());
     expect(screen.getByText(/tournament beta-2/i)).toBeInTheDocument();
     expect(screen.getByText(/8 fighters/i)).toBeInTheDocument();
     expect(screen.getByText(/6 fighters/i)).toBeInTheDocument();

@@ -61,11 +61,7 @@ interface Battle {
   weight_class: WeightClass | null;
 }
 
-function buildFighter(
-  bot: ApiBot,
-  persona: BotPersonaRow | null,
-  corner: Corner,
-): BattleFighter {
+function buildFighter(bot: ApiBot, persona: BotPersonaRow | null, corner: Corner): BattleFighter {
   return {
     bot_id: bot.id,
     nickname: persona?.nickname ?? nicknameFor(bot.id),
@@ -84,15 +80,14 @@ function mapStatus(upstream: BattleResponse['battle']['status']): BattleStatus {
   return 'completed';
 }
 
-function deriveOutcome(
-  battle: BattleResponse['battle'],
-  runs: BattleRun[],
-): BattleOutcome | null {
+function deriveOutcome(battle: BattleResponse['battle'], runs: BattleRun[]): BattleOutcome | null {
   if (battle.status !== 'complete' && battle.status !== 'failed') return null;
   if (battle.winner_bot_id === null) return 'draw';
-  const allKo = runs.length > 0 && runs.every((run) => {
-    return run.bot_a_status !== 'success' || run.bot_b_status !== 'success';
-  });
+  const allKo =
+    runs.length > 0 &&
+    runs.every((run) => {
+      return run.bot_a_status !== 'success' || run.bot_b_status !== 'success';
+    });
   if (allKo) return 'ko';
   return 'decision';
 }

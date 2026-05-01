@@ -71,12 +71,12 @@ Or boot the full local stack (sort-bot-api + arena server + vite) in one command
 
 ### Backend (`server/`)
 
-| Script                                           | What it does                              |
-| ------------------------------------------------ | ----------------------------------------- |
-| `pnpm --filter @sort-bot-arena/server dev`       | tsx watch on `src/index.ts`, loads `.env` |
-| `pnpm --filter @sort-bot-arena/server build`     | tsc → `dist/`                             |
+| Script                                           | What it does                                                                                         |
+| ------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
+| `pnpm --filter @sort-bot-arena/server dev`       | tsx watch on `src/index.ts`, loads `.env`                                                            |
+| `pnpm --filter @sort-bot-arena/server build`     | tsc → `dist/`                                                                                        |
 | `pnpm --filter @sort-bot-arena/server test`      | Vitest (66 cases — auth + sort-bot-api client + synthesis + read/write routes + upstream resilience) |
-| `pnpm --filter @sort-bot-arena/server typecheck` | tsc --noEmit                              |
+| `pnpm --filter @sort-bot-arena/server typecheck` | tsc --noEmit                                                                                         |
 
 ## Project structure
 
@@ -123,7 +123,7 @@ Phase plans live in `requests/phase-N-plan.md`. Phases merge to `main` via `/pha
 
 | Phase | Theme                                                            | Status  |
 | ----- | ---------------------------------------------------------------- | ------- |
-| 1–6   | Frontend phases — foundation through homepage polish              | shipped |
+| 1–6   | Frontend phases — foundation through homepage polish             | shipped |
 | 7     | API reconciliation — drop MSW, ship our own backend, cookie auth | shipped |
 | 8     | Cross-service resilience — breaker + stale cache + Sentry        | shipped |
 

@@ -4,16 +4,16 @@
 
 ## Theme summary
 
-| Theme | What it does | # slices | Parallelism |
-|---|---|---|---|
-| **A. CI lockdown** | Server tests in CI, coverage thresholds, husky | 4 | mostly sequential |
-| **B. Contract integrity** | Zod schemas, apiClient overload, server adoption, MSW fidelity, drift test | 6 | mostly parallel |
-| **C. Reliability + listeners** | SSE reconnect bug, /readyz listener field, global SSE listener (D-8), 60s sweep (D-10), useStartBattle invalidation | 5 | parallel after C1+C2 |
-| **D. Tournament orchestrator (D-9)** | Match-by-match orchestration; closes the escalation caveat | 5 | sequential within theme |
-| **E. Frontend cleanup** | apiError narrowing, DialogTriggerButton, useMutation auth, useEligibleFighters, polish bundle | 5 | parallel |
-| **F. Accessibility + UX** | axe coverage on modals + pages, react-markdown for analysis | 3 | parallel |
-| **G. E2E breadth** | Real-server harness + 5 flows | 6 | sequential within G |
-| **H. Test cleanup** | Consolidate dup tests, tighten flaky pickStyle, dir rename | 2 | parallel |
+| Theme                                | What it does                                                                                                        | # slices | Parallelism             |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------- | -------- | ----------------------- |
+| **A. CI lockdown**                   | Server tests in CI, coverage thresholds, husky                                                                      | 4        | mostly sequential       |
+| **B. Contract integrity**            | Zod schemas, apiClient overload, server adoption, MSW fidelity, drift test                                          | 6        | mostly parallel         |
+| **C. Reliability + listeners**       | SSE reconnect bug, /readyz listener field, global SSE listener (D-8), 60s sweep (D-10), useStartBattle invalidation | 5        | parallel after C1+C2    |
+| **D. Tournament orchestrator (D-9)** | Match-by-match orchestration; closes the escalation caveat                                                          | 5        | sequential within theme |
+| **E. Frontend cleanup**              | apiError narrowing, DialogTriggerButton, useMutation auth, useEligibleFighters, polish bundle                       | 5        | parallel                |
+| **F. Accessibility + UX**            | axe coverage on modals + pages, react-markdown for analysis                                                         | 3        | parallel                |
+| **G. E2E breadth**                   | Real-server harness + 5 flows                                                                                       | 6        | sequential within G     |
+| **H. Test cleanup**                  | Consolidate dup tests, tighten flaky pickStyle, dir rename                                                          | 2        | parallel                |
 
 **Total: 36 slices.** (Bigger than phase 9. Justified — A-grade test coverage, all debt closed, all FE issues resolved.)
 
@@ -78,6 +78,7 @@ Replace hand-rolled `toHaveProperty` lists in `server/tests/*-shape.test.ts`, `r
 
 **B5. MSW drift fixes (3 endpoints).**
 Per the QA review:
+
 - `GET /api/healthz` → MSW returns plain text `'ok'` (not JSON).
 - `POST /api/v1/inputs` validation error envelope → match `{error:'bad_field', issues:[...]}`.
 - `POST /api/v1/bots` validation error envelope → same.
@@ -135,6 +136,7 @@ NEW `src/api/eligible-fighters.ts`. Replace 4 duplicate `useLeaderboard({weight:
 
 **E5. FE polish bundle.**
 Smaller nits from the FE review:
+
 - `client.ts:113` — drop `?? envelope.error` from the code fallback.
 - `MatchSetupModal.tsx:131-133` — clear `submitError` in setters, not via deps-drifty effect.
 - `InputPickerTabs.tsx:117-128` — drop `aria-label` (the visible label wins).

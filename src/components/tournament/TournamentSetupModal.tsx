@@ -13,12 +13,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/cn';
 
 import { BotTilePicker } from './BotTilePicker';
@@ -228,7 +223,9 @@ export function TournamentSetupModal({
                   )}
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>POSTs to /tournaments and redirects to the bracket page.</TooltipContent>
+              <TooltipContent>
+                POSTs to /tournaments and redirects to the bracket page.
+              </TooltipContent>
             </Tooltip>
           </div>
         </DialogContent>

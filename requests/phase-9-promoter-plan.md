@@ -8,20 +8,20 @@ User-driven matchmaking. Two new product surfaces — match setup (battles) and 
 
 ## Decisions (locked, see Q&A in chat)
 
-| # | Decision | Detail |
-|---|---|---|
-| 1 | Battle weight class | Server-derived label from average `size_class` of the inputs picked: `sparring` (avg small) / `exhibition` (avg medium) / `title_fight` (avg large) |
-| 2 | Battle cooldown | **Rule A:** no simultaneous battles per pair AND max 3 completed per pair per rolling hour. 429 + `Retry-After` |
-| 3 | Tournament inputs | User-toggle in modal: `flat_random` (any 3 from 57) vs `escalation` (round-thematic). Caveat: sort-bot-api today only supports uniform `count` — escalation persisted as analytics until upstream supports per-match inputs |
-| 4 | Portrait re-roll | **No.** First gen is final. Lazy backfill only |
-| 5 | Custom input | Max 50,000 elements; integers only; negatives allowed; format dropdown (comma default / space / newline) |
-| 6 | Bracket sizes | Locked: 4 / 6 / 8 / 12. Byes for non-power-of-2 |
-| 7 | Bot tile picker | All evaluated, non-retired. Search by name. Single grid, paginate >50 |
-| 8 | 8 portrait styles | steampunk, cyberpunk, cartoony, anime, classic-battlebot, kaiju, medieval, retro-arcade. Uniform RNG per generation |
-| 9 | Persistence | Turso live in production via slice 0 |
-| 10 | Quick fight | Arena page button: 2 random bots + 3 random inputs, fire-and-redirect |
-| 11 | Custom inputs | Globally shared (any user can use any uploaded input) |
-| 12 | History pages | In-scope. `GET /api/v1/battles` + `/api/v1/tournaments` backed by Turso |
+| #   | Decision            | Detail                                                                                                                                                                                                                      |
+| --- | ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Battle weight class | Server-derived label from average `size_class` of the inputs picked: `sparring` (avg small) / `exhibition` (avg medium) / `title_fight` (avg large)                                                                         |
+| 2   | Battle cooldown     | **Rule A:** no simultaneous battles per pair AND max 3 completed per pair per rolling hour. 429 + `Retry-After`                                                                                                             |
+| 3   | Tournament inputs   | User-toggle in modal: `flat_random` (any 3 from 57) vs `escalation` (round-thematic). Caveat: sort-bot-api today only supports uniform `count` — escalation persisted as analytics until upstream supports per-match inputs |
+| 4   | Portrait re-roll    | **No.** First gen is final. Lazy backfill only                                                                                                                                                                              |
+| 5   | Custom input        | Max 50,000 elements; integers only; negatives allowed; format dropdown (comma default / space / newline)                                                                                                                    |
+| 6   | Bracket sizes       | Locked: 4 / 6 / 8 / 12. Byes for non-power-of-2                                                                                                                                                                             |
+| 7   | Bot tile picker     | All evaluated, non-retired. Search by name. Single grid, paginate >50                                                                                                                                                       |
+| 8   | 8 portrait styles   | steampunk, cyberpunk, cartoony, anime, classic-battlebot, kaiju, medieval, retro-arcade. Uniform RNG per generation                                                                                                         |
+| 9   | Persistence         | Turso live in production via slice 0                                                                                                                                                                                        |
+| 10  | Quick fight         | Arena page button: 2 random bots + 3 random inputs, fire-and-redirect                                                                                                                                                       |
+| 11  | Custom inputs       | Globally shared (any user can use any uploaded input)                                                                                                                                                                       |
+| 12  | History pages       | In-scope. `GET /api/v1/battles` + `/api/v1/tournaments` backed by Turso                                                                                                                                                     |
 
 ## Reference docs (read before starting any slice)
 
@@ -51,6 +51,7 @@ User-driven matchmaking. Two new product surfaces — match setup (battles) and 
 **Owner:** Justin (or me, opt-in). One-shot operational step, no subagent.
 
 **Steps:**
+
 - `~/.turso/turso db create sort-bot-arena-server --group default`
 - Capture URL + token, set on Railway env (`DATABASE_URL`, `DATABASE_AUTH_TOKEN`)
 - Trigger Railway redeploy. Verify `schema_migrations` table populated with all 5 existing migrations
@@ -63,6 +64,7 @@ User-driven matchmaking. Two new product surfaces — match setup (battles) and 
 **Goal:** Append migrations 0006-0009 to `server/src/db/schema.ts`. No behavior changes yet — just the table shapes.
 
 **Files:**
+
 - `server/src/db/schema.ts` (append 4 migrations)
 - `server/tests/migration-shape.test.ts` (NEW — assert each new table exists with the expected columns after `runMigrations()`)
 
@@ -75,6 +77,7 @@ User-driven matchmaking. Two new product surfaces — match setup (battles) and 
 **Goal:** Replace single `buildPortraitPrompt` with the 8-style pool, RNG selection. Persist selected style on `bot_personas.style`.
 
 **Files:**
+
 - `server/src/persona/leonardo.ts` (refactor `buildPortraitPrompt` to return `{prompt, style}`; add `STYLES`, `PROMPTS`, `pickStyle`)
 - `server/src/persona/store.ts` (extend `setLeonardoGenerationId` to also write `style`)
 - `server/src/persona/service.ts` (thread style through generatePortrait)
@@ -89,6 +92,7 @@ User-driven matchmaking. Two new product surfaces — match setup (battles) and 
 **Goal:** Add concurrency-capped backfill, fire from every list endpoint that returns bots.
 
 **Files:**
+
 - `server/src/persona/semaphore.ts` (NEW — generic Semaphore class)
 - `server/src/persona/service.ts` (use semaphore in `startBackgroundGeneration`)
 - `server/src/routes/leaderboard.ts`, `feed.ts`, `halloffame.ts`, `users.ts`, `per-input-leaderboard.ts` (each adds `startBackgroundGeneration` for any persona-less bot in its response)
@@ -103,6 +107,7 @@ User-driven matchmaking. Two new product surfaces — match setup (battles) and 
 **Goal:** New `POST /api/v1/battles` route with cooldown rules + `recent_battles` writes. Replaces today's pure pass-through.
 
 **Files:**
+
 - `server/src/store/recent-battles.ts` (NEW — `pairKey`, `findActive`, `countCompletedSince`, `insertPending`, `markRunning`, `markComplete`, `markFailed`)
 - `server/src/routes/battles.ts` (rewrite POST handler; existing GET handlers stay the same)
 - `server/tests/battle-cooldown.test.ts` (NEW — pairKey symmetry; simultaneous→429 pair_busy; 4th in hour→429 pair_cooldown; race-safe under 50 simultaneous)
@@ -116,6 +121,7 @@ User-driven matchmaking. Two new product surfaces — match setup (battles) and 
 **Goal:** Server derives `weight_class` from input size_classes when a battle is created. Persisted on `recent_battles.weight_class`. Surface on the rich Battle shape.
 
 **Files:**
+
 - `server/src/synthesize/battle-class.ts` (NEW — pure: `weightClassFor(inputSizeClasses[]) → 'sparring'|'exhibition'|'title_fight'`)
 - `server/src/routes/battles.ts` (compute label at create time; populate on recent_battles row; expose on `Battle` response)
 - `src/api/types.ts` (extend `Battle` with `weight_class: 'sparring'|'exhibition'|'title_fight'|null`)
@@ -131,6 +137,7 @@ User-driven matchmaking. Two new product surfaces — match setup (battles) and 
 **Goal:** `POST /api/v1/inputs` accepts JSON `{values: number[], format: 'comma'|'space'|'newline', display_name?: string}`, validates, proxies to sort-bot-api, mirrors metadata into `uploaded_inputs`, returns the canonical `InputSummary`.
 
 **Files:**
+
 - `server/src/routes/inputs.ts` (existing — extend with POST `/`)
 - `server/src/store/uploaded-inputs.ts` (NEW)
 - `server/tests/inputs-upload.test.ts` (NEW — validates 50k cap, integer-only, negatives ok, mirroring; sort-bot-api proxied with the right multipart body)
@@ -144,6 +151,7 @@ User-driven matchmaking. Two new product surfaces — match setup (battles) and 
 **Goal:** `GET /api/v1/battles` and `GET /api/v1/tournaments` return real cursor pages from `recent_battles` and `recent_tournaments`.
 
 **Files:**
+
 - `server/src/routes/battles.ts` (extend GET / to query Turso)
 - `server/src/routes/tournaments.ts` (same)
 - `server/src/store/recent-battles.ts` (add `listRecent({limit, before, initiatorUserId?})`)
@@ -159,6 +167,7 @@ User-driven matchmaking. Two new product surfaces — match setup (battles) and 
 **Goal:** Modal triggered by "Setup a match" CTA on Arena page. Two-bot picker + input picker (preset / manual / upload tabs). Submits to `/api/v1/battles`, redirects to BattlePage.
 
 **Files:**
+
 - `src/components/match/MatchSetupModal.tsx` (NEW)
 - `src/components/match/InputPickerTabs.tsx` (NEW — preset / manual / upload sub-components)
 - `src/components/match/BotSlotPicker.tsx` (NEW — two slots, search-by-name)
@@ -175,6 +184,7 @@ User-driven matchmaking. Two new product surfaces — match setup (battles) and 
 **Goal:** Modal triggered by "Setup a tournament" CTA on Arena page. Bracket size dropdown + Random fill + manual `<BotTilePicker />` + input mode toggle + Cancel/Start buttons.
 
 **Files:**
+
 - `src/components/tournament/TournamentSetupModal.tsx` (NEW)
 - `src/components/tournament/BotTilePicker.tsx` (NEW)
 - `src/components/tournament/TournamentSetupModal.test.tsx` (NEW)
@@ -190,6 +200,7 @@ User-driven matchmaking. Two new product surfaces — match setup (battles) and 
 **Goal:** Surface battle weight class on BattlePage (TitleFight / Exhibition / Sparring chip near the title) and on the Arena's recent-battles list.
 
 **Files:**
+
 - `src/components/battle/WeightClassChip.tsx` (NEW)
 - `src/pages/BattlePage.tsx` (render chip)
 - `src/pages/ArenaIndexPage.tsx` (recent battles section using `useBattles`)
@@ -204,6 +215,7 @@ User-driven matchmaking. Two new product surfaces — match setup (battles) and 
 **Goal:** Wire the existing `<TournamentBracketPage />` to consume the new `useTournament` (already exists, server backed by slice 7). Add tournament card on the recent tournaments list.
 
 **Files:**
+
 - `src/pages/TournamentBracketPage.tsx` (verify shape match, polish UX for byes)
 - `src/pages/ArenaIndexPage.tsx` or `src/pages/TournamentsListPage.tsx` (recent tournaments section)
 - Component tests as needed
@@ -215,6 +227,7 @@ User-driven matchmaking. Two new product surfaces — match setup (battles) and 
 **Goal:** Tooltips on all new modal fields per Justin's spec. `<LoadingGear />` consistency on long-running flows. Empty states tightened.
 
 **Files:**
+
 - `src/components/ui/Tooltip.tsx` (extend if needed)
 - Modals from 8 + 9 (add tooltip props)
 - `src/pages/ArenaIndexPage.tsx` (empty-state polish)
@@ -226,6 +239,7 @@ User-driven matchmaking. Two new product surfaces — match setup (battles) and 
 **Goal:** Update CLAUDE.md, debt.md, deployment-landmines.md. Live smoke against deployed env. Merge PR.
 
 **Files:**
+
 - `CLAUDE.md` — phase 9 row in phase table
 - `debt.md` — D-9 if any deferred items (e.g. real escalation pending sort-bot-api per-match input)
 - `references/deployment-landmines.md` — Turso section
@@ -246,6 +260,7 @@ User-driven matchmaking. Two new product surfaces — match setup (battles) and 
 ## Tests target
 
 After this phase ships:
+
 - Server tests: 87 → ~120+ (each slice adds 3-8 cases)
 - Frontend tests: 260 → ~290+ (modals, weight class chip, picker)
 - All gated on contract validation against `src/api/types.ts`

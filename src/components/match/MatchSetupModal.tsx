@@ -13,16 +13,10 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 import { BotSlotPicker } from './BotSlotPicker';
 import { InputPickerTabs, presetCount, type PresetKey } from './InputPickerTabs';
-
 
 interface MatchSetupModalProps {
   triggerLabel?: string;
@@ -45,11 +39,7 @@ export function MatchSetupModal({
           <TooltipTrigger asChild>
             <span className="inline-flex">
               <DialogTrigger asChild>
-                <Button
-                  variant="combat"
-                  className={triggerClassName}
-                  data-testid="setup-match-cta"
-                >
+                <Button variant="combat" className={triggerClassName} data-testid="setup-match-cta">
                   {triggerLabel}
                 </Button>
               </DialogTrigger>
@@ -101,12 +91,7 @@ function MatchSetupForm({ onClose }: MatchSetupFormProps) {
   }, [inputsQuery.data, extraInputs]);
 
   const distinctBots = redBotId !== null && blueBotId !== null && redBotId !== blueBotId;
-  const tabValid =
-    tab === 'preset'
-      ? true
-      : tab === 'manual'
-        ? selectedInputIds.size > 0
-        : false;
+  const tabValid = tab === 'preset' ? true : tab === 'manual' ? selectedInputIds.size > 0 : false;
   const canSubmit = distinctBots && tabValid && !startBattle.isPending;
 
   const onToggleInput = (id: string) => {

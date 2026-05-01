@@ -34,10 +34,7 @@ export interface RecordTournamentArgs {
 
 // Inserts a freshly-created tournament. Used by slice 9.5's
 // POST /api/v1/tournaments handler after upstream creation succeeds.
-export async function recordTournament(
-  db: Client,
-  args: RecordTournamentArgs,
-): Promise<string> {
+export async function recordTournament(db: Client, args: RecordTournamentArgs): Promise<string> {
   const createdAt = new Date().toISOString();
   const status = args.status ?? 'pending';
   await db.execute({

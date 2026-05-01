@@ -230,9 +230,7 @@ describe('GET /api/v1/tournaments/:id', () => {
     );
 
     const t = await makeTestApp({ sortBotApiBaseUrl: UPSTREAM });
-    const res = await t.app.request(
-      '/api/v1/tournaments/tour_357ebddb20442ac59c297d7ea421da97',
-    );
+    const res = await t.app.request('/api/v1/tournaments/tour_357ebddb20442ac59c297d7ea421da97');
     expect(res.status).toBe(200);
     const body = (await res.json()) as Record<string, unknown>;
 

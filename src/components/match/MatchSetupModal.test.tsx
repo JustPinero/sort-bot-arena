@@ -156,9 +156,7 @@ describe('<MatchSetupModal />', () => {
     await userEvent.click(screen.getByRole('tab', { name: /upload/i }));
     await userEvent.type(screen.getByLabelText(/values/i), '1, two, 3');
     await userEvent.click(screen.getByRole('button', { name: /add input/i }));
-    await waitFor(() =>
-      expect(screen.getByText(/must be integers/i)).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText(/must be integers/i)).toBeInTheDocument());
   });
 
   it('Bot pickers must be distinct to enable Start match', async () => {
@@ -184,9 +182,7 @@ describe('<MatchSetupModal />', () => {
     const presetSelect = await screen.findByLabelText(/preset bundle/i);
     await userEvent.selectOptions(presetSelect, 'sparring');
     await userEvent.click(screen.getByRole('button', { name: /start match/i }));
-    await waitFor(() =>
-      expect(screen.getByText(/already running/i)).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText(/already running/i)).toBeInTheDocument());
   });
 
   it('429 pair_cooldown → inline alert with formatted retry-after', async () => {
@@ -204,9 +200,7 @@ describe('<MatchSetupModal />', () => {
     const presetSelect = await screen.findByLabelText(/preset bundle/i);
     await userEvent.selectOptions(presetSelect, 'sparring');
     await userEvent.click(screen.getByRole('button', { name: /start match/i }));
-    await waitFor(() =>
-      expect(screen.getByText(/per-hour limit/i)).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText(/per-hour limit/i)).toBeInTheDocument());
     expect(screen.getByText(/10 min/i)).toBeInTheDocument();
   });
 
@@ -309,7 +303,6 @@ describe('<QuickFightButton />', () => {
       );
     });
   });
-
 
   it('with leaderboard loaded, click POSTs once and redirects on 200', async () => {
     let captured: unknown = null;

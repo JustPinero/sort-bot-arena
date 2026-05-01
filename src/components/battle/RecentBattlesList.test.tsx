@@ -3,6 +3,9 @@ import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Battle } from '@/api/types';
+
+import { RecentBattlesList } from './RecentBattlesList';
+
 import type { ReactNode } from 'react';
 
 const useBattlesMock = vi.fn();
@@ -10,8 +13,6 @@ const useBattlesMock = vi.fn();
 vi.mock('@/api/queries', () => ({
   useBattles: () => useBattlesMock(),
 }));
-
-import { RecentBattlesList } from './RecentBattlesList';
 
 function wrap(ui: ReactNode) {
   return render(<MemoryRouter>{ui}</MemoryRouter>);

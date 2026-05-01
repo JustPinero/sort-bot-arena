@@ -57,13 +57,7 @@ export function buildSessionCookie(token: string, opts: { secure: boolean }): st
 }
 
 export function buildLogoutCookie(opts: { secure: boolean }): string {
-  const parts = [
-    `${SESSION_COOKIE}=`,
-    'Path=/',
-    'HttpOnly',
-    sameSiteFor(opts.secure),
-    'Max-Age=0',
-  ];
+  const parts = [`${SESSION_COOKIE}=`, 'Path=/', 'HttpOnly', sameSiteFor(opts.secure), 'Max-Age=0'];
   if (opts.secure) parts.push('Secure');
   return parts.join('; ');
 }

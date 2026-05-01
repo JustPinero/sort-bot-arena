@@ -73,10 +73,7 @@ function deriveMatchStatus(m: UpstreamMatch): MatchStatus {
   return 'pending';
 }
 
-function buildParticipant(
-  bot: ApiBot,
-  persona: BotPersonaRow | null,
-): TournamentParticipant {
+function buildParticipant(bot: ApiBot, persona: BotPersonaRow | null): TournamentParticipant {
   return {
     bot_id: bot.id,
     nickname: persona?.nickname ?? nicknameFor(bot.id),

@@ -85,9 +85,7 @@ describe('phase 9 schema migrations', () => {
   });
 
   it('schema_migrations records every applied migration', async () => {
-    const res = await db.execute(
-      'SELECT id FROM schema_migrations ORDER BY id',
-    );
+    const res = await db.execute('SELECT id FROM schema_migrations ORDER BY id');
     const ids = res.rows.map((r) => (r as unknown as Record<string, string>)['id']);
     expect(ids).toEqual([
       '0001_users',

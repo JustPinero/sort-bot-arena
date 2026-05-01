@@ -150,11 +150,7 @@ export function claimPair(
   });
 }
 
-export async function reassignBattleId(
-  db: Client,
-  oldId: string,
-  newId: string,
-): Promise<void> {
+export async function reassignBattleId(db: Client, oldId: string, newId: string): Promise<void> {
   if (oldId === newId) return;
   await db.execute({
     sql: 'UPDATE recent_battles SET battle_id = ? WHERE battle_id = ?',
@@ -220,10 +216,7 @@ export interface ListRecentOpts {
 // text — no encoding). Order is strictly created_at DESC and the index
 // `idx_recent_battles_created` covers the unfiltered case;
 // `idx_recent_battles_initiator` covers the initiator-filtered case.
-export async function listRecent(
-  db: Client,
-  opts: ListRecentOpts,
-): Promise<RecentBattleRow[]> {
+export async function listRecent(db: Client, opts: ListRecentOpts): Promise<RecentBattleRow[]> {
   const where: string[] = [];
   const args: Array<string | number> = [];
   if (opts.before !== undefined) {

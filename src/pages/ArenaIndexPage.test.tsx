@@ -33,8 +33,6 @@ describe('<ArenaIndexPage />', () => {
 
   it('renders the Recent Battles section below the header CTAs', async () => {
     renderPage();
-    expect(
-      await screen.findByRole('heading', { name: /recent battles/i }),
-    ).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /recent battles/i })).toBeInTheDocument();
   });
 });

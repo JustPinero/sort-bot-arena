@@ -11,17 +11,10 @@ interface LoadingGearProps {
   className?: string;
 }
 
-export function LoadingGear({
-  size = 'h-24 w-24',
-  label,
-  className,
-}: LoadingGearProps) {
+export function LoadingGear({ size = 'h-24 w-24', label, className }: LoadingGearProps) {
   return (
     <div
-      className={cn(
-        'flex flex-col items-center justify-center gap-3 py-16',
-        className,
-      )}
+      className={cn('flex flex-col items-center justify-center gap-3 py-16', className)}
       role="status"
       aria-busy="true"
       aria-live="polite"

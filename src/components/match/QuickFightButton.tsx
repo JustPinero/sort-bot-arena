@@ -6,13 +6,7 @@ import { useLeaderboard, useStartBattle } from '@/api/queries';
 import type { LeaderboardEntry } from '@/api/types';
 import { LoadingGear } from '@/components/LoadingGear';
 import { Button } from '@/components/ui/button';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
-
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface QuickFightButtonProps {
   className?: string;

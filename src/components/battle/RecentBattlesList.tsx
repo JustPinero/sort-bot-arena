@@ -1,13 +1,12 @@
 import { Link } from 'react-router-dom';
 
 import { useBattles } from '@/api/queries';
+import type { Battle } from '@/api/types';
 import { LoadingGear } from '@/components/LoadingGear';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 
 import { BattleWeightClassChip } from './BattleWeightClassChip';
-
-import type { Battle } from '@/api/types';
 
 const MAX_RECENT = 8;
 
@@ -34,10 +33,7 @@ export function RecentBattlesList() {
 
   return (
     <section aria-labelledby="recent-battles-heading" className="mt-12">
-      <h2
-        id="recent-battles-heading"
-        className="font-display text-2xl uppercase tracking-wide"
-      >
+      <h2 id="recent-battles-heading" className="font-display text-2xl uppercase tracking-wide">
         Recent Battles
       </h2>
       <p className="mt-1 font-mono text-xs uppercase tracking-widest text-text-tertiary">
@@ -56,9 +52,7 @@ export function RecentBattlesList() {
         </p>
       ) : null}
 
-      {!isLoading && !isError ? (
-        <RecentBattlesContent battles={data?.items ?? []} />
-      ) : null}
+      {!isLoading && !isError ? <RecentBattlesContent battles={data?.items ?? []} /> : null}
     </section>
   );
 }
@@ -76,9 +70,7 @@ function RecentBattlesContent({ battles }: { battles: Battle[] }) {
             Setup a match
           </span>{' '}
           or{' '}
-          <span className="font-mono text-xs uppercase tracking-wide text-combat">
-            Quick fight
-          </span>{' '}
+          <span className="font-mono text-xs uppercase tracking-wide text-combat">Quick fight</span>{' '}
           above to start one.
         </p>
       </div>
