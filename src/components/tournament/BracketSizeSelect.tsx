@@ -1,3 +1,4 @@
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/cn';
 
 import { BRACKET_SIZES, type BracketSize } from './bracket';
@@ -19,24 +20,34 @@ export function BracketSizeSelect({ value, onChange, className }: BracketSizeSel
   const hint = BYE_HINT[value];
   return (
     <div className={cn('flex flex-col gap-1', className)}>
-      <label className="flex flex-col gap-1">
-        <span className="font-mono text-xs uppercase tracking-wide text-text-secondary">
-          Bracket size
-        </span>
-        <select
-          value={value}
-          onChange={(e) => onChange(Number(e.target.value) as BracketSize)}
-          className="rounded-sm border bg-surface-2 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-hazard"
-          aria-label="Bracket size"
-          title="Pick how many bots compete. 6 and 12 use byes in round 1."
+      <div className="flex flex-col gap-1">
+        <label
+          htmlFor="bracket-size"
+          className="font-mono text-xs uppercase tracking-wide text-text-secondary"
         >
-          {BRACKET_SIZES.map((size) => (
-            <option key={size} value={size}>
-              {size}
-            </option>
-          ))}
-        </select>
-      </label>
+          Bracket size
+        </label>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <select
+              id="bracket-size"
+              value={value}
+              onChange={(e) => onChange(Number(e.target.value) as BracketSize)}
+              className="rounded-sm border bg-surface-2 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-hazard"
+              aria-label="Bracket size"
+            >
+              {BRACKET_SIZES.map((size) => (
+                <option key={size} value={size}>
+                  {size}
+                </option>
+              ))}
+            </select>
+          </TooltipTrigger>
+          <TooltipContent>
+            Number of bots in the bracket. 6 and 12 add round-1 byes.
+          </TooltipContent>
+        </Tooltip>
+      </div>
       {hint ? (
         <p role="note" className="font-mono text-[11px] uppercase tracking-wide text-text-tertiary">
           {hint}

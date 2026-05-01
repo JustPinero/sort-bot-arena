@@ -1,5 +1,5 @@
 import { QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
@@ -384,6 +384,76 @@ describe('<TournamentSetupModal />', () => {
     await userEvent.click(random);
     await userEvent.click(screen.getByRole('button', { name: /start tournament/i }));
     await waitFor(() => expect(lastPath).toBe('/tournaments/trn_yay'));
+  });
+});
+
+describe('<TournamentSetupModal /> tooltips', () => {
+  it('exposes tooltips on the major form controls (bracket size, search, Start)', async () => {
+    useLeaderboardHandler(makeBots(12));
+    renderModal();
+
+    // Radix Tooltip opens on pointerMove. Fire pointer events directly to avoid
+    // jsdom + Radix DismissableLayer pointer-events:none friction.
+    const bracket = (await screen.findByLabelText(/bracket size/i)) as HTMLSelectElement;
+    fireEvent.pointerMove(bracket);
+    await waitFor(async () => {
+      const tips = await screen.findAllByRole('tooltip');
+      expect(tips.some((t) => /byes|number of bots/i.test(t.textContent ?? ''))).toBe(true);
+    });
+
+    const search = await screen.findByLabelText(/search bots/i);
+    fireEvent.pointerMove(search);
+    await waitFor(async () => {
+      const tips = await screen.findAllByRole('tooltip');
+      expect(tips.some((t) => /display name|nickname/i.test(t.textContent ?? ''))).toBe(true);
+    });
+
+    const start = await screen.findByRole('button', { name: /start tournament/i });
+    fireEvent.pointerMove(start);
+    await waitFor(async () => {
+      const tips = await screen.findAllByRole('tooltip');
+      expect(tips.some((t) => /bracket page|tournaments/i.test(t.textContent ?? ''))).toBe(true);
+    });
+  });
+
+  it('Random button tooltip explains the disabled-pool state when bots are insufficient', async () => {
+    useLeaderboardHandler(makeBots(5));
+    renderModal();
+    const random = await screen.findByRole('button', { name: /random fill/i });
+    await waitFor(() => expect(random).toBeDisabled());
+
+    // The button is disabled, but its wrapping span is the tooltip trigger.
+    const wrapper = random.parentElement as HTMLElement;
+    fireEvent.pointerMove(wrapper);
+    await waitFor(async () => {
+      const tips = await screen.findAllByRole('tooltip');
+      expect(tips.some((t) => /need ≥8/i.test(t.textContent ?? ''))).toBe(true);
+    });
+  });
+
+  it('Random button tooltip when enabled explains the random-fill behavior', async () => {
+    useLeaderboardHandler(makeBots(12));
+    renderModal();
+    const random = await screen.findByRole('button', { name: /random fill/i });
+    await waitFor(() => expect(random).not.toBeDisabled());
+    fireEvent.pointerMove(random);
+    await waitFor(async () => {
+      const tips = await screen.findAllByRole('tooltip');
+      expect(tips.some((t) => /fills the bracket with random/i.test(t.textContent ?? ''))).toBe(
+        true,
+      );
+    });
+  });
+
+  it('Cancel button has a tooltip explaining the discard behavior', async () => {
+    useLeaderboardHandler(makeBots(12));
+    renderModal();
+    const cancel = await screen.findByRole('button', { name: /cancel/i });
+    fireEvent.pointerMove(cancel);
+    await waitFor(async () => {
+      const tips = await screen.findAllByRole('tooltip');
+      expect(tips.some((t) => /discard|close/i.test(t.textContent ?? ''))).toBe(true);
+    });
   });
 });
 

@@ -2,6 +2,18 @@
 
 Entries from `/defer`. Resurface via `/activate <id>`.
 
+## D-9 (2026-05-01) — phase-9-promoter / per-match input picking deferred
+
+`POST /api/v1/tournaments` records `bracket_size` + `input_mode` (`flat_random` | `escalation`) on `recent_tournaments` for analytics, but only forwards `{participant_bot_ids, count}` to sort-bot-api. The "escalation" mode (round 1 small / round 2 medium / round 3+ large) is conceptual until sort-bot-api accepts per-match `input_ids`. Until then both modes pass `count: 3` upstream. The TournamentSetupModal's escalation tooltip cites this caveat.
+
+When activated: either (a) sort-bot-api adds per-match input arrays to its tournament create, or (b) we orchestrate match-by-match by POSTing `/v1/battles` for each tournament match server-side. (a) is cheaper.
+
+## D-10 (2026-05-01) — phase-9-promoter / battle status reconciliation
+
+`recent_battles.status` transitions from `pending → running` happen on POST, but `running → complete` only happens lazily when our server proxies a battle GET (the user landing on the BattlePage). For battles that finish without a viewer, the status stays `running` indefinitely. Cooldown rule 1 (no simultaneous) gracefully handles this — a stale `running` row blocks new battles for that pair, but `Retry-After` will look weird (computes elapsed since created_at).
+
+When activated: ship the global SSE listener (D-8), which already would observe `battle_complete` events; pipe them through to update `recent_battles`. Or add a 60s background sweep that fetches upstream status for any `running` row older than 60s and updates accordingly.
+
 ## D-8 (2026-04-29) — api-reconciliation / slice 7 deferred
 
 Global SSE listener — subscribes to sort-bot-api's `/v1/events/stream` and persists `battle_complete` events into a local `recent_battles` table so per-bot record / KO% / recent_form derive from real history instead of returning zeros.

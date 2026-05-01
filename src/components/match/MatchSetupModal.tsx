@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { ApiError } from '@/api/client';
 import { useInputs, useLeaderboard, useStartBattle } from '@/api/queries';
 import type { InputSummary, LeaderboardEntry } from '@/api/types';
+import { LoadingGear } from '@/components/LoadingGear';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -12,6 +13,12 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 
 import { BotSlotPicker } from './BotSlotPicker';
 import { InputPickerTabs, presetCount, type PresetKey } from './InputPickerTabs';
@@ -32,16 +39,29 @@ export function MatchSetupModal({
 }: MatchSetupModalProps) {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button variant="combat" className={triggerClassName} data-testid="setup-match-cta">
-          {triggerLabel}
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="max-w-2xl">
-        <MatchSetupForm onClose={() => setOpen(false)} />
-      </DialogContent>
-    </Dialog>
+    <TooltipProvider delayDuration={150}>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="inline-flex">
+              <DialogTrigger asChild>
+                <Button
+                  variant="combat"
+                  className={triggerClassName}
+                  data-testid="setup-match-cta"
+                >
+                  {triggerLabel}
+                </Button>
+              </DialogTrigger>
+            </span>
+          </TooltipTrigger>
+          <TooltipContent>Open the match builder to pick fighters and inputs.</TooltipContent>
+        </Tooltip>
+        <DialogContent className="max-w-2xl">
+          <MatchSetupForm onClose={() => setOpen(false)} />
+        </DialogContent>
+      </Dialog>
+    </TooltipProvider>
   );
 }
 
@@ -178,16 +198,33 @@ function MatchSetupForm({ onClose }: MatchSetupFormProps) {
       ) : null}
 
       <div className="flex justify-end gap-2">
-        <button
-          type="button"
-          className="font-mono text-xs uppercase tracking-wide text-text-tertiary hover:text-text-primary"
-          onClick={onClose}
-        >
-          Cancel
-        </button>
-        <Button type="submit" disabled={!canSubmit}>
-          {startBattle.isPending ? 'Starting…' : 'Start match'}
-        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              className="font-mono text-xs uppercase tracking-wide text-text-tertiary hover:text-text-primary"
+              onClick={onClose}
+            >
+              Cancel
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>Discard your picks and close the match builder.</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button type="submit" disabled={!canSubmit}>
+              {startBattle.isPending ? (
+                <span className="inline-flex items-center gap-2">
+                  <LoadingGear size="h-4 w-4" className="!py-0" />
+                  <span>Starting</span>
+                </span>
+              ) : (
+                'Start match'
+              )}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>POSTs to /battles and redirects to the live arena.</TooltipContent>
+        </Tooltip>
       </div>
     </form>
   );

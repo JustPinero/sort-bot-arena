@@ -4,7 +4,14 @@ import { useNavigate } from 'react-router-dom';
 import { ApiError } from '@/api/client';
 import { useLeaderboard, useStartBattle } from '@/api/queries';
 import type { LeaderboardEntry } from '@/api/types';
+import { LoadingGear } from '@/components/LoadingGear';
 import { Button } from '@/components/ui/button';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 
 
 interface QuickFightButtonProps {
@@ -66,23 +73,41 @@ export function QuickFightButton({ className }: QuickFightButtonProps) {
   };
 
   return (
-    <div className="flex flex-col items-stretch gap-1">
-      <Button
-        type="button"
-        variant="combat-secondary"
-        onClick={onClick}
-        disabled={disabled}
-        className={className}
-        data-testid="quick-fight-cta"
-      >
-        {startBattle.isPending ? 'Starting…' : 'Quick fight'}
-      </Button>
-      {error ? (
-        <p role="alert" className="rounded-sm bg-hazard/10 px-3 py-2 text-sm text-hazard">
-          {error}
-        </p>
-      ) : null}
-    </div>
+    <TooltipProvider delayDuration={150}>
+      <div className="flex flex-col items-stretch gap-1">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="inline-flex">
+              <Button
+                type="button"
+                variant="combat-secondary"
+                onClick={onClick}
+                disabled={disabled}
+                className={className}
+                data-testid="quick-fight-cta"
+              >
+                {startBattle.isPending ? (
+                  <span className="inline-flex items-center gap-2">
+                    <LoadingGear size="h-4 w-4" className="!py-0" />
+                    <span>Starting</span>
+                  </span>
+                ) : (
+                  'Quick fight'
+                )}
+              </Button>
+            </span>
+          </TooltipTrigger>
+          <TooltipContent>
+            Picks 2 random bots + 3 random inputs and fires a battle instantly.
+          </TooltipContent>
+        </Tooltip>
+        {error ? (
+          <p role="alert" className="rounded-sm bg-hazard/10 px-3 py-2 text-sm text-hazard">
+            {error}
+          </p>
+        ) : null}
+      </div>
+    </TooltipProvider>
   );
 }
 

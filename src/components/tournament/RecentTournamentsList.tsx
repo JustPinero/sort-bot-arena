@@ -41,9 +41,18 @@ export function RecentTournamentsList() {
       ) : null}
 
       {!isLoading && !isError && tournaments.length === 0 ? (
-        <p className="mt-4 rounded-md border bg-surface-1 p-6 text-center text-text-tertiary">
-          No tournaments yet — set up the first one above.
-        </p>
+        <div className="mt-4 rounded-md border bg-surface-1 p-6 text-center">
+          <p className="font-mono text-sm uppercase tracking-widest text-text-secondary">
+            No recent tournaments yet.
+          </p>
+          <p className="mt-2 text-sm text-text-tertiary">
+            Hit{' '}
+            <span className="font-mono text-xs uppercase tracking-wide text-tech">
+              Setup a tournament
+            </span>{' '}
+            above to run the first one.
+          </p>
+        </div>
       ) : null}
 
       {!isLoading && tournaments.length > 0 ? (

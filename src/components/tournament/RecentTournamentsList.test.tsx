@@ -65,7 +65,7 @@ describe('<RecentTournamentsList />', () => {
     renderList();
     await waitFor(() =>
       expect(
-        screen.getByText(/no tournaments yet|set up the first/i),
+        screen.getByText(/no recent tournaments yet/i),
       ).toBeInTheDocument(),
     );
   });

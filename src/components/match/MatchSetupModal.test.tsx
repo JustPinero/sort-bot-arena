@@ -1,5 +1,5 @@
 import { QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
@@ -231,7 +231,86 @@ describe('<MatchSetupModal />', () => {
   });
 });
 
+describe('<MatchSetupModal /> tooltips', () => {
+  it('exposes tooltips on the major form controls (red corner, blue corner, preset bundle)', async () => {
+    renderModal();
+    await screen.findByRole('tab', { name: /preset/i });
+
+    const red = (await screen.findByLabelText(/red corner/i)) as HTMLSelectElement;
+    await waitFor(() => expect(red.options.length).toBeGreaterThan(1));
+
+    // Radix Tooltip opens on pointerMove and focus. Fire pointer events directly
+    // — userEvent.hover trips on Radix's pointer-events:none body in jsdom.
+    fireEvent.pointerMove(red);
+    await waitFor(async () => {
+      const tips = await screen.findAllByRole('tooltip');
+      expect(tips.some((t) => /red corner badge|fighter a/i.test(t.textContent ?? ''))).toBe(true);
+    });
+
+    const blue = (await screen.findByLabelText(/blue corner/i)) as HTMLSelectElement;
+    fireEvent.pointerMove(blue);
+    await waitFor(async () => {
+      const tips = await screen.findAllByRole('tooltip');
+      expect(tips.some((t) => /different from the red/i.test(t.textContent ?? ''))).toBe(true);
+    });
+
+    const presetSelect = await screen.findByLabelText(/preset bundle/i);
+    fireEvent.pointerMove(presetSelect);
+    await waitFor(async () => {
+      const tips = await screen.findAllByRole('tooltip');
+      expect(tips.some((t) => /weight class chip|bigger bundle/i.test(t.textContent ?? ''))).toBe(
+        true,
+      );
+    });
+  });
+});
+
+describe('<MatchSetupModal /> tab tooltips', () => {
+  it('exposes tooltips on Preset/Manual/Upload tab triggers', async () => {
+    renderModal();
+    const presetTab = await screen.findByRole('tab', { name: /preset/i });
+    const manualTab = screen.getByRole('tab', { name: /manual/i });
+    const uploadTab = screen.getByRole('tab', { name: /upload/i });
+
+    // Tooltip triggers wrap each tab in a span.
+    fireEvent.pointerMove(presetTab.parentElement as HTMLElement);
+    await waitFor(async () => {
+      const tips = await screen.findAllByRole('tooltip');
+      expect(tips.some((t) => /bundled inputs|weight class/i.test(t.textContent ?? ''))).toBe(true);
+    });
+
+    fireEvent.pointerMove(manualTab.parentElement as HTMLElement);
+    await waitFor(async () => {
+      const tips = await screen.findAllByRole('tooltip');
+      expect(tips.some((t) => /cherry-pick|shared pool/i.test(t.textContent ?? ''))).toBe(true);
+    });
+
+    fireEvent.pointerMove(uploadTab.parentElement as HTMLElement);
+    await waitFor(async () => {
+      const tips = await screen.findAllByRole('tooltip');
+      expect(tips.some((t) => /integer array|saved globally/i.test(t.textContent ?? ''))).toBe(
+        true,
+      );
+    });
+  });
+});
+
 describe('<QuickFightButton />', () => {
+  it('shows a tooltip explaining 2 random bots + 3 random inputs', async () => {
+    renderQuickFight();
+    const btn = await screen.findByRole('button', { name: /quick fight/i });
+    // Tooltip trigger is the wrapping span; pointer-move it directly.
+    const wrapper = btn.parentElement as HTMLElement;
+    fireEvent.pointerMove(wrapper);
+    await waitFor(async () => {
+      const tips = await screen.findAllByRole('tooltip');
+      expect(tips.some((t) => /2 random bots.*3 random inputs/i.test(t.textContent ?? ''))).toBe(
+        true,
+      );
+    });
+  });
+
+
   it('with leaderboard loaded, click POSTs once and redirects on 200', async () => {
     let captured: unknown = null;
     server.use(

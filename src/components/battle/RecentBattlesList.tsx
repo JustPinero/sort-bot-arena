@@ -71,7 +71,15 @@ function RecentBattlesContent({ battles }: { battles: Battle[] }) {
           No recent battles yet.
         </p>
         <p className="mt-2 text-sm text-text-tertiary">
-          Use the buttons above to set up a match or quick fight.
+          Hit{' '}
+          <span className="font-mono text-xs uppercase tracking-wide text-hazard">
+            Setup a match
+          </span>{' '}
+          or{' '}
+          <span className="font-mono text-xs uppercase tracking-wide text-combat">
+            Quick fight
+          </span>{' '}
+          above to start one.
         </p>
       </div>
     );

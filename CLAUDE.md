@@ -41,6 +41,7 @@ Prime → Plan → RED → GREEN → Validate.
 | 6     | `phase-6-polish`             | shipped |
 | 7     | `api-reconciliation`         | shipped |
 | 8     | `phase-8-resilience`         | shipped |
+| 9     | `phase-9-promoter`           | shipped |
 
 Phases merge to `main` only after `/phase-complete` passes.
 

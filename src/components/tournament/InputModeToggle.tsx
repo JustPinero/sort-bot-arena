@@ -1,3 +1,4 @@
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/cn';
 
 export type TournamentInputMode = 'flat_random' | 'escalation';
@@ -53,36 +54,40 @@ interface OptionProps {
 function Option({ value, label, description, tooltip, checked, onSelect }: OptionProps) {
   const id = `tournament-input-mode-${value}`;
   return (
-    <label
-      htmlFor={id}
-      className={cn(
-        'flex cursor-pointer items-start gap-3 rounded-sm border px-3 py-2 text-sm transition-colors',
-        checked
-          ? 'border-hazard bg-surface-2'
-          : 'border-transparent bg-surface-2 hover:border-text-tertiary',
-      )}
-      title={tooltip}
-    >
-      <input
-        id={id}
-        type="radio"
-        name="tournament-input-mode"
-        value={value}
-        checked={checked}
-        onChange={onSelect}
-        className="mt-1"
-        aria-label={label}
-      />
-      <span className="flex flex-col gap-0.5">
-        <span className="font-mono text-xs font-bold uppercase tracking-wide">{label}</span>
-        <span className="text-xs text-text-secondary">{description}</span>
-        <span
-          data-testid={`input-mode-tooltip-${value}`}
-          className="text-[11px] text-text-tertiary"
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <label
+          htmlFor={id}
+          className={cn(
+            'flex cursor-pointer items-start gap-3 rounded-sm border px-3 py-2 text-sm transition-colors',
+            checked
+              ? 'border-hazard bg-surface-2'
+              : 'border-transparent bg-surface-2 hover:border-text-tertiary',
+          )}
         >
-          {tooltip}
-        </span>
-      </span>
-    </label>
+          <input
+            id={id}
+            type="radio"
+            name="tournament-input-mode"
+            value={value}
+            checked={checked}
+            onChange={onSelect}
+            className="mt-1"
+            aria-label={label}
+          />
+          <span className="flex flex-col gap-0.5">
+            <span className="font-mono text-xs font-bold uppercase tracking-wide">{label}</span>
+            <span className="text-xs text-text-secondary">{description}</span>
+            <span
+              data-testid={`input-mode-tooltip-${value}`}
+              className="text-[11px] text-text-tertiary"
+            >
+              {tooltip}
+            </span>
+          </span>
+        </label>
+      </TooltipTrigger>
+      <TooltipContent>{tooltip}</TooltipContent>
+    </Tooltip>
   );
 }
