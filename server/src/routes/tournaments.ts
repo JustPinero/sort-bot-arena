@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 
 import { SortBotApiError } from '../clients/sort-bot-api/index.js';
 import { nicknameFor } from '../persona/nicknames.js';
+import { listRecent as listRecentTournaments } from '../store/recent-tournaments.js';
 
 import type { AppContext } from '../auth/middleware.js';
 import type {
@@ -12,6 +13,7 @@ import type {
 } from '../clients/sort-bot-api/index.js';
 import type { PersonaService } from '../persona/service.js';
 import type { BotPersonaRow } from '../persona/store.js';
+import type { Client } from '@libsql/client';
 
 type TournamentStatus = 'upcoming' | 'active' | 'completed';
 type MatchStatus = 'pending' | 'live' | 'completed' | 'bye';
@@ -79,14 +81,60 @@ function buildParticipant(
 }
 
 export function tournamentsRoutes(deps: {
+  db: Client;
   sortBotApi: SortBotApiClient;
   persona: PersonaService;
 }): Hono<AppContext> {
   const r = new Hono<AppContext>();
 
-  // List endpoint placeholder. sort-bot-api has no list endpoint today;
-  // when we add a tournaments index in our DB this will paginate from there.
-  r.get('/', (c) => c.json({ items: [], next_cursor: null }));
+  // Slice 7: cursor-paginated history page backed by recent_tournaments.
+  // - default page size 20, ?limit=N to override (capped at 100)
+  // - ?before=<created_at ISO> for the next page (plain stateless cursor)
+  // - ?initiator_user_id=<id> to scope to a single user
+  // - order: created_at DESC
+  //
+  // Trim decision: list rows return `participants: []` and `matches: []`
+  // to skip the per-row upstream fan-out (a single tournament's detail
+  // call hits sort-bot-api getBot up to 12 times — N rows on a list
+  // page would be N*12 fan-out, unacceptable for a history page). The
+  // detail endpoint GET /:id below still hydrates fully. The frontend
+  // type `Tournament` (src/api/types.ts:210-223) declares both fields
+  // as arrays, so empty arrays are type-compatible.
+  r.get('/', async (c) => {
+    const url = new URL(c.req.url);
+    const limitRaw = Number(url.searchParams.get('limit') ?? '20');
+    const limit = Math.min(100, Math.max(1, Number.isFinite(limitRaw) ? Math.floor(limitRaw) : 20));
+    const before = url.searchParams.get('before') ?? undefined;
+    const initiatorUserId = url.searchParams.get('initiator_user_id') ?? undefined;
+
+    const rows = await listRecentTournaments(deps.db, {
+      limit: limit + 1,
+      ...(before !== undefined ? { before } : {}),
+      ...(initiatorUserId !== undefined ? { initiatorUserId } : {}),
+    });
+
+    const hasMore = rows.length > limit;
+    const page = hasMore ? rows.slice(0, limit) : rows;
+    const nextCursor = hasMore ? (page[page.length - 1]?.created_at ?? null) : null;
+
+    const items: Tournament[] = page.map((row) => ({
+      id: row.tournament_id,
+      name: `Tournament ${row.tournament_id.slice(0, 8)}`,
+      status: mapStatus(row.status),
+      participant_count: row.participant_count,
+      weight_class_filter: null,
+      prize_description: null,
+      scheduled_at: row.created_at,
+      rounds_total: 0,
+      current_round: 0,
+      champion_bot_id: row.winner_bot_id,
+      // Trim per the decision above — detail page hydrates these.
+      matches: [],
+      participants: [],
+    }));
+
+    return c.json({ items, next_cursor: nextCursor });
+  });
 
   r.get('/:id', async (c) => {
     const id = c.req.param('id');

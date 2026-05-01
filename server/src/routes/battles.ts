@@ -9,11 +9,15 @@ import { SortBotApiError } from '../clients/sort-bot-api/index.js';
 import { nicknameFor } from '../persona/nicknames.js';
 import {
   claimPair,
+  getWeightClassByBattleId,
+  listRecent,
   markFailed,
   markRunning,
   pairKey,
   reassignBattleId,
 } from '../store/recent-battles.js';
+import { weightClassFor, type SizeClass } from '../synthesize/battle-class.js';
+import { synthesizeBattleFromRow } from '../synthesize/battle.js';
 
 import type { AppContext } from '../auth/middleware.js';
 import type {
@@ -29,6 +33,7 @@ import type { Client } from '@libsql/client';
 type Corner = 'red' | 'blue';
 type BattleStatus = 'pre_fight' | 'live' | 'completed';
 type BattleOutcome = 'ko' | 'tko' | 'decision' | 'draw' | 'no_contest';
+type WeightClass = 'sparring' | 'exhibition' | 'title_fight';
 
 interface BattleFighter {
   bot_id: string;
@@ -53,6 +58,7 @@ interface Battle {
   completed_at: string | null;
   winner_bot_id: string | null;
   outcome: BattleOutcome | null;
+  weight_class: WeightClass | null;
 }
 
 function buildFighter(
@@ -114,9 +120,65 @@ export function battlesRoutes(deps: {
 }): Hono<AppContext> {
   const r = new Hono<AppContext>();
 
-  // List endpoint placeholder. sort-bot-api has no list endpoint today;
-  // when we add a battles index in our DB this will paginate from there.
-  r.get('/', (c) => c.json({ items: [], next_cursor: null }));
+  // Slice 7: cursor-paginated history page backed by recent_battles.
+  // - default page size 20, ?limit=N to override (capped at 100)
+  // - ?before=<created_at ISO> for the next page (plain stateless cursor)
+  // - ?initiator_user_id=<id> to scope to a single user; absent → public list
+  // - order: created_at DESC
+  // For each row we fan out to upstream getBot + persona.get to hydrate
+  // fighter_a/fighter_b. Per-page worst case: 2*limit upstream getBot calls.
+  // We do *not* call sort-bot-api getBattle per row — see
+  // synthesize/battle.ts:synthesizeBattleFromRow for what we trade for that
+  // (rounds_total/current_round default to 0, outcome defaults to
+  // 'decision' for completed battles).
+  r.get('/', async (c) => {
+    const url = new URL(c.req.url);
+    const limitRaw = Number(url.searchParams.get('limit') ?? '20');
+    const limit = Math.min(100, Math.max(1, Number.isFinite(limitRaw) ? Math.floor(limitRaw) : 20));
+    const before = url.searchParams.get('before') ?? undefined;
+    const initiatorUserId = url.searchParams.get('initiator_user_id') ?? undefined;
+
+    const rows = await listRecent(deps.db, {
+      limit: limit + 1,
+      ...(before !== undefined ? { before } : {}),
+      ...(initiatorUserId !== undefined ? { initiatorUserId } : {}),
+    });
+
+    const hasMore = rows.length > limit;
+    const page = hasMore ? rows.slice(0, limit) : rows;
+    const nextCursor = hasMore ? (page[page.length - 1]?.created_at ?? null) : null;
+
+    const items = await Promise.all(
+      page.map(async (row) => {
+        const [botA, botB, personaA, personaB] = await Promise.all([
+          deps.sortBotApi.getBot(row.bot_a_id).catch(() => null),
+          deps.sortBotApi.getBot(row.bot_b_id).catch(() => null),
+          deps.persona.get(row.bot_a_id).catch(() => null),
+          deps.persona.get(row.bot_b_id).catch(() => null),
+        ]);
+        // If upstream getBot fails for a fighter, fall back to a stub
+        // ApiBot so the row still renders rather than 502'ing the whole
+        // page over a single missing bot.
+        const fallbackBot = (id: string): ApiBot => ({
+          id,
+          user_id: '',
+          display_name: id,
+          language: 'python',
+          source_size_bytes: 0,
+          source_sha256: '',
+          status: 'evaluated',
+          submitted_at: row.created_at,
+        });
+        return synthesizeBattleFromRow({
+          row,
+          fighters: { a: botA ?? fallbackBot(row.bot_a_id), b: botB ?? fallbackBot(row.bot_b_id) },
+          personas: { a: personaA, b: personaB },
+        });
+      }),
+    );
+
+    return c.json({ items, next_cursor: nextCursor });
+  });
 
   r.post('/', requireAuth({ db: deps.db, sessionSecret: deps.sessionSecret }), async (c) => {
     const me = getUser(c);
@@ -130,11 +192,32 @@ export function battlesRoutes(deps: {
     const oneHourAgoISO = new Date(now.getTime() - 60 * 60_000).toISOString();
     const placeholderId = placeholderBattleId();
 
+    // Slice 5: derive the weight_class label from the input size_classes
+    // when input_ids is supplied explicitly. In `count` mode the upstream
+    // API picks the inputs after we've POSTed, so we can't know which
+    // size_classes will be selected — persist null in that case.
+    let weightClass: WeightClass | null = null;
+    if (body.input_ids && body.input_ids.length > 0) {
+      try {
+        const inputs = await deps.sortBotApi.getInputs({ limit: 1000 });
+        const byId = new Map<number, SizeClass>(
+          inputs.inputs.map((i) => [i.id, i.size_class as SizeClass]),
+        );
+        const sizeClasses = body.input_ids
+          .map((id) => byId.get(id))
+          .filter((sc): sc is SizeClass => sc !== undefined);
+        weightClass = weightClassFor(sizeClasses);
+      } catch {
+        // If we can't resolve size_classes (upstream blip / breaker open),
+        // fall back to null rather than failing the battle creation.
+        weightClass = null;
+      }
+    }
+
     // Atomic claim: runs Rule 1 + Rule 2 + INSERT pending under a per-pair
     // in-process lock so concurrent POSTs for the same pair serialize and
     // exactly one reaches upstream. See store/recent-battles.ts for the
     // why-not-libsql-transactions writeup.
-    // weight_class is null for now (slice 5 will compute it).
     const claim = await claimPair(
       deps.db,
       {
@@ -143,7 +226,7 @@ export function battlesRoutes(deps: {
         bot_b_id: body.bot_b,
         pair_key: pair,
         initiator_user_id: me.id,
-        weight_class: null,
+        weight_class: weightClass,
       },
       oneHourAgoISO,
       3,
@@ -205,11 +288,12 @@ export function battlesRoutes(deps: {
     const id = c.req.param('id');
     try {
       const { battle, runs } = await deps.sortBotApi.getBattle(id);
-      const [botA, botB, personaA, personaB] = await Promise.all([
+      const [botA, botB, personaA, personaB, weightClassRaw] = await Promise.all([
         deps.sortBotApi.getBot(battle.bot_a_id),
         deps.sortBotApi.getBot(battle.bot_b_id),
         deps.persona.get(battle.bot_a_id).catch(() => null),
         deps.persona.get(battle.bot_b_id).catch(() => null),
+        getWeightClassByBattleId(deps.db, battle.id).catch(() => null),
       ]);
 
       const status = mapStatus(battle.status);
@@ -218,6 +302,16 @@ export function battlesRoutes(deps: {
         battle.status === 'complete' || battle.status === 'failed'
           ? runs.length
           : countCompletedRuns(runs);
+
+      // Validate the persisted column against the WeightClass union — if
+      // a stale row holds an unexpected string, prefer null over leaking
+      // an invalid label to the frontend.
+      const weightClass: WeightClass | null =
+        weightClassRaw === 'sparring' ||
+        weightClassRaw === 'exhibition' ||
+        weightClassRaw === 'title_fight'
+          ? weightClassRaw
+          : null;
 
       const payload: Battle = {
         id: battle.id,
@@ -231,6 +325,7 @@ export function battlesRoutes(deps: {
         completed_at: battle.completed_at,
         winner_bot_id: battle.winner_bot_id,
         outcome: deriveOutcome(battle, runs),
+        weight_class: weightClass,
       };
       return c.json(payload);
     } catch (err) {

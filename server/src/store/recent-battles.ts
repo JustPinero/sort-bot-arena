@@ -191,3 +191,73 @@ export async function markFailed(db: Client, battleId: string): Promise<void> {
     args: [battleId],
   });
 }
+
+// Slice 5: surface the persisted weight_class label on the rich Battle
+// shape returned by GET /api/v1/battles/:id. Returns null for legacy
+// battles that pre-date our recent_battles mirror.
+export async function getWeightClassByBattleId(
+  db: Client,
+  battleId: string,
+): Promise<string | null> {
+  const res = await db.execute({
+    sql: 'SELECT weight_class FROM recent_battles WHERE battle_id = ? LIMIT 1',
+    args: [battleId],
+  });
+  const row = res.rows[0];
+  if (!row) return null;
+  const wc = (row as unknown as Record<string, unknown>)['weight_class'];
+  return typeof wc === 'string' ? wc : null;
+}
+
+export interface ListRecentOpts {
+  limit: number;
+  before?: string | undefined;
+  initiatorUserId?: string | undefined;
+}
+
+// Slice 7 — paginated listing for GET /api/v1/battles. Cursor is the
+// `created_at` ISO of the last item the caller saw (stateless, plain
+// text — no encoding). Order is strictly created_at DESC and the index
+// `idx_recent_battles_created` covers the unfiltered case;
+// `idx_recent_battles_initiator` covers the initiator-filtered case.
+export async function listRecent(
+  db: Client,
+  opts: ListRecentOpts,
+): Promise<RecentBattleRow[]> {
+  const where: string[] = [];
+  const args: Array<string | number> = [];
+  if (opts.before !== undefined) {
+    where.push('created_at < ?');
+    args.push(opts.before);
+  }
+  if (opts.initiatorUserId !== undefined) {
+    where.push('initiator_user_id = ?');
+    args.push(opts.initiatorUserId);
+  }
+  const whereClause = where.length > 0 ? `WHERE ${where.join(' AND ')}` : '';
+  args.push(opts.limit);
+  const res = await db.execute({
+    sql: `SELECT battle_id, bot_a_id, bot_b_id, pair_key, initiator_user_id,
+                 weight_class, status, winner_bot_id, created_at, completed_at
+            FROM recent_battles
+                 ${whereClause}
+        ORDER BY created_at DESC
+           LIMIT ?`,
+    args,
+  });
+  return res.rows.map((row) => {
+    const r = row as unknown as Record<string, unknown>;
+    return {
+      battle_id: r['battle_id'] as string,
+      bot_a_id: r['bot_a_id'] as string,
+      bot_b_id: r['bot_b_id'] as string,
+      pair_key: r['pair_key'] as string,
+      initiator_user_id: (r['initiator_user_id'] as string | null) ?? null,
+      weight_class: (r['weight_class'] as string | null) ?? null,
+      status: r['status'] as RecentBattleRow['status'],
+      winner_bot_id: (r['winner_bot_id'] as string | null) ?? null,
+      created_at: r['created_at'] as string,
+      completed_at: (r['completed_at'] as string | null) ?? null,
+    };
+  });
+}
