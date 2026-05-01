@@ -74,20 +74,30 @@ export function MatchCard({ match, participantsById, className }: MatchCardProps
           </Link>
         ) : null}
       </header>
-      <FighterRow
-        participant={a ?? null}
-        isWinner={Boolean(match.winner_bot_id && match.winner_bot_id === a?.bot_id)}
-      />
-      <div className="border-t" />
       {isBye ? (
-        <p className="px-3 py-2 font-mono text-[11px] uppercase tracking-widest text-text-tertiary">
-          Auto-advance
-        </p>
+        <>
+          <FighterRow
+            participant={(a ?? b) ?? null}
+            isWinner={false}
+            emphasized
+          />
+          <div className="border-t" />
+          <p className="px-3 py-2 font-mono text-[11px] uppercase tracking-widest text-text-tertiary">
+            Advances on bye
+          </p>
+        </>
       ) : (
-        <FighterRow
-          participant={b ?? null}
-          isWinner={Boolean(match.winner_bot_id && match.winner_bot_id === b?.bot_id)}
-        />
+        <>
+          <FighterRow
+            participant={a ?? null}
+            isWinner={Boolean(match.winner_bot_id && match.winner_bot_id === a?.bot_id)}
+          />
+          <div className="border-t" />
+          <FighterRow
+            participant={b ?? null}
+            isWinner={Boolean(match.winner_bot_id && match.winner_bot_id === b?.bot_id)}
+          />
+        </>
       )}
     </article>
   );

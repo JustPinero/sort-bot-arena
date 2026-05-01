@@ -2,9 +2,11 @@ import { Link } from 'react-router-dom';
 
 import { useBattles } from '@/api/queries';
 import type { Battle } from '@/api/types';
+import { RecentBattlesList } from '@/components/battle/RecentBattlesList';
 import { HazardStripes } from '@/components/design-system/HazardStripes';
 import { MatchSetupModal } from '@/components/match/MatchSetupModal';
 import { QuickFightButton } from '@/components/match/QuickFightButton';
+import { RecentTournamentsList } from '@/components/tournament/RecentTournamentsList';
 import { TournamentSetupModal } from '@/components/tournament/TournamentSetupModal';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -87,6 +89,10 @@ export default function ArenaIndexPage() {
           );
         })}
       </ul>
+
+      <RecentBattlesList />
+
+      <RecentTournamentsList />
     </section>
   );
 }

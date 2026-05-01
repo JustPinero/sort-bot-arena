@@ -48,9 +48,31 @@ describe('<TournamentBracketPage />', () => {
     expect(screen.getAllByText(/champion/i).length).toBeGreaterThan(0);
   });
 
-  it('shows BYE for matches with auto-advance', async () => {
+  it('still renders both fighters for normal (non-bye) matches', async () => {
+    renderAt('/tournaments/trn_active');
+    await waitFor(() =>
+      expect(
+        screen.getByRole('heading', { level: 1, name: /rumble in the stack/i }),
+      ).toBeInTheDocument(),
+    );
+    // The trn_active completed match (m_a) pits The Algorithm vs The Pivot.
+    expect(screen.getAllByText(/the algorithm/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/the pivot/i).length).toBeGreaterThan(0);
+    // No bye text appears on this fixture.
+    expect(screen.queryByText(/advances on bye/i)).not.toBeInTheDocument();
+  });
+
+  it('shows BYE matches as a single fighter advancing on bye', async () => {
     renderAt('/tournaments/trn_completed');
-    await waitFor(() => expect(screen.getByText(/auto-advance/i)).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText(/advances on bye/i)).toBeInTheDocument(),
+    );
+    // The participant who got the bye must still be named on the card.
+    const byeCopy = screen.getByText(/advances on bye/i);
+    const card = byeCopy.closest('article');
+    expect(card).not.toBeNull();
+    // veteranBot ("The Pivot") is the bye fighter in the trn_completed fixture (m_q2).
+    expect(card?.textContent ?? '').toMatch(/the pivot/i);
   });
 
   it('renders the not-found panel for unknown id', async () => {

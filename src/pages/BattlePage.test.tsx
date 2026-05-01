@@ -1,10 +1,13 @@
 import { QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { http, HttpResponse } from 'msw';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { describe, expect, it } from 'vitest';
 
 import { createQueryClient } from '@/api/queryClient';
+import { sampleBattle } from '@/test/msw/fixtures';
+import { server } from '@/test/msw/server';
 
 import BattlePage from './BattlePage';
 
@@ -50,5 +53,17 @@ describe('<BattlePage />', () => {
     await userEvent.click(screen.getByRole('button', { name: /enter arena/i }));
     // After click, pre-fight staredown is gone (no more "Pre-fight staredown" label)
     await waitFor(() => expect(screen.queryByText(/pre-fight staredown/i)).not.toBeInTheDocument());
+  });
+
+  it('renders the BattleWeightClassChip when battle.weight_class is set', async () => {
+    server.use(
+      http.get('http://api.test/api/v1/battles/:battleId', () =>
+        HttpResponse.json({ ...sampleBattle, weight_class: 'exhibition' }),
+      ),
+    );
+    renderAt('/arena/bat_demo_1');
+    await waitFor(() =>
+      expect(screen.getByRole('status', { name: /exhibition/i })).toBeInTheDocument(),
+    );
   });
 });

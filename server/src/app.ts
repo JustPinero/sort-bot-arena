@@ -136,7 +136,12 @@ export function createApp(deps: AppDeps): Hono<AppContext> {
   );
   app.route(
     '/api/v1/tournaments',
-    tournamentsRoutes({ db: deps.db, sortBotApi: deps.sortBotApi, persona: deps.persona }),
+    tournamentsRoutes({
+      db: deps.db,
+      sortBotApi: deps.sortBotApi,
+      persona: deps.persona,
+      sessionSecret: deps.sessionSecret,
+    }),
   );
   app.route(
     '/api/v1/users',
