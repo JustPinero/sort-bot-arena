@@ -42,6 +42,21 @@ export function feedRoutes(deps: {
     const top = lb?.bots ?? [];
     const personas = await Promise.all(top.map((b) => deps.persona.get(b.bot_id).catch(() => null)));
 
+    // Backfill personas for any bot we're about to surface. Covers the
+    // top-3 ticker bots regardless of whether they end up populating
+    // champion or rookie slots.
+    for (let i = 0; i < top.length; i++) {
+      if (!personas[i]) {
+        const b = top[i]!;
+        deps.persona.startBackgroundGeneration({
+          bot_id: b.bot_id,
+          display_name: b.display_name,
+          language: b.language,
+          algorithm: null,
+        });
+      }
+    }
+
     const championRow = top[0] ?? null;
     const rookieRow = top[1] ?? top[2] ?? null;
 

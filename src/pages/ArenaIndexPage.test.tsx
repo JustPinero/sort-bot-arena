@@ -24,12 +24,17 @@ function renderPage() {
 describe('<ArenaIndexPage />', () => {
   it('lists active battles with status badge and an Enter Arena CTA', async () => {
     renderPage();
-    await waitFor(() => expect(screen.getByText(/the algorithm/i)).toBeInTheDocument());
-    expect(screen.getByText(/the pivot/i)).toBeInTheDocument();
+    await waitFor(() => expect(screen.getAllByText(/the algorithm/i).length).toBeGreaterThan(0));
+    expect(screen.getAllByText(/the pivot/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/live/i).length).toBeGreaterThan(0);
-    expect(screen.getByRole('link', { name: /enter arena/i })).toHaveAttribute(
-      'href',
-      '/arena/bat_demo_1',
-    );
+    const enterLinks = screen.getAllByRole('link', { name: /enter arena/i });
+    expect(enterLinks[0]).toHaveAttribute('href', '/arena/bat_demo_1');
+  });
+
+  it('renders the Recent Battles section below the header CTAs', async () => {
+    renderPage();
+    expect(
+      await screen.findByRole('heading', { name: /recent battles/i }),
+    ).toBeInTheDocument();
   });
 });

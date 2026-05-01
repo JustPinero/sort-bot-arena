@@ -1,10 +1,13 @@
 import { Hono } from 'hono';
+import { z } from 'zod';
 
+import { decryptString } from '../auth/encrypt.js';
+import { requireAuth, getUser, type AppContext } from '../auth/middleware.js';
 import { SortBotApiError, type SortBotApiClient } from '../clients/sort-bot-api/index.js';
 import { CACHE_TTL_MS } from '../lib/cache-ttl.js';
 import { withStaleFallback } from '../lib/upstream-fallback.js';
+import { recordUpload } from '../store/uploaded-inputs.js';
 
-import type { AppContext } from '../auth/middleware.js';
 import type { Client } from '@libsql/client';
 
 interface InputSummary {
@@ -19,7 +22,27 @@ interface InputsPayload {
   next_cursor: null;
 }
 
-export function inputsRoutes(deps: { db: Client; sortBotApi: SortBotApiClient }): Hono<AppContext> {
+const uploadSchema = z.object({
+  values: z
+    .array(z.number().int())
+    .min(1)
+    .max(50_000),
+  format: z.enum(['comma', 'space', 'newline']).optional().default('comma'),
+  display_name: z.string().min(1).max(80).optional(),
+});
+
+type UploadFormat = 'comma' | 'space' | 'newline';
+
+export function serializeValues(values: number[], format: UploadFormat): string {
+  const sep = format === 'comma' ? ',' : format === 'space' ? ' ' : '\n';
+  return values.join(sep);
+}
+
+export function inputsRoutes(deps: {
+  db: Client;
+  sortBotApi: SortBotApiClient;
+  sessionSecret: string;
+}): Hono<AppContext> {
   const r = new Hono<AppContext>();
 
   r.get('/', async (c) => {
@@ -50,6 +73,49 @@ export function inputsRoutes(deps: { db: Client; sortBotApi: SortBotApiClient })
     } catch (err) {
       if (err instanceof SortBotApiError) {
         return c.json({ error: 'upstream_failure', upstream_status: err.status }, 502);
+      }
+      throw err;
+    }
+  });
+
+  r.post('/', requireAuth({ db: deps.db, sessionSecret: deps.sessionSecret }), async (c) => {
+    const me = getUser(c);
+    const parsed = uploadSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) {
+      return c.json({ error: 'bad_field', issues: parsed.error.issues }, 400);
+    }
+    const { values, format, display_name } = parsed.data;
+
+    const serialized = serializeValues(values, format);
+    const apiKey = decryptString(me.sort_bot_api_key_encrypted, deps.sessionSecret);
+
+    try {
+      const upstream = await deps.sortBotApi.uploadInput(apiKey, {
+        file: new Blob([serialized], { type: 'text/plain' }),
+        ...(display_name !== undefined && { name: display_name }),
+      });
+
+      await recordUpload(deps.db, {
+        sort_bot_api_input_id: upstream.id,
+        uploader_user_id: me.id,
+        display_name: display_name ?? null,
+        size_class: upstream.size_class,
+        array_len: upstream.array_len,
+      });
+
+      const summary: InputSummary = {
+        id: String(upstream.id),
+        name: display_name ?? `${capitalize(upstream.size_class)} custom`,
+        size: upstream.array_len,
+      };
+      return c.json(summary, 201);
+    } catch (err) {
+      if (err instanceof SortBotApiError) {
+        const status = err.status >= 500 ? 502 : err.status;
+        return c.json(
+          { error: 'upstream_failure', upstream_status: err.status, code: err.code },
+          status as 502 | 400,
+        );
       }
       throw err;
     }

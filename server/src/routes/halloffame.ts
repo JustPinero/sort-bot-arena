@@ -37,6 +37,15 @@ export function hallOfFameRoutes(deps: {
           deps.persona.get(id),
         ]);
         if (!bot) return null;
+        // Backfill persona for retired bots that never had one generated.
+        if (!persona) {
+          deps.persona.startBackgroundGeneration({
+            bot_id: bot.id,
+            display_name: bot.display_name,
+            language: bot.language,
+            algorithm: null,
+          });
+        }
         return synthesizeBot({ bot, profile, persona, retired: true });
       }),
     );

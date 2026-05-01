@@ -53,6 +53,21 @@ export function leaderboardRoutes(deps: {
             ...(language && { language }),
           });
           const personas = await Promise.all(lb.bots.map((b) => deps.persona.get(b.bot_id)));
+          // Backfill personas for any bot in the response that lacks one.
+          // Fire-and-forget; the semaphore in PersonaService caps fan-out.
+          // Algorithm metadata is omitted (would require an analysis fetch
+          // per row, which is too expensive for the leaderboard hot path).
+          for (let i = 0; i < lb.bots.length; i++) {
+            if (!personas[i]) {
+              const b = lb.bots[i]!;
+              deps.persona.startBackgroundGeneration({
+                bot_id: b.bot_id,
+                display_name: b.display_name,
+                language: b.language,
+                algorithm: null,
+              });
+            }
+          }
           const items: LeaderboardEntry[] = lb.bots.map((b, i) => {
             const p = personas[i] ?? null;
             return {

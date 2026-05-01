@@ -146,6 +146,8 @@ export interface BattleRankChange {
   new_champion_bot_id: string;
 }
 
+export type BattleWeightClass = 'sparring' | 'exhibition' | 'title_fight';
+
 export interface Battle {
   id: string;
   status: BattleStatus;
@@ -158,6 +160,7 @@ export interface Battle {
   completed_at: string | null;
   winner_bot_id: string | null;
   outcome: BattleOutcome | null;
+  weight_class: BattleWeightClass | null;
   rank_change?: BattleRankChange;
 }
 

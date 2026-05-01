@@ -6,6 +6,7 @@ import { nullInt, nullStr } from './unwrap.js';
 
 import type {
   ApiBot,
+  ApiInput,
   ApiUser,
   BattleResponse,
   BattleRun,
@@ -281,6 +282,21 @@ export class SortBotApiClient {
     return this.request<ApiBot>({
       method: 'POST',
       path: '/v1/bots',
+      apiKey,
+      formData: fd,
+    });
+  }
+
+  async uploadInput(
+    apiKey: string,
+    payload: { file: Blob | File; name?: string },
+  ): Promise<ApiInput> {
+    const fd = new FormData();
+    fd.append('file', payload.file as Blob);
+    if (payload.name !== undefined) fd.append('name', payload.name);
+    return this.request<ApiInput>({
+      method: 'POST',
+      path: '/v1/inputs',
       apiKey,
       formData: fd,
     });

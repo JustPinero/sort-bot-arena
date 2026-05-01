@@ -37,6 +37,18 @@ export function perInputLeaderboardRoutes(deps: {
       size: match.array_len,
     };
     const personas = await Promise.all(upstream.bots.map((b) => deps.persona.get(b.bot_id)));
+    // Backfill personas for any per-input leaderboard row that lacks one.
+    for (let i = 0; i < upstream.bots.length; i++) {
+      if (!personas[i]) {
+        const b = upstream.bots[i]!;
+        deps.persona.startBackgroundGeneration({
+          bot_id: b.bot_id,
+          display_name: b.display_name,
+          language: b.language,
+          algorithm: null,
+        });
+      }
+    }
     return c.json({
       input,
       items: upstream.bots.map((b, i) => {

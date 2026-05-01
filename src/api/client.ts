@@ -14,6 +14,7 @@ export class ApiError extends Error {
   readonly requestId: string | undefined;
   readonly fields: ApiErrorField[] | undefined;
   readonly retryable: boolean;
+  readonly retryAfterSeconds: number | undefined;
 
   constructor(args: {
     status: number;
@@ -22,6 +23,7 @@ export class ApiError extends Error {
     requestId?: string;
     fields?: ApiErrorField[];
     retryable: boolean;
+    retryAfterSeconds?: number;
   }) {
     super(args.message);
     this.status = args.status;
@@ -29,6 +31,7 @@ export class ApiError extends Error {
     this.requestId = args.requestId;
     this.fields = args.fields;
     this.retryable = args.retryable;
+    this.retryAfterSeconds = args.retryAfterSeconds;
   }
 }
 
@@ -103,13 +106,19 @@ async function request<T>(
     } catch {
       // body may not be JSON; fall through with statusText
     }
+    const retryAfterRaw = response.headers.get('Retry-After');
+    const retryAfterSeconds = retryAfterRaw ? Number(retryAfterRaw) : undefined;
     throw new ApiError({
       status: response.status,
-      code: envelope.code ?? `http_${response.status}`,
+      code: envelope.code ?? envelope.error ?? `http_${response.status}`,
       message: envelope.error ?? (response.statusText || 'request failed'),
       requestId: envelope.request_id ?? response.headers.get('X-Request-Id') ?? undefined,
       fields: envelope.fields,
       retryable: response.status >= 500,
+      retryAfterSeconds:
+        retryAfterSeconds !== undefined && Number.isFinite(retryAfterSeconds)
+          ? retryAfterSeconds
+          : undefined,
     });
   }
 

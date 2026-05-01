@@ -64,4 +64,68 @@ export const migrations: ReadonlyArray<{ id: string; sql: string }> = [
       CREATE INDEX IF NOT EXISTS idx_upstream_cache_expires ON upstream_cache(expires_at);
     `,
   },
+  {
+    id: '0006_bot_personas_style',
+    sql: `
+      ALTER TABLE bot_personas ADD COLUMN style TEXT;
+    `,
+  },
+  {
+    id: '0007_recent_battles',
+    sql: `
+      CREATE TABLE IF NOT EXISTS recent_battles (
+        battle_id            TEXT    PRIMARY KEY,
+        bot_a_id             TEXT    NOT NULL,
+        bot_b_id             TEXT    NOT NULL,
+        pair_key             TEXT    NOT NULL,
+        initiator_user_id    TEXT,
+        weight_class         TEXT,
+        status               TEXT    NOT NULL,
+        winner_bot_id        TEXT,
+        created_at           TEXT    NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+        completed_at         TEXT
+      );
+      CREATE INDEX IF NOT EXISTS idx_recent_battles_pair_created
+        ON recent_battles (pair_key, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_recent_battles_created
+        ON recent_battles (created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_recent_battles_initiator
+        ON recent_battles (initiator_user_id, created_at DESC);
+    `,
+  },
+  {
+    id: '0008_recent_tournaments',
+    sql: `
+      CREATE TABLE IF NOT EXISTS recent_tournaments (
+        tournament_id        TEXT    PRIMARY KEY,
+        initiator_user_id    TEXT,
+        participant_count    INTEGER NOT NULL,
+        bracket_size         INTEGER NOT NULL,
+        input_mode           TEXT    NOT NULL,
+        status               TEXT    NOT NULL,
+        winner_bot_id        TEXT,
+        created_at           TEXT    NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+        completed_at         TEXT
+      );
+      CREATE INDEX IF NOT EXISTS idx_recent_tournaments_created
+        ON recent_tournaments (created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_recent_tournaments_initiator
+        ON recent_tournaments (initiator_user_id, created_at DESC);
+    `,
+  },
+  {
+    id: '0009_uploaded_inputs',
+    sql: `
+      CREATE TABLE IF NOT EXISTS uploaded_inputs (
+        sort_bot_api_input_id INTEGER PRIMARY KEY,
+        uploader_user_id      TEXT    NOT NULL,
+        display_name          TEXT,
+        size_class            TEXT    NOT NULL,
+        array_len             INTEGER NOT NULL,
+        created_at            TEXT    NOT NULL DEFAULT (CURRENT_TIMESTAMP)
+      );
+      CREATE INDEX IF NOT EXISTS idx_uploaded_inputs_uploader
+        ON uploaded_inputs (uploader_user_id, created_at DESC);
+    `,
+  },
 ];

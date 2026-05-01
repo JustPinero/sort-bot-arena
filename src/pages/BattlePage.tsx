@@ -6,6 +6,7 @@ import type { BattleEvent } from '@/api/types';
 import { LiveBattle } from '@/components/arena/LiveBattle';
 import { PostFightDecision } from '@/components/arena/PostFightDecision';
 import { PreFightStaredown } from '@/components/arena/PreFightStaredown';
+import { BattleWeightClassChip } from '@/components/battle/BattleWeightClassChip';
 import { HazardStripes } from '@/components/design-system/HazardStripes';
 import { Button } from '@/components/ui/button';
 import { deriveBattleState } from '@/lib/battleReducer';
@@ -102,6 +103,12 @@ export default function BattlePage() {
 
   return (
     <>
+      {battle.weight_class ? (
+        <div className="mx-auto flex max-w-6xl items-center justify-end gap-3 px-4 pt-6">
+          <BattleWeightClassChip weightClass={battle.weight_class} />
+        </div>
+      ) : null}
+
       {phase === 'pre_fight' ? (
         <PreFightStaredown
           fighterA={a}
