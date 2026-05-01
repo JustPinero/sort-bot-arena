@@ -40,7 +40,7 @@ export function hallOfFameRoutes(deps: {
         return synthesizeBot({ bot, profile, persona, retired: true });
       }),
     );
-    return c.json({ bots: bots.filter((b) => b !== null) });
+    return c.json(bots.filter((b) => b !== null));
   });
 
   return r;

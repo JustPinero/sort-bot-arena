@@ -4,6 +4,7 @@ import { cors } from 'hono/cors';
 import { achievementsRoutes } from './routes/achievements.js';
 import { authRoutes } from './routes/auth.js';
 import { battlesReplayRoutes } from './routes/battles-replay.js';
+import { battlesRoutes } from './routes/battles.js';
 import { battlesSseRoutes } from './routes/battles-sse.js';
 import { botsRoutes } from './routes/bots.js';
 import { feedRoutes } from './routes/feed.js';
@@ -13,6 +14,7 @@ import { inputsRoutes } from './routes/inputs.js';
 import { leaderboardRoutes } from './routes/leaderboard.js';
 import { perInputLeaderboardRoutes } from './routes/per-input-leaderboard.js';
 import { statsRoutes } from './routes/stats.js';
+import { tournamentsRoutes } from './routes/tournaments.js';
 import { userRoutes } from './routes/users.js';
 
 import type { AppContext } from './auth/middleware.js';
@@ -106,6 +108,8 @@ export function createApp(deps: AppDeps): Hono<AppContext> {
   );
   app.route('/api/v1/achievements', achievementsRoutes({ sortBotApi: deps.sortBotApi }));
   app.route('/api/v1/bots', h2hRoutes({ sortBotApi: deps.sortBotApi }));
+  // SSE + replay are mounted before the rich battles routes so their
+  // sub-paths (/:id/events, /:id/replay) resolve before /:id catches.
   app.route(
     '/api/v1/battles',
     battlesSseRoutes({
@@ -114,6 +118,14 @@ export function createApp(deps: AppDeps): Hono<AppContext> {
     }),
   );
   app.route('/api/v1/battles', battlesReplayRoutes({ sortBotApi: deps.sortBotApi }));
+  app.route(
+    '/api/v1/battles',
+    battlesRoutes({ sortBotApi: deps.sortBotApi, persona: deps.persona }),
+  );
+  app.route(
+    '/api/v1/tournaments',
+    tournamentsRoutes({ sortBotApi: deps.sortBotApi, persona: deps.persona }),
+  );
   app.route(
     '/api/v1/users',
     userRoutes({

@@ -11,6 +11,50 @@ import type { SortBotApiClient } from '../clients/sort-bot-api/index.js';
 import type { PersonaService } from '../persona/service.js';
 import type { Client } from '@libsql/client';
 
+function formatAnalysis(raw: unknown): string {
+  if (!raw || typeof raw !== 'object') return '';
+  const a = raw as Record<string, unknown>;
+  const lines: string[] = [];
+  const header: string[] = [];
+  if (typeof a['algorithm'] === 'string' && a['algorithm']) {
+    header.push(`**Algorithm:** ${a['algorithm']}`);
+  }
+  if (
+    typeof a['time_complexity_estimate'] === 'string' &&
+    a['time_complexity_estimate']
+  ) {
+    header.push(`**Time complexity:** ${a['time_complexity_estimate']}`);
+  }
+  if (
+    typeof a['space_complexity_estimate'] === 'string' &&
+    a['space_complexity_estimate']
+  ) {
+    header.push(`**Space complexity:** ${a['space_complexity_estimate']}`);
+  }
+  if (header.length > 0) lines.push(header.join('\n'));
+
+  const sections: Array<[string, string]> = [
+    ['Strengths', 'strengths'],
+    ['Weaknesses', 'weaknesses'],
+    ['Suggested use cases', 'suggested_use_cases'],
+    ['Anti-patterns', 'anti_patterns'],
+  ];
+  for (const [label, key] of sections) {
+    const v = a[key];
+    if (Array.isArray(v) && v.length > 0) {
+      const bullets = v
+        .filter((x): x is string => typeof x === 'string' && x.length > 0)
+        .map((x) => `- ${x}`)
+        .join('\n');
+      if (bullets) lines.push(`**${label}**\n${bullets}`);
+    }
+  }
+  if (typeof a['reasoning'] === 'string' && a['reasoning']) {
+    lines.push(a['reasoning']);
+  }
+  return lines.join('\n\n');
+}
+
 const submitSchema = z.object({
   display_name: z.string().min(1).max(80),
   language: z.enum(['python', 'node', 'binary']),
@@ -80,7 +124,7 @@ export function botsRoutes(deps: {
       const analysis = await deps.sortBotApi.getBotAnalysis(id);
       return c.json({
         bot_id: id,
-        analysis,
+        analysis: formatAnalysis(analysis),
         generated_at: new Date().toISOString(),
       });
     } catch (err) {
@@ -127,18 +171,10 @@ export function botsRoutes(deps: {
   });
 
   r.get('/:id/runs', async (c) => {
-    const id = c.req.param('id');
-    const limitParam = c.req.query('limit');
-    const limit = limitParam ? Math.max(1, Math.min(200, Number(limitParam))) : 50;
-    try {
-      const runs = await deps.sortBotApi.getBotRuns(id, { limit });
-      return c.json(runs);
-    } catch (err) {
-      if (err instanceof SortBotApiError && err.status === 404) {
-        return c.json({ error: 'not_found' }, 404);
-      }
-      throw err;
-    }
+    // Battle history listener (slice 7) is deferred — see debt.md D-8.
+    // Until we record battles locally, we return an empty CursorPage<BotRun>
+    // rather than the upstream's per-input runs, which have a different shape.
+    return c.json({ items: [], next_cursor: null });
   });
 
   r.post('/', requireAuth({ db: deps.db, sessionSecret: deps.sessionSecret }), async (c) => {

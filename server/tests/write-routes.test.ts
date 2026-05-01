@@ -139,10 +139,10 @@ describe('POST /api/v1/bots', () => {
     );
     const res = await t.app.request('/api/v1/users/me/bots', { headers: { cookie } });
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { bots: Array<{ id: string; rank: number | null }> };
-    expect(body.bots).toHaveLength(1);
-    expect(body.bots[0]?.id).toBe('sba_bot_1');
-    expect(body.bots[0]?.rank).toBe(5);
+    const body = (await res.json()) as Array<{ id: string; rank: number | null }>;
+    expect(body).toHaveLength(1);
+    expect(body[0]?.id).toBe('sba_bot_1');
+    expect(body[0]?.rank).toBe(5);
   });
 
   it('upstream 5xx → 502', async () => {

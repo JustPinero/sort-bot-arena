@@ -6,6 +6,12 @@ import type { AppContext } from '../auth/middleware.js';
 import type { SortBotApiClient } from '../clients/sort-bot-api/index.js';
 import type { PersonaService } from '../persona/service.js';
 
+interface InputSummary {
+  id: string;
+  name: string;
+  size: number;
+}
+
 export function perInputLeaderboardRoutes(deps: {
   sortBotApi: SortBotApiClient;
   persona: PersonaService;
@@ -17,11 +23,23 @@ export function perInputLeaderboardRoutes(deps: {
     if (!Number.isInteger(inputId) || inputId <= 0) {
       return c.json({ error: 'bad_field' }, 400);
     }
-    const upstream = await deps.sortBotApi.getPerInputLeaderboard(inputId);
+    const [upstream, inputsResp] = await Promise.all([
+      deps.sortBotApi.getPerInputLeaderboard(inputId),
+      deps.sortBotApi.getInputs(),
+    ]);
+    const match = inputsResp.inputs.find((i) => i.id === inputId);
+    if (!match) {
+      return c.json({ error: 'not_found' }, 404);
+    }
+    const input: InputSummary = {
+      id: String(match.id),
+      name: `${capitalize(match.size_class)} #${match.case_index + 1}`,
+      size: match.array_len,
+    };
     const personas = await Promise.all(upstream.bots.map((b) => deps.persona.get(b.bot_id)));
     return c.json({
-      input_id: inputId,
-      entries: upstream.bots.map((b, i) => {
+      input,
+      items: upstream.bots.map((b, i) => {
         const p = personas[i] ?? null;
         return {
           bot_id: b.bot_id,
@@ -34,8 +52,13 @@ export function perInputLeaderboardRoutes(deps: {
           achieved_at: new Date().toISOString(),
         };
       }),
+      next_cursor: null,
     });
   });
 
   return r;
+}
+
+function capitalize(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1);
 }

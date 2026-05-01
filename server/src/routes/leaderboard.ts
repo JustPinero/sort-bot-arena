@@ -25,10 +25,8 @@ export interface LeaderboardEntry {
 }
 
 interface LeaderboardPayload {
-  entries: LeaderboardEntry[];
-  total_inputs: number;
-  stale?: boolean;
-  stale_age_ms?: number;
+  items: LeaderboardEntry[];
+  next_cursor: string | null;
 }
 
 export function leaderboardRoutes(deps: {
@@ -55,7 +53,7 @@ export function leaderboardRoutes(deps: {
             ...(language && { language }),
           });
           const personas = await Promise.all(lb.bots.map((b) => deps.persona.get(b.bot_id)));
-          const entries: LeaderboardEntry[] = lb.bots.map((b, i) => {
+          const items: LeaderboardEntry[] = lb.bots.map((b, i) => {
             const p = personas[i] ?? null;
             return {
               bot_id: b.bot_id,
@@ -72,7 +70,7 @@ export function leaderboardRoutes(deps: {
               retired: false,
             };
           });
-          return { entries, total_inputs: lb.total_inputs };
+          return { items, next_cursor: null };
         },
       });
 

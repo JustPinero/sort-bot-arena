@@ -8,10 +8,14 @@ interface AchievementDefinition {
   name: string;
   icon: string;
   description: string;
+  unlocked_at: string;
+  rarity_pct: number;
   unlocked_pct: number;
 }
 
-const CATALOG: ReadonlyArray<Omit<AchievementDefinition, 'unlocked_pct'>> = [
+const CATALOG: ReadonlyArray<
+  Omit<AchievementDefinition, 'unlocked_pct' | 'unlocked_at' | 'rarity_pct'>
+> = [
   {
     id: 'first_blood',
     name: 'First Blood',
@@ -55,12 +59,19 @@ export function achievementsRoutes(deps: { sortBotApi: SortBotApiClient }): Hono
     // rarity once we have battle data flowing.)
     const stats = await deps.sortBotApi.getStats().catch(() => null);
     const totalBots = stats?.total_bots ?? 0;
+    const pct =
+      totalBots > 0 ? Math.min(100, Math.round((1 / Math.max(totalBots, 5)) * 100)) : 0;
+    // TODO: server has no per-user achievement unlock tracking yet; the
+    // frontend type requires `unlocked_at`, so we publish the current
+    // server time as a placeholder until Slice 7 wires real unlock data.
+    const unlockedAt = new Date().toISOString();
     const items: AchievementDefinition[] = CATALOG.map((a) => ({
       ...a,
-      unlocked_pct:
-        totalBots > 0 ? Math.min(100, Math.round((1 / Math.max(totalBots, 5)) * 100)) : 0,
+      unlocked_at: unlockedAt,
+      rarity_pct: pct,
+      unlocked_pct: pct,
     }));
-    return c.json({ items });
+    return c.json(items);
   });
 
   return r;

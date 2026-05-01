@@ -47,14 +47,14 @@ describe('GET /api/v1/leaderboard', () => {
     const t = await makeTestApp({ sortBotApiBaseUrl: UPSTREAM });
     const res = await t.app.request('/api/v1/leaderboard?limit=10');
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { entries: Array<{ bot_id: string; nickname: string }> };
-    expect(body.entries).toHaveLength(1);
-    expect(body.entries[0]?.bot_id).toBe('bot_xyz');
-    expect(body.entries[0]?.nickname).toBeTruthy();
+    const body = (await res.json()) as { items: Array<{ bot_id: string; nickname: string }> };
+    expect(body.items).toHaveLength(1);
+    expect(body.items[0]?.bot_id).toBe('bot_xyz');
+    expect(body.items[0]?.nickname).toBeTruthy();
     // determinism check: same bot_id always gets the same nickname
     const second = await t.app.request('/api/v1/leaderboard?limit=10');
-    const body2 = (await second.json()) as { entries: Array<{ nickname: string }> };
-    expect(body2.entries[0]?.nickname).toBe(body.entries[0]?.nickname);
+    const body2 = (await second.json()) as { items: Array<{ nickname: string }> };
+    expect(body2.items[0]?.nickname).toBe(body.items[0]?.nickname);
   });
 });
 

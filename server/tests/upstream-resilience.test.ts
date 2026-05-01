@@ -202,8 +202,8 @@ describe('GET /api/v1/leaderboard with stale fallback', () => {
     const stale = await t.app.request('/api/v1/leaderboard?limit=10');
     expect(stale.status).toBe(200);
     expect(stale.headers.get('X-Stale')).toBe('true');
-    const body = (await stale.json()) as { entries: Array<{ bot_id: string }> };
-    expect(body.entries[0]?.bot_id).toBe('bot_cached');
+    const body = (await stale.json()) as { items: Array<{ bot_id: string }> };
+    expect(body.items[0]?.bot_id).toBe('bot_cached');
   }, 15_000);
 
   it('returns 502 with envelope when no cache exists and upstream is down', async () => {
