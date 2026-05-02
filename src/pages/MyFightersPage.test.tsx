@@ -3,6 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it } from 'vitest';
+import { axe } from 'vitest-axe';
 
 import { createQueryClient } from '@/api/queryClient';
 
@@ -39,5 +40,13 @@ describe('<MyFightersPage />', () => {
       () => expect(screen.queryByRole('button', { name: /retiring/i })).not.toBeInTheDocument(),
       { timeout: 3000 },
     );
+  });
+
+  describe('a11y', () => {
+    it('renders without axe violations', async () => {
+      const { container } = renderPage();
+      await waitFor(() => expect(screen.getByText(/the algorithm/i)).toBeInTheDocument());
+      expect(await axe(container)).toHaveNoViolations();
+    });
   });
 });

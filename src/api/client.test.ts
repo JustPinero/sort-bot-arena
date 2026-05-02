@@ -77,6 +77,26 @@ describe('apiClient', () => {
       }
     });
 
+    it('falls back to `http_${status}` code when only `error` is set (no `code` discriminator)', async () => {
+      server.use(
+        http.post(`${BASE}/api/v1/bots`, () =>
+          HttpResponse.json({ error: 'human readable message' }, { status: 400 }),
+        ),
+      );
+
+      const promise = apiClient.post('/api/v1/bots', { display_name: '' });
+      await expect(promise).rejects.toBeInstanceOf(ApiError);
+      try {
+        await promise;
+      } catch (err) {
+        expect(err).toMatchObject({
+          status: 400,
+          code: 'http_400',
+          message: 'human readable message',
+        });
+      }
+    });
+
     it('5xx → ApiError flagged retryable', async () => {
       server.use(
         http.get(`${BASE}/api/v1/leaderboard`, () =>

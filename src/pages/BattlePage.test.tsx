@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { describe, expect, it } from 'vitest';
+import { axe } from 'vitest-axe';
 
 import { createQueryClient } from '@/api/queryClient';
 import { sampleBattle } from '@/test/msw/fixtures';
@@ -65,5 +66,17 @@ describe('<BattlePage />', () => {
     await waitFor(() =>
       expect(screen.getByRole('status', { name: /exhibition/i })).toBeInTheDocument(),
     );
+  });
+
+  describe('a11y', () => {
+    it('renders without axe violations', async () => {
+      const { container } = renderAt('/arena/bat_demo_1');
+      await waitFor(() =>
+        expect(
+          screen.getByRole('heading', { level: 3, name: /the algorithm/i }),
+        ).toBeInTheDocument(),
+      );
+      expect(await axe(container)).toHaveNoViolations();
+    });
   });
 });

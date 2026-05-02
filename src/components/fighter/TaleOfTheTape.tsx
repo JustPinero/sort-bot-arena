@@ -14,6 +14,7 @@ interface TaleOfTheTapeProps {
   showVS?: boolean;
   onFighterClick?: (botId: string) => void;
   className?: string;
+  headingLevel?: 2 | 3 | 4;
 }
 
 export function TaleOfTheTape({
@@ -24,6 +25,7 @@ export function TaleOfTheTape({
   showVS = true,
   onFighterClick,
   className,
+  headingLevel,
 }: TaleOfTheTapeProps) {
   const interactive = mode === 'pre-fight' || mode === 'post-fight' || mode === 'static';
 
@@ -35,6 +37,7 @@ export function TaleOfTheTape({
           interactive={interactive && Boolean(onFighterClick)}
           emphasized={emphasizeBot === fighterA.id}
           onFighterClick={onFighterClick}
+          headingLevel={headingLevel}
         />
       </div>
     );
@@ -55,6 +58,7 @@ export function TaleOfTheTape({
         interactive={interactive && Boolean(onFighterClick)}
         emphasized={emphasizeBot === fighterA.id}
         onFighterClick={onFighterClick}
+        headingLevel={headingLevel}
       />
 
       {showVS ? (
@@ -73,6 +77,7 @@ export function TaleOfTheTape({
         interactive={interactive && Boolean(onFighterClick)}
         emphasized={emphasizeBot === fighterB.id}
         onFighterClick={onFighterClick}
+        headingLevel={headingLevel}
       />
     </div>
   );

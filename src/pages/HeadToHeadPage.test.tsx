@@ -2,6 +2,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { describe, expect, it } from 'vitest';
+import { axe } from 'vitest-axe';
 
 import { createQueryClient } from '@/api/queryClient';
 import { championBot, veteranBot } from '@/test/msw/fixtures';
@@ -30,9 +31,9 @@ describe('<HeadToHeadPage />', () => {
   it('renders both fighters in the Tale of the Tape', async () => {
     renderAt(`/bots/${championBot.id}/vs/${veteranBot.id}`);
     await waitFor(() =>
-      expect(screen.getByRole('heading', { level: 3, name: /the algorithm/i })).toBeInTheDocument(),
+      expect(screen.getByRole('heading', { level: 2, name: /the algorithm/i })).toBeInTheDocument(),
     );
-    expect(screen.getByRole('heading', { level: 3, name: /the pivot/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 2, name: /the pivot/i })).toBeInTheDocument();
   });
 
   it('renders the shared-input comparison table', async () => {
@@ -44,6 +45,18 @@ describe('<HeadToHeadPage />', () => {
     renderAt(`/bots/${championBot.id}/vs/bot_does_not_exist`);
     await waitFor(() => expect(screen.getByText(/matchup not available/i)).toBeInTheDocument(), {
       timeout: 3000,
+    });
+  });
+
+  describe('a11y', () => {
+    it('renders without axe violations', async () => {
+      const { container } = renderAt(`/bots/${championBot.id}/vs/${veteranBot.id}`);
+      await waitFor(() =>
+        expect(
+          screen.getByRole('heading', { level: 2, name: /the algorithm/i }),
+        ).toBeInTheDocument(),
+      );
+      expect(await axe(container)).toHaveNoViolations();
     });
   });
 });

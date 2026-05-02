@@ -3,6 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { afterEach, describe, expect, it } from 'vitest';
+import { axe } from 'vitest-axe';
 
 import { createQueryClient } from '@/api/queryClient';
 import { useAuthStore } from '@/stores/auth';
@@ -151,5 +152,23 @@ describe('<SignUpDialog />', () => {
     await user.click(screen.getByRole('button', { name: /have an account\? sign in/i }));
 
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+});
+
+describe('<SignUpDialog /> a11y', () => {
+  it('signup mode has no axe violations', async () => {
+    const user = userEvent.setup();
+    const { container } = renderDialog();
+    await openDialog(user);
+    expect(await axe(container)).toHaveNoViolations();
+  });
+
+  it('login mode has no axe violations', async () => {
+    const user = userEvent.setup();
+    const { container } = renderDialog();
+    await openDialog(user);
+    await user.click(screen.getByRole('button', { name: /have an account\? sign in/i }));
+    await screen.findByRole('heading', { name: /sign in/i });
+    expect(await axe(container)).toHaveNoViolations();
   });
 });

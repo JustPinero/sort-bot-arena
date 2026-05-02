@@ -55,6 +55,69 @@ export async function recordTournament(db: Client, args: RecordTournamentArgs): 
   return createdAt;
 }
 
+// Slice D3 — terminal-state transitions for the orchestrator. The
+// `status NOT IN ('complete', 'failed')` guard makes both calls
+// idempotent: replay-driven double-advancement silently no-ops instead
+// of clobbering a recorded winner / completion timestamp.
+export async function markComplete(
+  db: Client,
+  tournamentId: string,
+  winnerBotId: string,
+): Promise<void> {
+  await db.execute({
+    sql: `UPDATE recent_tournaments
+             SET status = 'complete',
+                 winner_bot_id = ?,
+                 completed_at = ?
+           WHERE tournament_id = ?
+             AND status NOT IN ('complete', 'failed')`,
+    args: [winnerBotId, new Date().toISOString(), tournamentId],
+  });
+}
+
+export async function markFailed(db: Client, tournamentId: string): Promise<void> {
+  await db.execute({
+    sql: `UPDATE recent_tournaments
+             SET status = 'failed',
+                 completed_at = ?
+           WHERE tournament_id = ?
+             AND status NOT IN ('complete', 'failed')`,
+    args: [new Date().toISOString(), tournamentId],
+  });
+}
+
+// Slice D3 — read helper for the orchestrator. Returns null when the
+// tournament row was deleted/never inserted; the orchestrator treats
+// that as a graceful "do nothing" rather than throwing.
+export async function getById(
+  db: Client,
+  tournamentId: string,
+): Promise<RecentTournamentRow | null> {
+  const res = await db.execute({
+    sql: `SELECT tournament_id, initiator_user_id, participant_count,
+                 bracket_size, input_mode, status, winner_bot_id,
+                 created_at, completed_at
+            FROM recent_tournaments
+           WHERE tournament_id = ?
+           LIMIT 1`,
+    args: [tournamentId],
+  });
+  const row = res.rows[0];
+  if (!row) return null;
+  const r = row as unknown as Record<string, unknown>;
+  return {
+    tournament_id: r['tournament_id'] as string,
+    initiator_user_id: (r['initiator_user_id'] as string | null) ?? null,
+    participant_count: Number(r['participant_count'] ?? 0),
+    bracket_size: Number(r['bracket_size'] ?? 0),
+    input_mode: r['input_mode'] as string,
+    status: r['status'] as RecentTournamentRow['status'],
+    winner_bot_id: (r['winner_bot_id'] as string | null) ?? null,
+    created_at: r['created_at'] as string,
+    completed_at: (r['completed_at'] as string | null) ?? null,
+  };
+}
+
 export interface ListRecentTournamentsOpts {
   limit: number;
   before?: string | undefined;

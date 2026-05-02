@@ -1,5 +1,7 @@
 import { http, HttpResponse } from 'msw';
 
+import { weightClass } from '@/lib/weightClass';
+
 import {
   achievementsCatalog,
   allBattles,
@@ -114,14 +116,7 @@ export const defaultHandlers = [
       if (e.retired) return false;
       if (language && e.language !== language) return false;
       if (weight === 'all') return true;
-      const wMap: Record<string, string[]> = {
-        heavyweight: ['binary'],
-        cruiserweight: ['go'],
-        middleweight: ['node'],
-        lightweight: ['python'],
-      };
-      const langs = wMap[weight];
-      return Boolean(langs?.includes(e.language));
+      return weightClass(e.language).toLowerCase() === weight;
     });
 
     return HttpResponse.json({ items: filtered, next_cursor: null });

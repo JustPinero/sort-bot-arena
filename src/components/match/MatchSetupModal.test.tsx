@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { describe, expect, it } from 'vitest';
+import { axe } from 'vitest-axe';
 
 import { createQueryClient } from '@/api/queryClient';
 import { server } from '@/test/msw/server';
@@ -171,7 +172,7 @@ describe('<MatchSetupModal />', () => {
     server.use(
       http.post(`${BASE}/api/v1/battles`, () =>
         HttpResponse.json(
-          { error: 'pair_busy', detail: 'busy' },
+          { code: 'pair_busy', error: 'matchup busy' },
           { status: 429, headers: { 'Retry-After': '30' } },
         ),
       ),
@@ -189,7 +190,7 @@ describe('<MatchSetupModal />', () => {
     server.use(
       http.post(`${BASE}/api/v1/battles`, () =>
         HttpResponse.json(
-          { error: 'pair_cooldown', detail: 'limit' },
+          { code: 'pair_cooldown', error: 'cooldown limit' },
           { status: 429, headers: { 'Retry-After': '600' } },
         ),
       ),
@@ -202,6 +203,28 @@ describe('<MatchSetupModal />', () => {
     await userEvent.click(screen.getByRole('button', { name: /start match/i }));
     await waitFor(() => expect(screen.getByText(/per-hour limit/i)).toBeInTheDocument());
     expect(screen.getByText(/10 min/i)).toBeInTheDocument();
+  });
+
+  it('clears submitError when user toggles a tab after a failed submit', async () => {
+    server.use(
+      http.post(`${BASE}/api/v1/battles`, () =>
+        HttpResponse.json(
+          { code: 'pair_busy', error: 'matchup busy' },
+          { status: 429, headers: { 'Retry-After': '30' } },
+        ),
+      ),
+    );
+    renderModal();
+    await screen.findByRole('tab', { name: /preset/i });
+    await selectBots('Champion Coder', 'Sandy Reeves');
+    const presetSelect = await screen.findByLabelText(/preset bundle/i);
+    await userEvent.selectOptions(presetSelect, 'sparring');
+    await userEvent.click(screen.getByRole('button', { name: /start match/i }));
+    await waitFor(() => expect(screen.getByText(/already running/i)).toBeInTheDocument());
+
+    // Switching tabs should clear the submit error.
+    await userEvent.click(screen.getByRole('tab', { name: /manual/i }));
+    await waitFor(() => expect(screen.queryByText(/already running/i)).not.toBeInTheDocument());
   });
 
   it('successful submit redirects to /arena/<battle_id>', async () => {
@@ -325,6 +348,34 @@ describe('<QuickFightButton />', () => {
     const c = captured as { count?: number; bot_a?: string; bot_b?: string };
     expect(c.count).toBe(3);
     expect(c.bot_a).not.toBe(c.bot_b);
+  });
+});
+
+describe('<MatchSetupModal /> a11y', () => {
+  it('Preset tab renders without axe violations', async () => {
+    const { container } = renderModal({ initialOpen: true });
+    await screen.findByRole('dialog');
+    await screen.findByRole('tab', { name: /preset/i });
+    expect(await axe(container)).toHaveNoViolations();
+  });
+
+  it('Manual tab renders without axe violations', async () => {
+    const { container } = renderModal({ initialOpen: true });
+    await screen.findByRole('dialog');
+    await screen.findByRole('tab', { name: /preset/i });
+    await userEvent.click(screen.getByRole('tab', { name: /manual/i }));
+    // Wait for the manual list to render
+    await screen.findAllByRole('checkbox');
+    expect(await axe(container)).toHaveNoViolations();
+  });
+
+  it('Upload tab renders without axe violations', async () => {
+    const { container } = renderModal({ initialOpen: true });
+    await screen.findByRole('dialog');
+    await screen.findByRole('tab', { name: /preset/i });
+    await userEvent.click(screen.getByRole('tab', { name: /upload/i }));
+    await screen.findByLabelText(/values/i);
+    expect(await axe(container)).toHaveNoViolations();
   });
 });
 

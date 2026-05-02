@@ -70,6 +70,7 @@ async function bootstrap(): Promise<void> {
       .map((s) => s.trim())
       .filter(Boolean),
     listener: env.RUN_LISTENER ? listener : null,
+    enableTestReset: env.ENABLE_TEST_RESET,
   });
 
   const pruneHandle = setInterval(() => {

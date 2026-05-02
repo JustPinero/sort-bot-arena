@@ -3,6 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
+import { axe } from 'vitest-axe';
 
 import { createQueryClient } from '@/api/queryClient';
 
@@ -19,7 +20,12 @@ vi.mock('@/components/submit/MonacoEditor', () => ({
     language: string;
     onChange: (v: string) => void;
   }) => (
-    <textarea data-testid="mock-monaco" value={value} onChange={(e) => onChange(e.target.value)} />
+    <textarea
+      data-testid="mock-monaco"
+      aria-label="Source code"
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+    />
   ),
 }));
 
@@ -73,5 +79,17 @@ describe('<SubmitPage />', () => {
         ).toBeInTheDocument(),
       { timeout: 3000 },
     );
+  });
+
+  describe('a11y', () => {
+    it('renders without axe violations', async () => {
+      const { container } = renderPage();
+      await waitFor(() =>
+        expect(
+          screen.getByRole('heading', { level: 1, name: /register your fighter/i }),
+        ).toBeInTheDocument(),
+      );
+      expect(await axe(container)).toHaveNoViolations();
+    });
   });
 });

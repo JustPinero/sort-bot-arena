@@ -22,6 +22,7 @@ interface FighterCardProps {
   emphasized?: boolean;
   onFighterClick?: (botId: string) => void;
   className?: string;
+  headingLevel?: 2 | 3 | 4;
 }
 
 const FORM_LABEL: Record<'W' | 'L' | 'D', string> = {
@@ -44,6 +45,7 @@ export function FighterCard({
   emphasized = false,
   onFighterClick,
   className,
+  headingLevel = 3,
 }: FighterCardProps) {
   const headingId = useId();
   const isChampion = bot.rank === 1 && !bot.retired;
@@ -51,6 +53,7 @@ export function FighterCard({
   const corner = useMemo(() => cornerColor(bot.id), [bot.id]);
   const portraitOk = isAllowedImageUrl(bot.portrait_url);
   const headline = bot.nickname ?? bot.display_name;
+  const HeadingTag = `h${headingLevel}` as 'h2' | 'h3' | 'h4';
 
   const cardChildren = (
     <article
@@ -93,9 +96,12 @@ export function FighterCard({
       </div>
 
       <div className="flex flex-col gap-3 p-4">
-        <h3 id={headingId} className="font-display text-3xl uppercase leading-none tracking-wide">
+        <HeadingTag
+          id={headingId}
+          className="font-display text-3xl uppercase leading-none tracking-wide"
+        >
           {headline}
-        </h3>
+        </HeadingTag>
         <p className="font-mono text-xs uppercase tracking-widest text-text-tertiary">
           {bot.nickname ? bot.display_name : null}
           {bot.nickname && bot.algorithm ? ' · ' : null}

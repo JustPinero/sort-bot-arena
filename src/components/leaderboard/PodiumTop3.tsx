@@ -97,7 +97,7 @@ function PodiumCard({
         >
           {position.label}
         </p>
-        <h3 className="font-display text-2xl uppercase leading-none tracking-wide">{headline}</h3>
+        <h2 className="font-display text-2xl uppercase leading-none tracking-wide">{headline}</h2>
         <p className="font-mono text-xs uppercase tracking-widest text-text-tertiary">
           {entry.display_name}
         </p>

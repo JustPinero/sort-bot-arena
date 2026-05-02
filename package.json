@@ -9,6 +9,7 @@
   },
   "scripts": {
     "dev": "vite",
+    "dev:real": "vite",
     "dev:stack": "bash scripts/dev-stack.sh",
     "build": "tsc --noEmit && tsc --noEmit -p tsconfig.node.json && vite build",
     "preview": "vite preview",
@@ -20,6 +21,7 @@
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage --passWithNoTests",
+    "test:e2e": "playwright test",
     "validate": "bash scripts/validate.sh",
     "generate:api-types": "bash scripts/generate-api-types.sh"
   },

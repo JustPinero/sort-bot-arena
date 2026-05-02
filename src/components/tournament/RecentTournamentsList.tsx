@@ -17,8 +17,17 @@ export function RecentTournamentsList() {
   const tournaments = (data?.items ?? []).slice(0, MAX_RECENT);
 
   return (
-    <section className="mt-12">
-      <h2 className="font-display text-2xl uppercase tracking-wide">Recent Tournaments</h2>
+    <section
+      aria-labelledby="recent-tournaments-heading"
+      data-testid="recent-tournaments"
+      className="mt-12"
+    >
+      <h2
+        id="recent-tournaments-heading"
+        className="font-display text-2xl uppercase tracking-wide"
+      >
+        Recent Tournaments
+      </h2>
       <p className="mt-1 font-mono text-xs uppercase tracking-widest text-text-tertiary">
         Brackets from the last few cards.
       </p>

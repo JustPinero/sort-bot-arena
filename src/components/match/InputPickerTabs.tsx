@@ -117,7 +117,6 @@ export function InputPickerTabs({
                     type="checkbox"
                     checked={checked}
                     onChange={() => onToggleInput(inp.id)}
-                    aria-label={inp.name}
                   />
                   <label
                     htmlFor={`input-${inp.id}`}

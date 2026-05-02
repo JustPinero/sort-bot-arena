@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { ApiError } from '@/api/client';
@@ -87,6 +87,7 @@ function MatchSetupForm({ onClose }: MatchSetupFormProps) {
   const canSubmit = distinctBots && tabValid && !startBattle.isPending;
 
   const onToggleInput = (id: string) => {
+    setSubmitError(null);
     setSelectedInputIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
@@ -104,10 +105,25 @@ function MatchSetupForm({ onClose }: MatchSetupFormProps) {
     });
   };
 
-  // Auto-clear submit error when user changes inputs
-  useEffect(() => {
+  const onChangeRed = (id: string | null) => {
     setSubmitError(null);
-  }, [redBotId, blueBotId, tab, preset, selectedInputIds]);
+    setRedBotId(id);
+  };
+
+  const onChangeBlue = (id: string | null) => {
+    setSubmitError(null);
+    setBlueBotId(id);
+  };
+
+  const onChangeTab = (next: TabKey) => {
+    setSubmitError(null);
+    setTab(next);
+  };
+
+  const onChangePreset = (next: PresetKey) => {
+    setSubmitError(null);
+    setPreset(next);
+  };
 
   const onSubmit = async () => {
     if (!redBotId || !blueBotId || redBotId === blueBotId) return;
@@ -144,8 +160,8 @@ function MatchSetupForm({ onClose }: MatchSetupFormProps) {
       <BotSlotPicker
         redBotId={redBotId}
         blueBotId={blueBotId}
-        onChangeRed={setRedBotId}
-        onChangeBlue={setBlueBotId}
+        onChangeRed={onChangeRed}
+        onChangeBlue={onChangeBlue}
         bots={bots}
         isLoading={eligibleFighters.isLoading}
         error={eligibleFighters.isError}
@@ -160,11 +176,11 @@ function MatchSetupForm({ onClose }: MatchSetupFormProps) {
       <InputPickerTabs
         inputs={allInputs}
         preset={preset}
-        onChangePreset={setPreset}
+        onChangePreset={onChangePreset}
         selectedInputIds={selectedInputIds}
         onToggleInput={onToggleInput}
         activeTab={tab}
-        onChangeTab={setTab}
+        onChangeTab={onChangeTab}
         onInputUploaded={onInputUploaded}
       />
 

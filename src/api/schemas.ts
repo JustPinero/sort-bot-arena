@@ -371,7 +371,7 @@ export const TournamentSchema = z
     name: z.string(),
     status: TournamentStatusSchema,
     participant_count: z.number(),
-    weight_class_filter: z.string().nullable(),
+    weight_class_filter: WeightClassFilterSchema.nullable(),
     prize_description: z.string().nullable(),
     scheduled_at: z.string(),
     rounds_total: z.number(),

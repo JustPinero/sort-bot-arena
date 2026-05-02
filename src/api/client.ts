@@ -117,7 +117,7 @@ async function request<T>(
     const retryAfterSeconds = retryAfterRaw ? Number(retryAfterRaw) : undefined;
     throw new ApiError({
       status: response.status,
-      code: envelope.code ?? envelope.error ?? `http_${response.status}`,
+      code: envelope.code ?? `http_${response.status}`,
       message: envelope.error ?? (response.statusText || 'request failed'),
       requestId: envelope.request_id ?? response.headers.get('X-Request-Id') ?? undefined,
       fields: envelope.fields,

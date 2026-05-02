@@ -39,4 +39,16 @@ describe('<DesignSystemPage />', () => {
     const critical = (results.violations ?? []).filter((v) => v.impact === 'critical');
     expect(critical).toEqual([]);
   });
+
+  describe('a11y', () => {
+    it('renders without axe violations', async () => {
+      const { container } = render(
+        <MemoryRouter>
+          <DesignSystemPage />
+        </MemoryRouter>,
+      );
+      expect(screen.getByText('Surface tiers')).toBeInTheDocument();
+      expect(await axe(container)).toHaveNoViolations();
+    });
+  });
 });

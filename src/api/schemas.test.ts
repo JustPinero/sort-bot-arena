@@ -485,6 +485,15 @@ describe('TournamentSchema', () => {
   it('rejects unknown status', () => {
     expect(() => TournamentSchema.parse({ ...happyTournament, status: 'cancelled' })).toThrow();
   });
+  it('rejects invalid weight_class_filter values', () => {
+    expect(() =>
+      TournamentSchema.parse({ ...happyTournament, weight_class_filter: 'invalid_value' }),
+    ).toThrow();
+  });
+  it('accepts a valid weight class filter', () => {
+    const t = { ...happyTournament, weight_class_filter: 'lightweight' as const };
+    expect(TournamentSchema.parse(t)).toEqual(t);
+  });
   it('strict rejects extra key', () => {
     expect(() => TournamentStrictSchema.parse({ ...happyTournament, extra: 1 })).toThrow();
   });

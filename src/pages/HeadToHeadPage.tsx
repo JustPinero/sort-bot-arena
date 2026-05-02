@@ -83,7 +83,7 @@ export default function HeadToHeadPage() {
         {aLabel} vs {bLabel}
       </h1>
 
-      <TaleOfTheTape fighterA={botA} fighterB={botB} mode="static" />
+      <TaleOfTheTape fighterA={botA} fighterB={botB} mode="static" headingLevel={2} />
 
       <div className="mt-12">
         <h2 className="font-mono text-xs uppercase tracking-widest text-text-tertiary">

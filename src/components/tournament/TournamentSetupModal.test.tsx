@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { describe, expect, it } from 'vitest';
+import { axe } from 'vitest-axe';
 
 import { createQueryClient } from '@/api/queryClient';
 import type { LeaderboardEntry } from '@/api/types';
@@ -454,6 +455,28 @@ describe('<TournamentSetupModal /> tooltips', () => {
       const tips = await screen.findAllByRole('tooltip');
       expect(tips.some((t) => /discard|close/i.test(t.textContent ?? ''))).toBe(true);
     });
+  });
+});
+
+describe('<TournamentSetupModal /> a11y', () => {
+  it('initial render (manual fill state) has no axe violations', async () => {
+    useLeaderboardHandler(makeBots(12));
+    const { container } = renderModal({ defaultOpen: true });
+    await screen.findByRole('dialog');
+    // Wait for tiles to render so the picker is fully painted
+    await screen.findAllByRole('button', { name: /select fighter/i });
+    expect(await axe(container)).toHaveNoViolations();
+  });
+
+  it('after Random fill (selected tiles state) has no axe violations', async () => {
+    useLeaderboardHandler(makeBots(12));
+    const { container } = renderModal({ defaultOpen: true });
+    await screen.findByRole('dialog');
+    const random = await screen.findByRole('button', { name: /random fill/i });
+    await waitFor(() => expect(random).not.toBeDisabled());
+    await userEvent.click(random);
+    await waitFor(() => expect(screen.getByTestId('selected-count')).toHaveTextContent('8'));
+    expect(await axe(container)).toHaveNoViolations();
   });
 });
 

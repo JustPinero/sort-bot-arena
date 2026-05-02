@@ -3,6 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 import { describe, expect, it } from 'vitest';
+import { axe } from 'vitest-axe';
 
 import { createQueryClient } from '@/api/queryClient';
 
@@ -51,5 +52,13 @@ describe('<LeaderboardPage />', () => {
   it('shows the empty-results panel when filters return nothing', async () => {
     renderAt('/leaderboard?weight=heavyweight');
     await waitFor(() => expect(screen.getByText(/no fighters match/i)).toBeInTheDocument());
+  });
+
+  describe('a11y', () => {
+    it('renders without axe violations', async () => {
+      const { container } = renderAt('/leaderboard');
+      await waitFor(() => expect(screen.getByText('#1')).toBeInTheDocument());
+      expect(await axe(container)).toHaveNoViolations();
+    });
   });
 });

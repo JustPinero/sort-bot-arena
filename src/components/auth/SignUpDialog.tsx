@@ -4,7 +4,13 @@ import { ApiError } from '@/api/client';
 import { useLogin, useSignup } from '@/api/queries';
 import { LoadingGear } from '@/components/LoadingGear';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogTriggerButton } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+  DialogTriggerButton,
+} from '@/components/ui/dialog';
 import { useAuthStore } from '@/stores/auth';
 
 type Mode = 'signup' | 'login';
@@ -63,14 +69,14 @@ export function SignUpDialog({ triggerLabel = 'Sign up', triggerClassName }: Sig
       <DialogContent>
         <form onSubmit={onSubmit} className="flex flex-col gap-4">
           <header>
-            <h2 className="font-display text-2xl uppercase tracking-wider">
+            <DialogTitle className="font-display text-2xl uppercase tracking-wider">
               {mode === 'signup' ? 'Step into the cage' : 'Sign in'}
-            </h2>
-            <p className="mt-1 text-sm text-text-secondary">
+            </DialogTitle>
+            <DialogDescription className="mt-1 text-sm text-text-secondary">
               {mode === 'signup'
                 ? 'Sign up to submit a fighter and track stats. We provision your sort-bot key on the backend — no API keys handled by the browser.'
                 : 'Welcome back, champ. Pick up where you left off.'}
-            </p>
+            </DialogDescription>
           </header>
 
           {mode === 'signup' && (

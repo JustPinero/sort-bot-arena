@@ -9,6 +9,7 @@ const schema = z.object({
   LEONARDO_API_KEY: z.string().optional(),
   ANTHROPIC_API_KEY: z.string().optional(),
   RUN_LISTENER: z.coerce.boolean().default(false),
+  ENABLE_TEST_RESET: z.coerce.boolean().default(false),
   ALLOWED_ORIGINS: z.string().min(1),
   LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal']).default('info'),
   SENTRY_DSN: z.string().optional(),

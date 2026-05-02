@@ -14,6 +14,7 @@ import { inputsRoutes } from './routes/inputs.js';
 import { leaderboardRoutes } from './routes/leaderboard.js';
 import { perInputLeaderboardRoutes } from './routes/per-input-leaderboard.js';
 import { statsRoutes } from './routes/stats.js';
+import { testRoutes } from './routes/test.js';
 import { tournamentsRoutes } from './routes/tournaments.js';
 import { userRoutes } from './routes/users.js';
 
@@ -45,6 +46,10 @@ export interface AppDeps {
   // events_processed:0 but `ready` stays true (listener isn't on the
   // critical request path).
   listener?: ListenerHealth | null;
+  // When true, mounts `/api/test/reset` (drops + re-runs migrations).
+  // GATED: production must NEVER set this. Real-server Playwright specs
+  // toggle this via `ENABLE_TEST_RESET=true` on the server boot command.
+  enableTestReset?: boolean;
 }
 
 export function createApp(deps: AppDeps): Hono<AppContext> {
@@ -177,6 +182,9 @@ export function createApp(deps: AppDeps): Hono<AppContext> {
       persona: deps.persona,
     }),
   );
+  if (deps.enableTestReset) {
+    app.route('/api/test', testRoutes({ db: deps.db }));
+  }
   return app;
 }
 
