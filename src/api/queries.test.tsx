@@ -1,12 +1,13 @@
 import { QueryClientProvider } from '@tanstack/react-query';
 import { renderHook, waitFor } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { championBot, noAnalysisBot, rookieBot } from '@/test/msw/fixtures';
 import { server } from '@/test/msw/server';
 
 import {
+  useBattles,
   useBot,
   useBotAnalysis,
   useBotInputPerformance,
@@ -16,6 +17,7 @@ import {
   useLeaderboard,
   usePerInputLeaderboard,
   usePing,
+  useStartBattle,
 } from './queries';
 import { createQueryClient } from './queryClient';
 
@@ -164,5 +166,28 @@ describe('useInputs', () => {
     const { result } = renderHook(() => useInputs(), { wrapper });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data?.items.length).toBeGreaterThan(0);
+  });
+});
+
+describe('useStartBattle', () => {
+  it("invalidates ['battles'] on success so RecentBattlesList refreshes", async () => {
+    const client = createQueryClient();
+    const invalidateSpy = vi.spyOn(client, 'invalidateQueries');
+    function sharedWrapper({ children }: { children: ReactNode }) {
+      return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+    }
+
+    const { result } = renderHook(
+      () => ({ battles: useBattles(), start: useStartBattle() }),
+      { wrapper: sharedWrapper },
+    );
+
+    await waitFor(() => expect(result.current.battles.isSuccess).toBe(true));
+
+    result.current.start.mutate({ bot_a: championBot.id, bot_b: rookieBot.id });
+
+    await waitFor(() => expect(result.current.start.isSuccess).toBe(true));
+
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['battles'] });
   });
 });

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { deriveBattleState } from '@/lib/battleReducer';
 
@@ -10,7 +10,8 @@ import type { BattleEvent, BattleOutcome } from './types';
 
 export type SseStatus = 'idle' | 'connecting' | 'open' | 'reconnecting' | 'polling' | 'failed';
 
-const MAX_SSE_FAILURES = 3;
+const RECONNECT_BACKOFFS_MS = [500, 1000, 2000] as const;
+const MAX_SSE_FAILURES = RECONNECT_BACKOFFS_MS.length;
 const POLL_INTERVAL_MS = 3_000;
 const POLL_MAX_DURATION_MS = 5 * 60_000;
 const REPLAY_GAP_MS = 500;
@@ -61,21 +62,20 @@ export function useBattleEvents(
   const [error, setError] = useState<Error | null>(null);
 
   const enabled = opts.enabled !== false && Boolean(battleId);
-  const failuresRef = useRef(0);
 
   useEffect(() => {
     if (!enabled || !battleId) return;
 
     setEvents([]);
     setError(null);
-    setStatus('connecting');
-    failuresRef.current = 0;
 
     let es: EventSource | null = null;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
     let pollTimer: ReturnType<typeof setTimeout> | null = null;
     let replayTimer: ReturnType<typeof setTimeout> | null = null;
     let pollAbort: AbortController | null = null;
     let pollStartedAt = 0;
+    let attempts = 0;
     let cancelled = false;
 
     const replay = (payload: ReplayPayload) => {
@@ -163,13 +163,24 @@ export function useBattleEvents(
       void tick();
     };
 
+    const scheduleReconnect = () => {
+      if (cancelled) return;
+      const base = RECONNECT_BACKOFFS_MS[attempts - 1] ?? 2000;
+      const jitter = base * (0.8 + Math.random() * 0.4);
+      setStatus('reconnecting');
+      reconnectTimer = setTimeout(() => {
+        if (!cancelled) connect();
+      }, jitter);
+    };
+
     const connect = () => {
       if (cancelled) return;
+      setStatus('connecting');
       const url = `${config.apiBaseUrl}/api/v1/battles/${battleId}/events`;
       es = new EventSource(url);
 
       es.onopen = () => {
-        failuresRef.current = 0;
+        attempts = 0;
         setStatus('open');
       };
       es.onmessage = (e) => {
@@ -186,12 +197,15 @@ export function useBattleEvents(
         }
       };
       es.onerror = () => {
-        failuresRef.current += 1;
+        if (cancelled) return;
+        es?.close();
+        es = null;
+        attempts += 1;
         setError(new Error('SSE connection failed'));
-        if (failuresRef.current >= MAX_SSE_FAILURES) {
+        if (attempts >= MAX_SSE_FAILURES) {
           startPolling();
         } else {
-          setStatus('reconnecting');
+          scheduleReconnect();
         }
       };
     };
@@ -201,6 +215,7 @@ export function useBattleEvents(
     return () => {
       cancelled = true;
       if (es) es.close();
+      if (reconnectTimer) clearTimeout(reconnectTimer);
       if (pollTimer) clearTimeout(pollTimer);
       if (replayTimer) clearTimeout(replayTimer);
       if (pollAbort) pollAbort.abort();

@@ -1,3 +1,4 @@
+import { MarkdownContent } from '@/components/markdown/MarkdownContent';
 import { cn } from '@/lib/cn';
 
 interface ScoutingReportProps {
@@ -48,7 +49,7 @@ export function ScoutingReport({ analysis, isLoading, isError, className }: Scou
       <h3 id="scouting-heading" className="font-mono text-xs uppercase tracking-widest text-tech">
         Breakdown
       </h3>
-      <p className="mt-3 whitespace-pre-wrap text-base text-text-primary">{analysis}</p>
+      <MarkdownContent className="mt-3 text-text-primary">{analysis}</MarkdownContent>
     </section>
   );
 }

@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { apiClient } from './client';
+import { retryNon4xx } from './error-helpers';
 
 import type {
   AchievementDefinition,
@@ -35,11 +36,7 @@ export function useBot(botId: string | undefined) {
     queryFn: () => apiClient.get<Bot>(`/api/v1/bots/${botId}`),
     enabled: Boolean(botId),
     staleTime: 5 * 60 * 1000,
-    retry: (failureCount, err) => {
-      const status = (err as { status?: number } | null)?.status;
-      if (status && status >= 400 && status < 500) return false;
-      return failureCount < 1;
-    },
+    retry: retryNon4xx,
   });
 }
 
@@ -127,11 +124,7 @@ export function usePerInputLeaderboard(inputId: string | undefined) {
       apiClient.get<PerInputLeaderboardResponse>(`/api/v1/leaderboard/inputs/${inputId}`),
     enabled: Boolean(inputId),
     staleTime: 60 * 1000,
-    retry: (failureCount, err) => {
-      const status = (err as { status?: number } | null)?.status;
-      if (status && status >= 400 && status < 500) return false;
-      return failureCount < 1;
-    },
+    retry: retryNon4xx,
   });
 }
 
@@ -157,11 +150,7 @@ export function useBattle(battleId: string | undefined) {
     queryFn: () => apiClient.get<Battle>(`/api/v1/battles/${battleId}`),
     enabled: Boolean(battleId),
     staleTime: 30 * 1000,
-    retry: (failureCount, err) => {
-      const status = (err as { status?: number } | null)?.status;
-      if (status && status >= 400 && status < 500) return false;
-      return failureCount < 1;
-    },
+    retry: retryNon4xx,
   });
 }
 
@@ -218,9 +207,13 @@ export interface StartBattleResponse {
 }
 
 export function useStartBattle() {
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: StartBattleInput) =>
       apiClient.post<StartBattleResponse>('/api/v1/battles', input),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['battles'] });
+    },
   });
 }
 
@@ -276,11 +269,7 @@ export function useTournament(id: string | undefined) {
     queryFn: () => apiClient.get<Tournament>(`/api/v1/tournaments/${id}`),
     enabled: Boolean(id),
     staleTime: 60 * 1000,
-    retry: (failureCount, err) => {
-      const status = (err as { status?: number } | null)?.status;
-      if (status && status >= 400 && status < 500) return false;
-      return failureCount < 1;
-    },
+    retry: retryNon4xx,
   });
 }
 
