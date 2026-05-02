@@ -188,7 +188,13 @@ export function createApp(deps: AppDeps): Hono<AppContext> {
     }),
   );
   if (deps.enableTestReset) {
-    app.route('/api/test', testRoutes({ db: deps.db }));
+    app.route(
+      '/api/test',
+      testRoutes({
+        db: deps.db,
+        ...(deps.orchestrator ? { orchestrator: deps.orchestrator } : {}),
+      }),
+    );
   }
   return app;
 }

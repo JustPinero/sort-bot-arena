@@ -337,7 +337,7 @@ describe('<TournamentSetupModal />', () => {
     await userEvent.click(escRadio);
     expect(escRadio.checked).toBe(true);
     expect(screen.getByTestId('input-mode-tooltip-escalation')).toHaveTextContent(
-      /per-match input selection/i,
+      /round 1 draws from small/i,
     );
 
     const random = screen.getByRole('button', { name: /random fill/i });

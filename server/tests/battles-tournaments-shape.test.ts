@@ -281,3 +281,197 @@ describe('GET /api/v1/tournaments/:id', () => {
     });
   });
 });
+
+// Slice D5 — when a row exists in `recent_tournaments` (i.e. the
+// tournament was created via our POST handler post-D4), the GET handler
+// reads from our DB instead of upstream. This tests the new path:
+// match status mapping, current_round computation, rounds_total derived
+// from bracket_size, and bye row rendering.
+describe('GET /api/v1/tournaments/:id — Slice D5 our-DB-driven path', () => {
+  it('reads from recent_tournaments + tournament_matches and maps match status correctly', async () => {
+    const t = await makeTestApp({ sortBotApiBaseUrl: UPSTREAM });
+
+    // Seed our DB directly. recordTournament + insertInitialMatches
+    // mirror what the POST handler does; we skip the HTTP path so the
+    // test is focused on the GET path's read shape.
+    const { recordTournament } = await import('../src/store/recent-tournaments.js');
+    const { insertInitialMatches, markInFlight, markComplete } = await import(
+      '../src/store/tournament-matches.js'
+    );
+
+    const tid = 'tour_d5_test_001';
+    await recordTournament(t.db, {
+      tournament_id: tid,
+      initiator_user_id: 'u1',
+      participant_count: 4,
+      bracket_size: 4,
+      input_mode: 'flat_random',
+      status: 'running',
+    });
+    await insertInitialMatches(t.db, tid, [
+      {
+        match_id: 'r1p0',
+        round: 1,
+        bracket_position: 0,
+        bot_a_id: 'bot_a',
+        bot_b_id: 'bot_b',
+        status: 'pending',
+        winner_bot_id: null,
+      },
+      {
+        match_id: 'r1p1',
+        round: 1,
+        bracket_position: 1,
+        bot_a_id: 'bot_c',
+        bot_b_id: 'bot_d',
+        status: 'pending',
+        winner_bot_id: null,
+      },
+    ]);
+    // Walk match 0 to in_flight, match 1 to complete.
+    await markInFlight(t.db, `${tid}_r1p0`, 'bat_x', '2026-05-01T00:00:00Z');
+    await markComplete(t.db, `${tid}_r1p1`, 'bot_c', '2026-05-01T00:01:00Z');
+
+    server.use(
+      http.get(`${UPSTREAM}/v1/bots/bot_a`, () => HttpResponse.json(botA)),
+      http.get(`${UPSTREAM}/v1/bots/bot_b`, () => HttpResponse.json(botB)),
+      http.get(`${UPSTREAM}/v1/bots/bot_c`, () =>
+        HttpResponse.json({ ...botA, id: 'bot_c', display_name: 'Charlie Bot' }),
+      ),
+      http.get(`${UPSTREAM}/v1/bots/bot_d`, () =>
+        HttpResponse.json({ ...botB, id: 'bot_d', display_name: 'Delta Bot' }),
+      ),
+    );
+
+    const res = await t.app.request(`/api/v1/tournaments/${tid}`);
+    expect(res.status).toBe(200);
+    const parsed = TournamentStrictSchema.parse(await res.json());
+
+    expect(parsed.id).toBe(tid);
+    expect(parsed.status).toBe('active');
+    expect(parsed.participant_count).toBe(4);
+    expect(parsed.rounds_total).toBe(2); // log2(4) = 2 rounds
+    expect(parsed.current_round).toBe(1); // R1 has non-pending rows
+    expect(parsed.champion_bot_id).toBeNull();
+
+    expect(parsed.participants).toHaveLength(4);
+    expect(parsed.participants.map((p) => p.bot_id).sort()).toEqual([
+      'bot_a',
+      'bot_b',
+      'bot_c',
+      'bot_d',
+    ]);
+
+    expect(parsed.matches).toHaveLength(2);
+    const inFlight = parsed.matches.find((m) => m.fighter_a_bot_id === 'bot_a');
+    const complete = parsed.matches.find((m) => m.fighter_a_bot_id === 'bot_c');
+    expect(inFlight?.status).toBe('live'); // in_flight → live
+    expect(inFlight?.battle_id).toBe('bat_x');
+    expect(complete?.status).toBe('completed'); // complete → completed
+    expect(complete?.winner_bot_id).toBe('bot_c');
+  });
+
+  it('maps a bye row to status=bye and a 6-bracket to rounds_total=3', async () => {
+    const t = await makeTestApp({ sortBotApiBaseUrl: UPSTREAM });
+
+    const { recordTournament } = await import('../src/store/recent-tournaments.js');
+    const { insertInitialMatches } = await import('../src/store/tournament-matches.js');
+
+    const tid = 'tour_d5_test_bye';
+    await recordTournament(t.db, {
+      tournament_id: tid,
+      initiator_user_id: 'u1',
+      participant_count: 6,
+      bracket_size: 6,
+      input_mode: 'escalation',
+      status: 'pending',
+    });
+    // 6-bracket: 2 R1 matches + 2 byes (top seeds advance free)
+    await insertInitialMatches(t.db, tid, [
+      {
+        match_id: 'r1bye0',
+        round: 1,
+        bracket_position: 0,
+        bot_a_id: 'bot_a',
+        bot_b_id: null,
+        status: 'bye',
+        winner_bot_id: 'bot_a',
+      },
+      {
+        match_id: 'r1p1',
+        round: 1,
+        bracket_position: 1,
+        bot_a_id: 'bot_b',
+        bot_b_id: 'bot_c',
+        status: 'pending',
+        winner_bot_id: null,
+      },
+    ]);
+
+    server.use(
+      http.get(`${UPSTREAM}/v1/bots/bot_a`, () => HttpResponse.json(botA)),
+      http.get(`${UPSTREAM}/v1/bots/bot_b`, () => HttpResponse.json(botB)),
+      http.get(`${UPSTREAM}/v1/bots/bot_c`, () =>
+        HttpResponse.json({ ...botA, id: 'bot_c', display_name: 'Charlie Bot' }),
+      ),
+    );
+
+    const res = await t.app.request(`/api/v1/tournaments/${tid}`);
+    expect(res.status).toBe(200);
+    const parsed = TournamentStrictSchema.parse(await res.json());
+
+    expect(parsed.status).toBe('upcoming');
+    expect(parsed.rounds_total).toBe(3); // log2(6) ceil = 3 rounds
+    expect(parsed.current_round).toBe(1); // bye row counts as a non-pending R1 cell
+
+    const byeMatch = parsed.matches.find((m) => m.fighter_b_bot_id === null);
+    expect(byeMatch?.status).toBe('bye');
+    expect(byeMatch?.winner_bot_id).toBe('bot_a');
+  });
+
+  it('reports champion_bot_id once the recent_tournaments row is marked complete', async () => {
+    const t = await makeTestApp({ sortBotApiBaseUrl: UPSTREAM });
+
+    const { recordTournament, markComplete: markTournamentComplete } = await import(
+      '../src/store/recent-tournaments.js'
+    );
+    const { insertInitialMatches, markComplete: markMatchComplete } = await import(
+      '../src/store/tournament-matches.js'
+    );
+
+    const tid = 'tour_d5_test_champ';
+    await recordTournament(t.db, {
+      tournament_id: tid,
+      initiator_user_id: 'u1',
+      participant_count: 4,
+      bracket_size: 4,
+      input_mode: 'flat_random',
+      status: 'running',
+    });
+    await insertInitialMatches(t.db, tid, [
+      {
+        match_id: 'r1p0',
+        round: 1,
+        bracket_position: 0,
+        bot_a_id: 'bot_a',
+        bot_b_id: 'bot_b',
+        status: 'pending',
+        winner_bot_id: null,
+      },
+    ]);
+    await markMatchComplete(t.db, `${tid}_r1p0`, 'bot_a', '2026-05-01T00:01:00Z');
+    await markTournamentComplete(t.db, tid, 'bot_a');
+
+    server.use(
+      http.get(`${UPSTREAM}/v1/bots/bot_a`, () => HttpResponse.json(botA)),
+      http.get(`${UPSTREAM}/v1/bots/bot_b`, () => HttpResponse.json(botB)),
+    );
+
+    const res = await t.app.request(`/api/v1/tournaments/${tid}`);
+    expect(res.status).toBe(200);
+    const parsed = TournamentStrictSchema.parse(await res.json());
+
+    expect(parsed.status).toBe('completed');
+    expect(parsed.champion_bot_id).toBe('bot_a');
+  });
+});

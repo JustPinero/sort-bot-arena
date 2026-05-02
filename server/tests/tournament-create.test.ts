@@ -38,7 +38,10 @@ function upstreamCreateTournamentResponse(tournamentId: string, participantCount
 }
 
 async function signedUpApp(opts?: {
-  orchestrator?: { schedule: (id: string) => Promise<void> };
+  orchestrator?: {
+    schedule: (id: string) => Promise<void>;
+    advanceMatch: (matchRow: unknown) => Promise<void>;
+  };
 }) {
   server.use(
     http.post(`${UPSTREAM}/v1/users`, () =>
@@ -437,6 +440,7 @@ describe('POST /api/v1/tournaments', () => {
         schedule: async (id: string): Promise<void> => {
           scheduleCalls.push(id);
         },
+        advanceMatch: async (): Promise<void> => {},
       };
       const { t, cookie } = await signedUpApp({ orchestrator });
       server.use(

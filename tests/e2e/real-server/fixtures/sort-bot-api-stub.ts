@@ -96,10 +96,10 @@ function fixtureProfile(id: string, displayName: string): Record<string, unknown
 // display_name, which breaks the BotProfilePage assertion.
 const submittedBots = new Map<string, { display_name: string; language: string }>();
 
-// Pre-seeded fighters used by the login-battle-fight-end spec (G3).
-// Two bots are the minimum the BotSlotPicker needs to enable the
-// "Start match" button. Names are descriptive so the spec can
-// disambiguate the red vs blue corner picks if it ever needs to.
+// Pre-seeded fighters used by the login-battle-fight-end spec (G3) and
+// the tournament-escalation spec (G6). The first two satisfy a 2-slot
+// BotSlotPicker; the full 8 satisfy a default (bracket_size=8) tournament
+// without any further submissions.
 const PRESEEDED_BOTS: Array<{
   bot_id: string;
   display_name: string;
@@ -107,6 +107,12 @@ const PRESEEDED_BOTS: Array<{
 }> = [
   { bot_id: 'bot_e2e_red', display_name: 'Red Mauler', language: 'python' },
   { bot_id: 'bot_e2e_blue', display_name: 'Blue Crusher', language: 'node' },
+  { bot_id: 'bot_e2e_3', display_name: 'Cobra Strike', language: 'python' },
+  { bot_id: 'bot_e2e_4', display_name: 'Dragonfly', language: 'node' },
+  { bot_id: 'bot_e2e_5', display_name: 'Eclipse Hawk', language: 'python' },
+  { bot_id: 'bot_e2e_6', display_name: 'Fury Sentinel', language: 'node' },
+  { bot_id: 'bot_e2e_7', display_name: 'Gale Reaper', language: 'python' },
+  { bot_id: 'bot_e2e_8', display_name: 'Hailstorm', language: 'node' },
 ];
 for (const b of PRESEEDED_BOTS) {
   submittedBots.set(b.bot_id, { display_name: b.display_name, language: b.language });
@@ -123,6 +129,24 @@ interface StubBattleState {
   created_at: string;
 }
 let lastBattle: StubBattleState | null = null;
+
+// In-memory list of uploaded inputs so the arena server's GET
+// /v1/inputs (called from `useInputs` to populate the Manual tab in
+// the MatchSetupModal) can return whatever the upload form just
+// minted. Shape matches `ApiInput` in
+// server/src/clients/sort-bot-api/types.ts — the arena server
+// normalizes these into `InputSummary` items keyed by stringified id.
+interface StubInputState {
+  id: number;
+  size_class: 'small' | 'medium' | 'large';
+  case_index: number;
+  array_len: number;
+  is_custom: boolean;
+  uploader_id: string | null;
+  created_at: string;
+}
+const uploadedInputs: StubInputState[] = [];
+let nextInputId = 1_000_000;
 
 const routes: StubRoute[] = [
   // Health probes (the arena server's /api/readyz pings upstream /healthz).
@@ -172,7 +196,7 @@ const routes: StubRoute[] = [
     method: 'GET',
     match: (p) => p === '/v1/inputs',
     handler: (_req, res) => {
-      json(res, 200, { inputs: [], total: 0 });
+      json(res, 200, { inputs: uploadedInputs, total: uploadedInputs.length });
     },
   },
   {
@@ -241,6 +265,38 @@ const routes: StubRoute[] = [
       const id = `bot_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
       submittedBots.set(id, { display_name: displayName, language });
       json(res, 201, fixtureBot(id, displayName, language));
+    },
+  },
+  // Custom-input upload. The arena server forwards a multipart/form-data
+  // body (file = serialized values, optional name) to /v1/inputs. We
+  // drain the body without parsing the multipart payload — the wire
+  // format is covered by contract-drift tests — and mint a fresh
+  // `ApiInput`-shaped record. The new id is appended to the in-memory
+  // `uploadedInputs` list so the next GET /v1/inputs returns it (which
+  // is what populates the Manual tab in the MatchSetupModal after the
+  // FE invalidates the inputs query on upload success).
+  {
+    method: 'POST',
+    match: (p) => p === '/v1/inputs',
+    handler: async (req, res) => {
+      const buffers: Buffer[] = [];
+      await new Promise<void>((resolve, reject) => {
+        req.on('data', (c: Buffer) => buffers.push(c));
+        req.on('end', () => resolve());
+        req.on('error', reject);
+      });
+      const id = nextInputId++;
+      const minted: StubInputState = {
+        id,
+        size_class: 'small',
+        case_index: uploadedInputs.length,
+        array_len: 5,
+        is_custom: true,
+        uploader_id: 'user_stub',
+        created_at: new Date().toISOString(),
+      };
+      uploadedInputs.push(minted);
+      json(res, 201, minted);
     },
   },
   // Per-bot profile, analysis, rank-history. Order matters — these
@@ -313,6 +369,25 @@ const routes: StubRoute[] = [
           (remembered?.language as 'python' | 'node' | 'binary') ?? 'python',
         ),
       );
+    },
+  },
+  // Tournament creation — returns a `CreateTournamentResponse` shape
+  // per server/src/clients/sort-bot-api/types.ts. The arena server's
+  // POST /api/v1/tournaments forwards a small participant_bot_ids+count
+  // body here and uses the returned `tournament_id` to seed
+  // recent_tournaments + tournament_matches and to redirect the FE.
+  // Slice G6 added this so the orchestrator can walk a real bracket
+  // end-to-end against the stub.
+  {
+    method: 'POST',
+    match: (p) => p === '/v1/tournaments',
+    handler: async (_req, res) => {
+      const tournament_id = `tour_e2e_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+      json(res, 201, {
+        tournament_id,
+        status: 'pending',
+        created_at: new Date().toISOString(),
+      });
     },
   },
   // Battle creation — returns a `CreateBattleResponse` shape per

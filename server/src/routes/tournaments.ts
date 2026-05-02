@@ -7,17 +7,22 @@ import { SortBotApiError } from '../clients/sort-bot-api/index.js';
 import { log } from '../lib/log.js';
 import { nicknameFor } from '../persona/nicknames.js';
 import {
+  getById as getRecentTournamentById,
   listRecent as listRecentTournaments,
   recordTournament,
+  type RecentTournamentRow,
 } from '../store/recent-tournaments.js';
-import { insertInitialMatches } from '../store/tournament-matches.js';
+import {
+  insertInitialMatches,
+  listAllForTournament,
+  type TournamentMatchRow,
+} from '../store/tournament-matches.js';
 import { buildInitialBracket, type BracketSize } from '../synthesize/bracket.js';
 
 import type { AppContext } from '../auth/middleware.js';
 import type {
   ApiBot,
   SortBotApiClient,
-  TournamentMatch as UpstreamMatch,
   TournamentSummary,
 } from '../clients/sort-bot-api/index.js';
 import type { PersonaService } from '../persona/service.js';
@@ -26,9 +31,24 @@ import type { Client } from '@libsql/client';
 
 // Slice D4 — Structural type for the orchestrator handle the route
 // holds. Lets tests pass a spy/stub without standing up the full
-// orchestrator core.
+// orchestrator core. `advanceMatch` is exposed so the test-only
+// `/api/test/advance-match` endpoint (slice D5/G6) can drive the
+// listener path without spinning up the actual SSE listener.
 export interface OrchestratorHandle {
   schedule(tournamentId: string): Promise<void>;
+  advanceMatch(matchRow: {
+    match_id: string;
+    tournament_id: string;
+    round: number;
+    bracket_position: number;
+    bot_a_id: string | null;
+    bot_b_id: string | null;
+    battle_id: string | null;
+    status: 'pending' | 'in_flight' | 'complete' | 'failed' | 'bye';
+    winner_bot_id: string | null;
+    scheduled_at: string | null;
+    completed_at: string | null;
+  }): Promise<void>;
 }
 
 type TournamentStatus = 'upcoming' | 'active' | 'completed';
@@ -74,13 +94,31 @@ function mapStatus(upstream: TournamentSummary['status']): TournamentStatus {
   return 'completed';
 }
 
-function deriveMatchStatus(m: UpstreamMatch): MatchStatus {
-  if (m.winner_bot_id !== null) return 'completed';
-  const hasA = m.bot_a_id !== null;
-  const hasB = m.bot_b_id !== null;
-  if (hasA && hasB) return 'live';
-  if (hasA !== hasB) return 'bye';
-  return 'pending';
+// Slice D5 — tournament_matches uses a richer 5-state machine
+// (pending/in_flight/complete/failed/bye) while the FE Tournament
+// schema's match status is the 4-state {pending, live, completed, bye}.
+// Mapping rules:
+//   - 'in_flight' → 'live' (battle running upstream)
+//   - 'complete'  → 'completed' (winner_bot_id populated)
+//   - 'failed'    → 'completed' with no winner; the FE doesn't render
+//                   a separate "failed" indicator and the bracket-level
+//                   status='failed' on recent_tournaments tells the user
+//                   the tournament itself didn't finish.
+//   - 'bye' / 'pending' pass through verbatim.
+function mapMatchStatus(status: TournamentMatchRow['status']): MatchStatus {
+  if (status === 'in_flight') return 'live';
+  if (status === 'complete' || status === 'failed') return 'completed';
+  return status;
+}
+
+// Total rounds is fixed by bracket_size, not by how many rows have been
+// materialized in tournament_matches yet. round 1 alone is seeded by
+// `buildInitialBracket`; round 2+ rows are created lazily as winners
+// advance. Computing from bracket_size keeps `rounds_total` stable on
+// the bracket page from the moment a tournament is created.
+function roundsTotalFor(bracketSize: number): number {
+  if (bracketSize <= 1) return 0;
+  return Math.ceil(Math.log2(bracketSize));
 }
 
 function buildParticipant(bot: ApiBot, persona: BotPersonaRow | null): TournamentParticipant {
@@ -90,6 +128,77 @@ function buildParticipant(bot: ApiBot, persona: BotPersonaRow | null): Tournamen
     display_name: bot.display_name,
     language: bot.language,
     portrait_url: persona?.portrait_url ?? null,
+  };
+}
+
+// Slice D5 — assembles the rich `Tournament` payload from our DB rows.
+// Maps recent_tournaments + tournament_matches into the FE shape, fans
+// out per-bot getBot+persona calls in parallel, and computes total/
+// current round from bracket_size and the materialized match rows.
+async function buildTournamentPayload(
+  deps: { db: Client; sortBotApi: SortBotApiClient; persona: PersonaService },
+  id: string,
+  recent: RecentTournamentRow,
+  matches: TournamentMatchRow[],
+): Promise<Tournament> {
+  const participantIds = Array.from(
+    new Set(
+      matches.flatMap((m) =>
+        [m.bot_a_id, m.bot_b_id].filter((x): x is string => typeof x === 'string'),
+      ),
+    ),
+  );
+
+  const participants = await Promise.all(
+    participantIds.map(async (botId) => {
+      const [bot, persona] = await Promise.all([
+        deps.sortBotApi.getBot(botId),
+        deps.persona.get(botId).catch(() => null),
+      ]);
+      return buildParticipant(bot, persona);
+    }),
+  );
+
+  const mappedMatches: TournamentMatch[] = matches.map((m) => ({
+    id: m.match_id,
+    round: m.round,
+    position: m.bracket_position,
+    fighter_a_bot_id: m.bot_a_id,
+    fighter_b_bot_id: m.bot_b_id,
+    winner_bot_id: m.winner_bot_id,
+    status: mapMatchStatus(m.status),
+    battle_id: m.battle_id,
+  }));
+
+  // Active round = highest round that already has at least one
+  // non-pending match. A 4-bracket with both R1 matches in_flight =>
+  // current_round=1; once both R1s complete and R2 is materialized
+  // pending => still 1 until the final fires.
+  const currentRound = matches.reduce((max, m) => {
+    if (m.status === 'pending') return max;
+    return Math.max(max, m.round);
+  }, 0);
+
+  const tournamentStatus: TournamentStatus =
+    recent.status === 'pending'
+      ? 'upcoming'
+      : recent.status === 'running'
+        ? 'active'
+        : 'completed';
+
+  return {
+    id,
+    name: `Tournament ${id.slice(0, 8)}`,
+    status: tournamentStatus,
+    participant_count: recent.participant_count,
+    weight_class_filter: null,
+    prize_description: null,
+    scheduled_at: recent.created_at,
+    rounds_total: roundsTotalFor(recent.bracket_size),
+    current_round: currentRound,
+    champion_bot_id: recent.winner_bot_id,
+    matches: mappedMatches,
+    participants,
   };
 }
 
@@ -269,8 +378,23 @@ export function tournamentsRoutes(deps: {
     },
   );
 
+  // Slice D5 — read-side flips from upstream-driven to our-DB-driven.
+  // The orchestrator (D3 + D4) is now the source of truth for bracket
+  // state; reading from `tournament_matches` is what makes the bracket
+  // page reflect orchestrator advancement (in_flight → completed →
+  // next-round materialization). Upstream's `getTournament` is only
+  // used as a fallback for legacy tournaments that have no row in our
+  // `recent_tournaments` table.
   r.get('/:id', async (c) => {
     const id = c.req.param('id');
+
+    const recent = await getRecentTournamentById(deps.db, id);
+    if (recent) {
+      const matches = await listAllForTournament(deps.db, id);
+      return c.json(await buildTournamentPayload(deps, id, recent, matches));
+    }
+
+    // Legacy fallback — pre-D4 tournaments live only upstream.
     try {
       const { tournament, matches } = await deps.sortBotApi.getTournament(id);
 
@@ -298,16 +422,28 @@ export function tournamentsRoutes(deps: {
         0,
       );
 
-      const mappedMatches: TournamentMatch[] = matches.map((m) => ({
-        id: String(m.id),
-        round: m.round,
-        position: m.bracket_position,
-        fighter_a_bot_id: m.bot_a_id,
-        fighter_b_bot_id: m.bot_b_id,
-        winner_bot_id: m.winner_bot_id,
-        status: deriveMatchStatus(m),
-        battle_id: m.battle_id,
-      }));
+      const mappedMatches: TournamentMatch[] = matches.map((m) => {
+        const hasA = m.bot_a_id !== null;
+        const hasB = m.bot_b_id !== null;
+        const status: MatchStatus =
+          m.winner_bot_id !== null
+            ? 'completed'
+            : hasA && hasB
+              ? 'live'
+              : hasA !== hasB
+                ? 'bye'
+                : 'pending';
+        return {
+          id: String(m.id),
+          round: m.round,
+          position: m.bracket_position,
+          fighter_a_bot_id: m.bot_a_id,
+          fighter_b_bot_id: m.bot_b_id,
+          winner_bot_id: m.winner_bot_id,
+          status,
+          battle_id: m.battle_id,
+        };
+      });
 
       const payload: Tournament = {
         id: tournament.id,

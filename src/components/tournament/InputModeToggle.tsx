@@ -6,7 +6,7 @@ export type TournamentInputMode = 'flat_random' | 'escalation';
 const FLAT_RANDOM_TIP = 'Every match draws 3 random inputs from the full pool of 57.';
 
 const ESCALATION_TIP =
-  'Round-by-round size scaling — coming once sort-bot-api supports per-match input selection. For now both modes use 3 random inputs from the full pool.';
+  'Round 1 draws from small inputs only, round 2 from medium, round 3+ from large. Falls back to the next size class when a class is short on inputs.';
 
 interface InputModeToggleProps {
   value: TournamentInputMode;
