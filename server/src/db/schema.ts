@@ -128,4 +128,25 @@ export const migrations: ReadonlyArray<{ id: string; sql: string }> = [
         ON uploaded_inputs (uploader_user_id, created_at DESC);
     `,
   },
+  {
+    id: '0010_tournament_matches',
+    sql: `
+      CREATE TABLE IF NOT EXISTS tournament_matches (
+        match_id              TEXT    PRIMARY KEY,
+        tournament_id         TEXT    NOT NULL,
+        round                 INTEGER NOT NULL,
+        bracket_position      INTEGER NOT NULL,
+        bot_a_id              TEXT,
+        bot_b_id              TEXT,
+        battle_id             TEXT,
+        status                TEXT    NOT NULL,
+        winner_bot_id         TEXT,
+        scheduled_at          TEXT,
+        completed_at          TEXT,
+        FOREIGN KEY (tournament_id) REFERENCES recent_tournaments(tournament_id) ON DELETE CASCADE
+      );
+      CREATE INDEX IF NOT EXISTS idx_tm_tournament_round ON tournament_matches(tournament_id, round, bracket_position);
+      CREATE INDEX IF NOT EXISTS idx_tm_status_scheduled ON tournament_matches(status, scheduled_at);
+    `,
+  },
 ];

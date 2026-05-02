@@ -9,6 +9,8 @@ import { loadEnv } from './env.js';
 import { CACHE_PRUNE_INTERVAL_MS } from './lib/cache-ttl.js';
 import { log } from './lib/log.js';
 import { initSentry } from './lib/sentry.js';
+import { BattleSweeper } from './listener/battle-sweep.js';
+import { GlobalEventListener } from './listener/global-listener.js';
 import { AnthropicClient } from './persona/anthropic.js';
 import { LeonardoClient } from './persona/leonardo.js';
 import { PersonaService } from './persona/service.js';
@@ -65,6 +67,24 @@ async function bootstrap(): Promise<void> {
       });
   }, CACHE_PRUNE_INTERVAL_MS);
   pruneHandle.unref();
+
+  // Slice C3 (D-10) — reconcile orphaned recent_battles.status='running'
+  // rows whose upstream battle has long since completed. Belt-and-suspenders
+  // for the cooldown rule until the global SSE listener (D-8) ships.
+  new BattleSweeper({ db, sortBotApi }).start();
+
+  // Slice C4 (D-8) — reactive `running → complete` transitions via the
+  // upstream `/v1/events/stream`. Single-instance per environment (Railway
+  // single-replica + RUN_LISTENER set on exactly that replica). The 60s
+  // sweep above is the safety net for events lost during reconnect windows.
+  // The `listener` reference is retained so slice C5 can wire it into
+  // `/api/readyz` for health introspection.
+  const listener = new GlobalEventListener({
+    db,
+    sortBotApiUrl: env.SORT_BOT_API_URL,
+    runListener: env.RUN_LISTENER,
+  });
+  listener.start();
 
   serve({ fetch: app.fetch, port: env.PORT }, (info) => {
     log.info({ port: info.port }, 'sort-bot-arena server listening');

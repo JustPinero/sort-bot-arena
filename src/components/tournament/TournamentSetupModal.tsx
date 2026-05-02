@@ -11,10 +11,9 @@ import {
   DialogContent,
   DialogDescription,
   DialogTitle,
-  DialogTrigger,
+  DialogTriggerButton,
 } from '@/components/ui/dialog';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { cn } from '@/lib/cn';
 
 import { BotTilePicker } from './BotTilePicker';
 import { type BracketSize, pickRandomBots } from './bracket';
@@ -115,25 +114,14 @@ export function TournamentSetupModal({
   return (
     <TooltipProvider delayDuration={150}>
       <Dialog open={open} onOpenChange={handleOpenChange}>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <span className="inline-flex">
-              <DialogTrigger asChild>
-                <button
-                  type="button"
-                  className={cn(
-                    'inline-flex h-8 items-center rounded-sm px-3 font-mono text-xs font-bold uppercase tracking-wide bg-tech text-black hover:opacity-90',
-                    triggerClassName,
-                  )}
-                  data-testid="setup-tournament-cta"
-                >
-                  {triggerLabel}
-                </button>
-              </DialogTrigger>
-            </span>
-          </TooltipTrigger>
-          <TooltipContent>Open the tournament builder to pick a bracket.</TooltipContent>
-        </Tooltip>
+        <DialogTriggerButton
+          variant="combat"
+          tooltip="Open the tournament builder to pick a bracket."
+          testId="setup-tournament-cta"
+          className={triggerClassName}
+        >
+          {triggerLabel}
+        </DialogTriggerButton>
         <DialogContent className="max-w-3xl">
           <header className="flex flex-col gap-1">
             <DialogTitle>Setup a tournament</DialogTitle>

@@ -97,6 +97,7 @@ describe('phase 9 schema migrations', () => {
       '0007_recent_battles',
       '0008_recent_tournaments',
       '0009_uploaded_inputs',
+      '0010_tournament_matches',
     ]);
   });
 

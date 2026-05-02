@@ -11,7 +11,7 @@ import {
   DialogContent,
   DialogDescription,
   DialogTitle,
-  DialogTrigger,
+  DialogTriggerButton,
 } from '@/components/ui/dialog';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
@@ -35,18 +35,14 @@ export function MatchSetupModal({
   return (
     <TooltipProvider delayDuration={150}>
       <Dialog open={open} onOpenChange={setOpen}>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <span className="inline-flex">
-              <DialogTrigger asChild>
-                <Button variant="combat" className={triggerClassName} data-testid="setup-match-cta">
-                  {triggerLabel}
-                </Button>
-              </DialogTrigger>
-            </span>
-          </TooltipTrigger>
-          <TooltipContent>Open the match builder to pick fighters and inputs.</TooltipContent>
-        </Tooltip>
+        <DialogTriggerButton
+          variant="combat"
+          tooltip="Open the match builder to pick fighters and inputs."
+          testId="setup-match-cta"
+          className={triggerClassName}
+        >
+          {triggerLabel}
+        </DialogTriggerButton>
         <DialogContent className="max-w-2xl">
           <MatchSetupForm onClose={() => setOpen(false)} />
         </DialogContent>

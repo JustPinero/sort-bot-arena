@@ -1,3 +1,5 @@
+import type { ZodType } from 'zod';
+
 import { config } from './config';
 
 const DEFAULT_TIMEOUT_MS = 15_000;
@@ -40,6 +42,7 @@ export interface RequestOptions {
   signal?: AbortSignal;
   skipAuth?: boolean;
   headers?: Record<string, string>;
+  schema?: ZodType<unknown>;
 }
 
 interface ErrorEnvelope {
@@ -123,7 +126,20 @@ async function request<T>(
   }
 
   if (response.status === 204) return undefined as T;
-  return (await response.json()) as T;
+  const raw: unknown = await response.json();
+  if (opts?.schema) {
+    const parsed = opts.schema.safeParse(raw);
+    if (!parsed.success) {
+      throw new ApiError({
+        status: 0,
+        code: 'malformed_response',
+        message: `${path}: ${parsed.error.issues[0]?.message ?? 'response did not match schema'}`,
+        retryable: false,
+      });
+    }
+    return parsed.data as T;
+  }
+  return raw as T;
 }
 
 export const apiClient = {

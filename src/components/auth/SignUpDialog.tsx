@@ -3,8 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { login, signup } from '@/api/auth';
 import { ApiError } from '@/api/client';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/dialog';
-import { cn } from '@/lib/cn';
+import { Dialog, DialogContent, DialogTriggerButton } from '@/components/ui/dialog';
 
 type Mode = 'signup' | 'login';
 
@@ -50,18 +49,13 @@ export function SignUpDialog({ triggerLabel = 'Sign up', triggerClassName }: Sig
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <button
-          type="button"
-          className={cn(
-            'inline-flex h-8 items-center rounded-sm px-3 font-mono text-xs font-bold uppercase tracking-wide bg-hazard text-black hover:opacity-90',
-            triggerClassName,
-          )}
-          data-testid="signup-cta"
-        >
-          {triggerLabel}
-        </button>
-      </DialogTrigger>
+      <DialogTriggerButton
+        variant="combat"
+        testId="signup-cta"
+        className={triggerClassName}
+      >
+        {triggerLabel}
+      </DialogTriggerButton>
       <DialogContent>
         <form onSubmit={onSubmit} className="flex flex-col gap-4">
           <header>
