@@ -22,8 +22,13 @@ import {
 const BASE = 'http://api.test';
 
 export const defaultHandlers = [
-  http.get(`${BASE}/api/healthz`, () =>
-    HttpResponse.json({ status: 'ok' }, { headers: { 'X-Request-Id': 'req-health-1' } }),
+  http.get(
+    `${BASE}/api/healthz`,
+    () =>
+      new HttpResponse('ok', {
+        status: 200,
+        headers: { 'Content-Type': 'text/plain', 'X-Request-Id': 'req-health-1' },
+      }),
   ),
 
   http.post(`${BASE}/api/v1/auth/signup`, async ({ request }) => {
@@ -143,7 +148,20 @@ export const defaultHandlers = [
     };
     if (!body.values || body.values.length === 0) {
       return HttpResponse.json(
-        { error: 'invalid input', code: 'validation_failed' },
+        {
+          error: 'bad_field',
+          issues: [
+            {
+              code: 'too_small',
+              minimum: 1,
+              type: 'array',
+              inclusive: true,
+              exact: false,
+              message: 'Array must contain at least 1 element(s)',
+              path: ['values'],
+            },
+          ],
+        },
         { status: 400 },
       );
     }
@@ -190,9 +208,18 @@ export const defaultHandlers = [
     if (!body.display_name) {
       return HttpResponse.json(
         {
-          error: 'invalid input',
-          code: 'validation_failed',
-          fields: [{ path: 'display_name', message: 'must be ≥ 1 char' }],
+          error: 'bad_field',
+          issues: [
+            {
+              code: 'too_small',
+              minimum: 1,
+              type: 'string',
+              inclusive: true,
+              exact: false,
+              message: 'String must contain at least 1 character(s)',
+              path: ['display_name'],
+            },
+          ],
         },
         { status: 400 },
       );
@@ -200,9 +227,18 @@ export const defaultHandlers = [
     if (!body.source || body.source.length < 10) {
       return HttpResponse.json(
         {
-          error: 'invalid source',
-          code: 'validation_failed',
-          fields: [{ path: 'source', message: 'must be at least 10 characters' }],
+          error: 'bad_field',
+          issues: [
+            {
+              code: 'too_small',
+              minimum: 1,
+              type: 'string',
+              inclusive: true,
+              exact: false,
+              message: 'String must contain at least 1 character(s)',
+              path: ['source'],
+            },
+          ],
         },
         { status: 400 },
       );

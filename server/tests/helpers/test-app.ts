@@ -1,6 +1,6 @@
 import { createClient, type Client } from '@libsql/client';
 
-import { createApp } from '../../src/app.js';
+import { createApp, type ListenerHealth } from '../../src/app.js';
 import { SortBotApiClient } from '../../src/clients/sort-bot-api/index.js';
 import { runMigrations } from '../../src/db/migrate.js';
 import { PersonaService } from '../../src/persona/service.js';
@@ -16,6 +16,10 @@ export interface TestApp {
 export async function makeTestApp(opts?: {
   sortBotApiBaseUrl?: string;
   persona?: PersonaService;
+  // Optional listener stub for /api/readyz tests. Pass `null` to mirror
+  // the production RUN_LISTENER=false posture; pass a stub to assert
+  // running-state surface.
+  listener?: ListenerHealth | null;
 }): Promise<TestApp> {
   const db = createClient({ url: ':memory:' });
   await runMigrations(db);
@@ -34,6 +38,7 @@ export async function makeTestApp(opts?: {
     persona,
     sessionSecret,
     cookieSecure: false,
+    ...(opts && 'listener' in opts ? { listener: opts.listener } : {}),
   });
   return { app, db, sortBotApi, persona, sessionSecret };
 }

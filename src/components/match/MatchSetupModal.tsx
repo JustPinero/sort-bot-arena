@@ -2,8 +2,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { ApiError } from '@/api/client';
-import { useInputs, useLeaderboard, useStartBattle } from '@/api/queries';
-import type { InputSummary, LeaderboardEntry } from '@/api/types';
+import { useEligibleFighters } from '@/api/eligible-fighters';
+import { useInputs, useStartBattle } from '@/api/queries';
+import type { InputSummary } from '@/api/types';
 import { LoadingGear } from '@/components/LoadingGear';
 import { Button } from '@/components/ui/button';
 import {
@@ -57,12 +58,7 @@ interface MatchSetupFormProps {
 
 function MatchSetupForm({ onClose }: MatchSetupFormProps) {
   const navigate = useNavigate();
-  const leaderboard = useLeaderboard({
-    weight: 'all',
-    activity: 'all',
-    language: null,
-    sort: 'rank',
-  });
+  const eligibleFighters = useEligibleFighters();
   const inputsQuery = useInputs();
   const startBattle = useStartBattle();
 
@@ -74,7 +70,7 @@ function MatchSetupForm({ onClose }: MatchSetupFormProps) {
   const [extraInputs, setExtraInputs] = useState<InputSummary[]>([]);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  const bots: LeaderboardEntry[] = leaderboard.data?.items ?? [];
+  const bots = eligibleFighters.fighters;
 
   const allInputs = useMemo(() => {
     const base = inputsQuery.data?.items ?? [];
@@ -151,8 +147,8 @@ function MatchSetupForm({ onClose }: MatchSetupFormProps) {
         onChangeRed={setRedBotId}
         onChangeBlue={setBlueBotId}
         bots={bots}
-        isLoading={leaderboard.isLoading}
-        error={leaderboard.isError}
+        isLoading={eligibleFighters.isLoading}
+        error={eligibleFighters.isError}
       />
 
       {redBotId && blueBotId && redBotId === blueBotId ? (

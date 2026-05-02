@@ -97,8 +97,10 @@ describe('apiClient', () => {
 
   describe('happy path', () => {
     it('returns the parsed JSON body on 2xx', async () => {
-      const body = await apiClient.get<{ status: string }>('/api/healthz');
-      expect(body.status).toBe('ok');
+      // `/api/healthz` returns text/plain on the deployed server, so we
+      // exercise the JSON happy-path against a JSON endpoint instead.
+      const body = await apiClient.get<{ id: string; email: string }>('/api/v1/auth/me');
+      expect(body.email).toBe('test@example.com');
     });
 
     it('serializes JSON request bodies and sets Content-Type', async () => {

@@ -45,6 +45,20 @@ async function bootstrap(): Promise<void> {
     },
     'persona generators wired',
   );
+  // Slice C4 (D-8) — reactive `running → complete` transitions via the
+  // upstream `/v1/events/stream`. Single-instance per environment (Railway
+  // single-replica + RUN_LISTENER set on exactly that replica). The 60s
+  // sweep below is the safety net for events lost during reconnect windows.
+  // Constructed before `createApp` so its health getters can be passed
+  // into `/api/readyz` (slice C5). When RUN_LISTENER=false the instance
+  // is still constructed — `start()` is a no-op and `isRunning()` stays
+  // false, which is exactly what readyz wants to surface.
+  const listener = new GlobalEventListener({
+    db,
+    sortBotApiUrl: env.SORT_BOT_API_URL,
+    runListener: env.RUN_LISTENER,
+  });
+
   const app = createApp({
     db,
     sortBotApi,
@@ -55,6 +69,7 @@ async function bootstrap(): Promise<void> {
     allowedOrigins: env.ALLOWED_ORIGINS.split(',')
       .map((s) => s.trim())
       .filter(Boolean),
+    listener: env.RUN_LISTENER ? listener : null,
   });
 
   const pruneHandle = setInterval(() => {
@@ -70,20 +85,9 @@ async function bootstrap(): Promise<void> {
 
   // Slice C3 (D-10) — reconcile orphaned recent_battles.status='running'
   // rows whose upstream battle has long since completed. Belt-and-suspenders
-  // for the cooldown rule until the global SSE listener (D-8) ships.
+  // for the cooldown rule when the listener misses an event.
   new BattleSweeper({ db, sortBotApi }).start();
 
-  // Slice C4 (D-8) — reactive `running → complete` transitions via the
-  // upstream `/v1/events/stream`. Single-instance per environment (Railway
-  // single-replica + RUN_LISTENER set on exactly that replica). The 60s
-  // sweep above is the safety net for events lost during reconnect windows.
-  // The `listener` reference is retained so slice C5 can wire it into
-  // `/api/readyz` for health introspection.
-  const listener = new GlobalEventListener({
-    db,
-    sortBotApiUrl: env.SORT_BOT_API_URL,
-    runListener: env.RUN_LISTENER,
-  });
   listener.start();
 
   serve({ fetch: app.fetch, port: env.PORT }, (info) => {

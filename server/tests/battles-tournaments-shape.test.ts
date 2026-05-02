@@ -2,6 +2,11 @@ import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
+import {
+  BattleStrictSchema,
+  CursorPageSchema,
+  TournamentStrictSchema,
+} from '../../src/api/schemas.js';
 import { makeTestApp } from './helpers/test-app.js';
 
 const UPSTREAM = 'http://api.test';
@@ -90,8 +95,9 @@ describe('GET /api/v1/battles', () => {
     const t = await makeTestApp({ sortBotApiBaseUrl: UPSTREAM });
     const res = await t.app.request('/api/v1/battles');
     expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(body).toEqual({ items: [], next_cursor: null });
+    const parsed = CursorPageSchema(BattleStrictSchema).parse(await res.json());
+    expect(parsed.items).toEqual([]);
+    expect(parsed.next_cursor).toBeNull();
   });
 });
 
@@ -105,26 +111,24 @@ describe('GET /api/v1/battles/:id', () => {
     const t = await makeTestApp({ sortBotApiBaseUrl: UPSTREAM });
     const res = await t.app.request('/api/v1/battles/bat_1');
     expect(res.status).toBe(200);
-    const body = (await res.json()) as Record<string, unknown>;
+    const parsed = BattleStrictSchema.parse(await res.json());
 
-    expect(body['id']).toBe('bat_1');
-    expect(body['status']).toBe('completed');
-    expect(body['rounds_total']).toBe(3);
-    expect(body['current_round']).toBe(3);
-    expect(body['winner_bot_id']).toBe('bot_a');
-    expect(body['outcome']).toBe('decision');
-    expect(body['scheduled_at']).toBe('2026-04-29T00:00:00Z');
-    expect(body['completed_at']).toBe('2026-04-29T00:05:00Z');
+    expect(parsed.id).toBe('bat_1');
+    expect(parsed.status).toBe('completed');
+    expect(parsed.rounds_total).toBe(3);
+    expect(parsed.current_round).toBe(3);
+    expect(parsed.winner_bot_id).toBe('bot_a');
+    expect(parsed.outcome).toBe('decision');
+    expect(parsed.scheduled_at).toBe('2026-04-29T00:00:00Z');
+    expect(parsed.completed_at).toBe('2026-04-29T00:05:00Z');
 
-    const fa = body['fighter_a'] as Record<string, unknown>;
-    const fb = body['fighter_b'] as Record<string, unknown>;
-    expect(fa['bot_id']).toBe('bot_a');
-    expect(fa['corner']).toBe('red');
-    expect(fa['display_name']).toBe('Alpha Bot');
-    expect(fa['nickname']).toBeTruthy();
-    expect(fb['bot_id']).toBe('bot_b');
-    expect(fb['corner']).toBe('blue');
-    expect(fb['display_name']).toBe('Bravo Bot');
+    expect(parsed.fighter_a.bot_id).toBe('bot_a');
+    expect(parsed.fighter_a.corner).toBe('red');
+    expect(parsed.fighter_a.display_name).toBe('Alpha Bot');
+    expect(parsed.fighter_a.nickname).toBeTruthy();
+    expect(parsed.fighter_b.bot_id).toBe('bot_b');
+    expect(parsed.fighter_b.corner).toBe('blue');
+    expect(parsed.fighter_b.display_name).toBe('Bravo Bot');
   });
 
   it('404s when upstream 404s', async () => {
@@ -179,7 +183,9 @@ describe('GET /api/v1/tournaments', () => {
     const t = await makeTestApp({ sortBotApiBaseUrl: UPSTREAM });
     const res = await t.app.request('/api/v1/tournaments');
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ items: [], next_cursor: null });
+    const parsed = CursorPageSchema(TournamentStrictSchema).parse(await res.json());
+    expect(parsed.items).toEqual([]);
+    expect(parsed.next_cursor).toBeNull();
   });
 });
 
@@ -232,30 +238,28 @@ describe('GET /api/v1/tournaments/:id', () => {
     const t = await makeTestApp({ sortBotApiBaseUrl: UPSTREAM });
     const res = await t.app.request('/api/v1/tournaments/tour_357ebddb20442ac59c297d7ea421da97');
     expect(res.status).toBe(200);
-    const body = (await res.json()) as Record<string, unknown>;
+    const parsed = TournamentStrictSchema.parse(await res.json());
 
-    expect(body['id']).toBe('tour_357ebddb20442ac59c297d7ea421da97');
-    expect(body['status']).toBe('active');
-    expect(body['name']).toBe('Tournament tour_357');
-    expect(body['rounds_total']).toBe(2);
-    expect(body['current_round']).toBe(1);
-    expect(body['scheduled_at']).toBe('2026-04-29T00:00:00Z');
-    expect(body['weight_class_filter']).toBeNull();
-    expect(body['prize_description']).toBeNull();
-    expect(body['champion_bot_id']).toBeNull();
+    expect(parsed.id).toBe('tour_357ebddb20442ac59c297d7ea421da97');
+    expect(parsed.status).toBe('active');
+    expect(parsed.name).toBe('Tournament tour_357');
+    expect(parsed.rounds_total).toBe(2);
+    expect(parsed.current_round).toBe(1);
+    expect(parsed.scheduled_at).toBe('2026-04-29T00:00:00Z');
+    expect(parsed.weight_class_filter).toBeNull();
+    expect(parsed.prize_description).toBeNull();
+    expect(parsed.champion_bot_id).toBeNull();
 
-    const participants = body['participants'] as Array<Record<string, unknown>>;
-    expect(participants).toHaveLength(2);
-    const participantIds = participants.map((p) => p['bot_id']).sort();
+    expect(parsed.participants).toHaveLength(2);
+    const participantIds = parsed.participants.map((p) => p.bot_id).sort();
     expect(participantIds).toEqual(['bot_a', 'bot_b']);
-    for (const p of participants) {
-      expect(p['nickname']).toBeTruthy();
-      expect(p['display_name']).toBeTruthy();
+    for (const p of parsed.participants) {
+      expect(p.nickname).toBeTruthy();
+      expect(p.display_name).toBeTruthy();
     }
 
-    const matches = body['matches'] as Array<Record<string, unknown>>;
-    expect(matches).toHaveLength(2);
-    expect(matches[0]).toMatchObject({
+    expect(parsed.matches).toHaveLength(2);
+    expect(parsed.matches[0]).toMatchObject({
       id: '1',
       round: 1,
       position: 0,
@@ -265,7 +269,7 @@ describe('GET /api/v1/tournaments/:id', () => {
       status: 'completed',
       battle_id: 'bat_1',
     });
-    expect(matches[1]).toMatchObject({
+    expect(parsed.matches[1]).toMatchObject({
       id: '2',
       round: 2,
       position: 0,

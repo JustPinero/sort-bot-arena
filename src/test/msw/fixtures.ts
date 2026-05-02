@@ -321,6 +321,7 @@ export const sampleBattle = {
   completed_at: null,
   winner_bot_id: null,
   outcome: null,
+  weight_class: null,
 };
 
 export const allBattles = [sampleBattle];

@@ -45,6 +45,16 @@ describe('usePing', () => {
     await waitFor(() => expect(result.current.isError).toBe(true), { timeout: 5000 });
     expect(result.current.error).toMatchObject({ name: 'ApiError', status: 503 });
   });
+
+  // Contract guard: the deployed server returns `text/plain "ok"` for the
+  // healthz route. The default MSW handler must mirror that shape so
+  // frontend tests don't pass against a fictional JSON envelope.
+  it('default MSW handler returns text/plain "ok" (matches deployed server)', async () => {
+    const res = await fetch('http://api.test/api/healthz');
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Content-Type')).toContain('text/plain');
+    expect(await res.text()).toBe('ok');
+  });
 });
 
 describe('useBot', () => {
@@ -64,6 +74,23 @@ describe('useBot', () => {
   it('is disabled when botId is undefined', () => {
     const { result } = renderHook(() => useBot(undefined), { wrapper });
     expect(result.current.fetchStatus).toBe('idle');
+  });
+
+  // End-to-end wiring guard: schema validation runs at the apiClient layer
+  // and surfaces as an ApiError to TanStack Query consumers. A malformed
+  // response (here, an empty object that fails BotSchema) must produce
+  // {code: 'malformed_response'} — never a render crash downstream.
+  it('surfaces ApiError({code: "malformed_response"}) when the response fails BotSchema', async () => {
+    server.use(
+      http.get(`http://api.test/api/v1/bots/${championBot.id}`, () => HttpResponse.json({})),
+    );
+    const { result } = renderHook(() => useBot(championBot.id), { wrapper });
+    await waitFor(() => expect(result.current.isError).toBe(true), { timeout: 5000 });
+    expect(result.current.error).toMatchObject({
+      name: 'ApiError',
+      code: 'malformed_response',
+      status: 0,
+    });
   });
 });
 

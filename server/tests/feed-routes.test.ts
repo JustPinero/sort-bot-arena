@@ -2,6 +2,7 @@ import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
+import { HomeSnapshotStrictSchema } from '../../src/api/schemas.js';
 import { makeTestApp } from './helpers/test-app.js';
 
 const UPSTREAM = 'http://api.test';
@@ -35,33 +36,18 @@ describe('GET /api/v1/feed/snapshot', () => {
     const t = await makeTestApp({ sortBotApiBaseUrl: UPSTREAM });
     const res = await t.app.request('/api/v1/feed/snapshot');
     expect(res.status).toBe(200);
-    const body = (await res.json()) as Record<string, unknown>;
+    const parsed = HomeSnapshotStrictSchema.parse(await res.json());
 
-    expect(Array.isArray(body['ticker'])).toBe(true);
+    expect(parsed.featured_battle_id).toBeNull();
+    expect(parsed.biggest_upset).toBeNull();
 
-    expect('featured_battle_id' in body).toBe(true);
-    expect(body['featured_battle_id']).toBeNull();
-
-    expect('biggest_upset' in body).toBe(true);
-    expect(body['biggest_upset']).toBeNull();
-
-    expect('rookie_of_the_day' in body).toBe(true);
-
-    expect(body['champion']).toMatchObject({
+    expect(parsed.champion).toMatchObject({
       bot_id: 'bot_champ',
       display_name: 'Champ',
       language: 'python',
       record: { wins: 0, losses: 0, draws: 0 },
     });
-    const champion = body['champion'] as Record<string, unknown>;
-    expect('nickname' in champion).toBe(true);
-    expect('portrait_url' in champion).toBe(true);
-    expect(champion['nickname']).toBeTruthy();
-
-    // Crucially the old shape must be gone.
-    expect('top_3' in body).toBe(false);
-    expect('stats' in body).toBe(false);
-    expect('recent_events' in body).toBe(false);
+    expect(parsed.champion?.nickname).toBeTruthy();
   });
 
   it('returns nulls for champion and rookie when leaderboard is empty', async () => {
@@ -73,9 +59,9 @@ describe('GET /api/v1/feed/snapshot', () => {
     const t = await makeTestApp({ sortBotApiBaseUrl: UPSTREAM });
     const res = await t.app.request('/api/v1/feed/snapshot');
     expect(res.status).toBe(200);
-    const body = (await res.json()) as Record<string, unknown>;
-    expect(body['champion']).toBeNull();
-    expect(body['rookie_of_the_day']).toBeNull();
-    expect(body['ticker']).toEqual([]);
+    const parsed = HomeSnapshotStrictSchema.parse(await res.json());
+    expect(parsed.champion).toBeNull();
+    expect(parsed.rookie_of_the_day).toBeNull();
+    expect(parsed.ticker).toEqual([]);
   });
 });

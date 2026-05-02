@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 
-import { login, signup } from '@/api/auth';
 import { ApiError } from '@/api/client';
+import { useLogin, useSignup } from '@/api/queries';
+import { LoadingGear } from '@/components/LoadingGear';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogTriggerButton } from '@/components/ui/dialog';
+import { useAuthStore } from '@/stores/auth';
 
 type Mode = 'signup' | 'login';
 
@@ -18,34 +20,36 @@ export function SignUpDialog({ triggerLabel = 'Sign up', triggerClassName }: Sig
   const [displayName, setDisplayName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
+
+  const signupMutation = useSignup();
+  const loginMutation = useLogin();
+  const activeMutation = mode === 'signup' ? signupMutation : loginMutation;
 
   const reset = () => {
-    setError(null);
     setDisplayName('');
     setEmail('');
     setPassword('');
+    signupMutation.reset();
+    loginMutation.reset();
   };
 
-  const onSubmit = async (e: React.FormEvent) => {
+  const onSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setError(null);
-    setSubmitting(true);
-    try {
-      if (mode === 'signup') {
-        await signup({ display_name: displayName, email, password });
-      } else {
-        await login({ email, password });
-      }
+    const onSuccess = (user: { id: string; display_name: string; email: string }) => {
+      useAuthStore.getState().setUser(user);
+      useAuthStore.getState().setSessionLoaded(true);
       reset();
       setOpen(false);
-    } catch (err) {
-      setError(messageFor(err, mode));
-    } finally {
-      setSubmitting(false);
+    };
+    if (mode === 'signup') {
+      signupMutation.mutate({ display_name: displayName, email, password }, { onSuccess });
+    } else {
+      loginMutation.mutate({ email, password }, { onSuccess });
     }
   };
+
+  const errorMessage = activeMutation.error ? messageFor(activeMutation.error, mode) : null;
+  const isPending = activeMutation.isPending;
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -98,9 +102,9 @@ export function SignUpDialog({ triggerLabel = 'Sign up', triggerClassName }: Sig
             maxLength={200}
           />
 
-          {error ? (
+          {errorMessage ? (
             <p role="alert" className="rounded-sm bg-hazard/10 px-3 py-2 text-sm text-hazard">
-              {error}
+              {errorMessage}
             </p>
           ) : null}
 
@@ -110,13 +114,23 @@ export function SignUpDialog({ triggerLabel = 'Sign up', triggerClassName }: Sig
               className="font-mono text-xs uppercase tracking-wide text-text-tertiary hover:text-text-primary"
               onClick={() => {
                 setMode((m) => (m === 'signup' ? 'login' : 'signup'));
-                setError(null);
+                signupMutation.reset();
+                loginMutation.reset();
               }}
             >
               {mode === 'signup' ? 'Have an account? Sign in' : 'New here? Sign up'}
             </button>
-            <Button type="submit" disabled={submitting}>
-              {submitting ? '...' : mode === 'signup' ? 'Sign up' : 'Sign in'}
+            <Button type="submit" disabled={isPending}>
+              {isPending ? (
+                <span className="inline-flex items-center gap-2">
+                  <LoadingGear size="h-4 w-4" className="py-0" />
+                  {mode === 'signup' ? 'Signing up...' : 'Signing in...'}
+                </span>
+              ) : mode === 'signup' ? (
+                'Sign up'
+              ) : (
+                'Sign in'
+              )}
             </Button>
           </div>
         </form>

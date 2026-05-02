@@ -137,6 +137,20 @@ export const HealthResponseStrictSchema = HealthResponseSchema.strict();
 export type HealthResponse = z.infer<typeof HealthResponseSchema>;
 
 // ---------------------------------------------------------------------------
+// Auth / session
+// ---------------------------------------------------------------------------
+
+export const SessionUserSchema = z
+  .object({
+    id: z.string(),
+    display_name: z.string(),
+    email: z.string(),
+  })
+  .passthrough();
+export const SessionUserStrictSchema = SessionUserSchema.strict();
+export type SessionUser = z.infer<typeof SessionUserSchema>;
+
+// ---------------------------------------------------------------------------
 // Leaderboard
 // ---------------------------------------------------------------------------
 

@@ -1,12 +1,20 @@
+import { QueryClientProvider } from '@tanstack/react-query';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it } from 'vitest';
 import { axe } from 'vitest-axe';
 
+import { createQueryClient } from '@/api/queryClient';
+
 import { AppShell } from './AppShell';
 
 function withRouter(node: React.ReactNode) {
-  return <MemoryRouter>{node}</MemoryRouter>;
+  const client = createQueryClient();
+  return (
+    <QueryClientProvider client={client}>
+      <MemoryRouter>{node}</MemoryRouter>
+    </QueryClientProvider>
+  );
 }
 
 describe('<AppShell />', () => {

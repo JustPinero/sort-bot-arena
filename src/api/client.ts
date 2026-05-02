@@ -1,4 +1,4 @@
-import type { ZodType } from 'zod';
+import type { ZodType, ZodTypeAny, z } from 'zod';
 
 import { config } from './config';
 
@@ -43,6 +43,10 @@ export interface RequestOptions {
   skipAuth?: boolean;
   headers?: Record<string, string>;
   schema?: ZodType<unknown>;
+}
+
+export interface RequestOptionsWithSchema<S extends ZodTypeAny> extends Omit<RequestOptions, 'schema'> {
+  schema: S;
 }
 
 interface ErrorEnvelope {
@@ -142,20 +146,45 @@ async function request<T>(
   return raw as T;
 }
 
-export const apiClient = {
-  get<T>(path: string, opts?: RequestOptions): Promise<T> {
-    return request<T>('GET', path, undefined, opts);
+interface ApiClient {
+  get<S extends ZodTypeAny>(path: string, opts: RequestOptionsWithSchema<S>): Promise<z.infer<S>>;
+  get<T>(path: string, opts?: RequestOptions): Promise<T>;
+  post<S extends ZodTypeAny>(
+    path: string,
+    body: unknown,
+    opts: RequestOptionsWithSchema<S>,
+  ): Promise<z.infer<S>>;
+  post<T>(path: string, body: unknown, opts?: RequestOptions): Promise<T>;
+  patch<S extends ZodTypeAny>(
+    path: string,
+    body: unknown,
+    opts: RequestOptionsWithSchema<S>,
+  ): Promise<z.infer<S>>;
+  patch<T>(path: string, body: unknown, opts?: RequestOptions): Promise<T>;
+  put<S extends ZodTypeAny>(
+    path: string,
+    body: unknown,
+    opts: RequestOptionsWithSchema<S>,
+  ): Promise<z.infer<S>>;
+  put<T>(path: string, body: unknown, opts?: RequestOptions): Promise<T>;
+  delete<S extends ZodTypeAny>(path: string, opts: RequestOptionsWithSchema<S>): Promise<z.infer<S>>;
+  delete<T>(path: string, opts?: RequestOptions): Promise<T>;
+}
+
+export const apiClient: ApiClient = {
+  get(path: string, opts?: RequestOptions) {
+    return request('GET', path, undefined, opts);
   },
-  post<T>(path: string, body: unknown, opts?: RequestOptions): Promise<T> {
-    return request<T>('POST', path, body, opts);
+  post(path: string, body: unknown, opts?: RequestOptions) {
+    return request('POST', path, body, opts);
   },
-  patch<T>(path: string, body: unknown, opts?: RequestOptions): Promise<T> {
-    return request<T>('PATCH', path, body, opts);
+  patch(path: string, body: unknown, opts?: RequestOptions) {
+    return request('PATCH', path, body, opts);
   },
-  put<T>(path: string, body: unknown, opts?: RequestOptions): Promise<T> {
-    return request<T>('PUT', path, body, opts);
+  put(path: string, body: unknown, opts?: RequestOptions) {
+    return request('PUT', path, body, opts);
   },
-  delete<T>(path: string, opts?: RequestOptions): Promise<T> {
-    return request<T>('DELETE', path, undefined, opts);
+  delete(path: string, opts?: RequestOptions) {
+    return request('DELETE', path, undefined, opts);
   },
 };

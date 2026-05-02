@@ -26,17 +26,15 @@ export function BotTilePicker({
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(0);
 
-  const eligible = useMemo(() => bots.filter((b) => !b.retired), [bots]);
-
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return eligible;
-    return eligible.filter((b) => {
+    if (!q) return bots;
+    return bots.filter((b) => {
       const name = b.display_name.toLowerCase();
       const nick = b.nickname?.toLowerCase() ?? '';
       return name.includes(q) || nick.includes(q);
     });
-  }, [eligible, search]);
+  }, [bots, search]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages - 1);

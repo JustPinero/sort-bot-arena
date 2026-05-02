@@ -1,7 +1,9 @@
 import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { z } from 'zod';
 
+import { BotStrictSchema } from '../../src/api/schemas.js';
 import { makeTestApp } from './helpers/test-app.js';
 
 const UPSTREAM = 'http://api.test';
@@ -89,9 +91,9 @@ describe('POST /api/v1/bots', () => {
       }),
     });
     expect(res.status).toBe(201);
-    const body = (await res.json()) as Record<string, unknown>;
-    expect(body['id']).toBe('sba_bot_1');
-    expect(body['nickname']).toBeTruthy();
+    const parsed = BotStrictSchema.parse(await res.json());
+    expect(parsed.id).toBe('sba_bot_1');
+    expect(parsed.nickname).toBeTruthy();
 
     expect(captured!.auth).toBe('Bearer sk_live_secret');
     expect(captured!.displayName).toBe('Recon Bot');
@@ -139,10 +141,10 @@ describe('POST /api/v1/bots', () => {
     );
     const res = await t.app.request('/api/v1/users/me/bots', { headers: { cookie } });
     expect(res.status).toBe(200);
-    const body = (await res.json()) as Array<{ id: string; rank: number | null }>;
-    expect(body).toHaveLength(1);
-    expect(body[0]?.id).toBe('sba_bot_1');
-    expect(body[0]?.rank).toBe(5);
+    const parsed = z.array(BotStrictSchema).parse(await res.json());
+    expect(parsed).toHaveLength(1);
+    expect(parsed[0]?.id).toBe('sba_bot_1');
+    expect(parsed[0]?.rank).toBe(5);
   });
 
   it('upstream 5xx → 502', async () => {

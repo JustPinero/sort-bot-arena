@@ -22,6 +22,16 @@ import type { SortBotApiClient } from './clients/sort-bot-api/index.js';
 import type { PersonaService } from './persona/service.js';
 import type { Client } from '@libsql/client';
 
+// Structural type — we only need the three health getters from
+// `GlobalEventListener`. Keeping it structural avoids importing the
+// concrete class (and its db / fetch dependencies) into tests that
+// stub the listener purely for /readyz introspection.
+export interface ListenerHealth {
+  isRunning(): boolean;
+  lastEventAt(): string | null;
+  eventsProcessed(): number;
+}
+
 export interface AppDeps {
   db: Client;
   sortBotApi: SortBotApiClient;
@@ -30,6 +40,11 @@ export interface AppDeps {
   sessionSecret: string;
   cookieSecure: boolean;
   allowedOrigins?: string[];
+  // Optional — null when RUN_LISTENER=false or when tests don't need it.
+  // When absent, /readyz reports running:false / last_event_at:null /
+  // events_processed:0 but `ready` stays true (listener isn't on the
+  // critical request path).
+  listener?: ListenerHealth | null;
 }
 
 export function createApp(deps: AppDeps): Hono<AppContext> {
@@ -51,6 +66,11 @@ export function createApp(deps: AppDeps): Hono<AppContext> {
   app.get('/api/readyz', async (c) => {
     const breakers = deps.sortBotApi.breakers?.states() ?? {};
     const anyBreakerOpen = deps.sortBotApi.breakers?.anyOpen() ?? false;
+    const listener = {
+      running: deps.listener?.isRunning() ?? false,
+      last_event_at: deps.listener?.lastEventAt() ?? null,
+      events_processed: deps.listener?.eventsProcessed() ?? 0,
+    };
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 2_000);
     try {
@@ -58,12 +78,16 @@ export function createApp(deps: AppDeps): Hono<AppContext> {
         signal: controller.signal,
       });
       const upstreamOk = res.ok;
+      // Listener health is observational only — it does NOT factor into
+      // `ready`. Railway healthchecks should not flap when the listener
+      // briefly disconnects (the 60s sweep handles reconciliation).
       const ready = upstreamOk && !anyBreakerOpen;
       return c.json(
         {
           ready,
           upstream: upstreamOk ? 'ok' : `http_${res.status}`,
           breakers,
+          listener,
         },
         ready ? 200 : 503,
       );
@@ -73,6 +97,7 @@ export function createApp(deps: AppDeps): Hono<AppContext> {
           ready: false,
           upstream: 'unreachable',
           breakers,
+          listener,
           error: (err as Error).message,
         },
         503,

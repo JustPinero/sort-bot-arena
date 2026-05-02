@@ -2,8 +2,8 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { ApiError } from '@/api/client';
-import { useLeaderboard, useStartBattle } from '@/api/queries';
-import type { LeaderboardEntry } from '@/api/types';
+import { useEligibleFighters } from '@/api/eligible-fighters';
+import { useStartBattle } from '@/api/queries';
 import { LoadingGear } from '@/components/LoadingGear';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -13,18 +13,13 @@ interface QuickFightButtonProps {
 }
 
 export function QuickFightButton({ className }: QuickFightButtonProps) {
-  const leaderboard = useLeaderboard({
-    weight: 'all',
-    activity: 'all',
-    language: null,
-    sort: 'rank',
-  });
+  const eligibleFighters = useEligibleFighters();
   const startBattle = useStartBattle();
   const navigate = useNavigate();
   const [error, setError] = useState<string | null>(null);
 
-  const bots: LeaderboardEntry[] = (leaderboard.data?.items ?? []).filter((b) => !b.retired);
-  const disabled = leaderboard.isLoading || bots.length < 2 || startBattle.isPending;
+  const bots = eligibleFighters.fighters;
+  const disabled = eligibleFighters.isLoading || !eligibleFighters.hasEnough(2) || startBattle.isPending;
 
   const onClick = async () => {
     setError(null);

@@ -473,11 +473,14 @@ describe('<BotTilePicker /> standalone', () => {
     expect(counter!.textContent?.replace(/\s+/g, ' ').trim()).toBe('2 / 4 selected');
   });
 
-  it('filters out retired bots', () => {
+  it('renders bots passed in (presentational; parent owns retired filter)', () => {
+    // The picker is now presentational — its parent (TournamentSetupModal) uses
+    // useEligibleFighters to filter retired bots before passing them in. The
+    // picker itself shows whatever it receives.
     const bots = makeBots(3);
     bots[0]!.retired = true;
     render(<BotTilePicker bots={bots} selected={[]} bracketSize={3} onToggle={() => {}} />);
-    expect(screen.queryByRole('button', { name: /select fighter 1/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /select fighter 1/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /select fighter 2/i })).toBeInTheDocument();
   });
 });

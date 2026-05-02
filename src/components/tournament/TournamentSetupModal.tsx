@@ -1,9 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { ApiError } from '@/api/client';
-import { useLeaderboard, useStartTournament } from '@/api/queries';
-import type { LeaderboardEntry } from '@/api/types';
+import { useEligibleFighters } from '@/api/eligible-fighters';
+import { useStartTournament } from '@/api/queries';
 import { LoadingGear } from '@/components/LoadingGear';
 import { Button } from '@/components/ui/button';
 import {
@@ -40,16 +40,8 @@ export function TournamentSetupModal({
   const navigate = useNavigate();
   const startTournament = useStartTournament();
 
-  const leaderboard = useLeaderboard({
-    weight: 'all',
-    activity: 'all',
-    language: null,
-    sort: 'rank',
-  });
-
-  const eligibleBots: LeaderboardEntry[] = useMemo(() => {
-    return (leaderboard.data?.items ?? []).filter((entry) => !entry.retired);
-  }, [leaderboard.data]);
+  const eligibleFighters = useEligibleFighters();
+  const eligibleBots = eligibleFighters.fighters;
 
   const reset = () => {
     setSelected([]);
@@ -104,8 +96,8 @@ export function TournamentSetupModal({
     }
   };
 
-  const enoughBots = eligibleBots.length >= bracketSize;
-  const randomDisabled = !enoughBots || leaderboard.isLoading;
+  const enoughBots = eligibleFighters.hasEnough(bracketSize);
+  const randomDisabled = !enoughBots || eligibleFighters.isLoading;
   const randomTooltip = enoughBots
     ? 'Fills the bracket with random bots. You can still swap before Start.'
     : `Need ≥${bracketSize} evaluated bots in the leaderboard.`;
@@ -160,7 +152,7 @@ export function TournamentSetupModal({
               </TooltipTrigger>
               <TooltipContent>{randomTooltip}</TooltipContent>
             </Tooltip>
-            {!enoughBots && !leaderboard.isLoading ? (
+            {!enoughBots && !eligibleFighters.isLoading ? (
               <span
                 role="note"
                 className="font-mono text-[11px] uppercase tracking-wide text-text-tertiary"
