@@ -24,6 +24,12 @@ import { describe, expect, it } from 'vitest';
 import { GlobalEventListener } from '../src/listener/global-listener.js';
 import { SseLineParser } from '../src/listener/sse-parser.js';
 import { insertPending, markRunning } from '../src/store/recent-battles.js';
+import {
+  insertInitialMatches,
+  markInFlight,
+  type TournamentMatchRow,
+} from '../src/store/tournament-matches.js';
+import { recordTournament } from '../src/store/recent-tournaments.js';
 
 import { makeTestApp } from './helpers/test-app.js';
 
@@ -408,6 +414,176 @@ describe('GlobalEventListener — reconnect on stream close', () => {
       });
       expect(aRow.rows[0]?.['status']).toBe('complete');
       expect(bRow.rows[0]?.['status']).toBe('complete');
+    } finally {
+      await listener.stop();
+    }
+  });
+});
+
+// Slice D4 — battle_complete on a battle bound to a tournament_matches
+// row triggers `orchestrator.advanceMatch` after the match's status is
+// flipped to complete. Non-tournament battles still flow through the
+// recent_battles update path without touching the orchestrator.
+describe('GlobalEventListener — Slice D4 orchestrator advance', () => {
+  it('battle_complete mapped to a tournament match calls orchestrator.advanceMatch with the row', async () => {
+    const t = await makeTestApp({ sortBotApiBaseUrl: UPSTREAM });
+
+    // Seed a pending tournament + one in_flight match bound to a battle.
+    const tournamentId = 'tour_listener_1';
+    await recordTournament(t.db, {
+      tournament_id: tournamentId,
+      initiator_user_id: 'u1',
+      participant_count: 4,
+      bracket_size: 4,
+      input_mode: 'flat_random',
+      status: 'running',
+    });
+    await insertInitialMatches(t.db, tournamentId, [
+      {
+        match_id: 'm_r1_p0',
+        round: 1,
+        bracket_position: 0,
+        bot_a_id: 'bot_alpha',
+        bot_b_id: 'bot_beta',
+        status: 'pending',
+        winner_bot_id: null,
+      },
+      {
+        match_id: 'm_r1_p1',
+        round: 1,
+        bracket_position: 1,
+        bot_a_id: 'bot_gamma',
+        bot_b_id: 'bot_delta',
+        status: 'pending',
+        winner_bot_id: null,
+      },
+    ]);
+    const matchId = `${tournamentId}_m_r1_p0`;
+    const battleId = 'bat_listener_1';
+
+    await insertPending(t.db, {
+      battle_id: battleId,
+      bot_a_id: 'bot_alpha',
+      bot_b_id: 'bot_beta',
+      pair_key: 'bot_alpha:bot_beta',
+      initiator_user_id: 'u1',
+      weight_class: null,
+    });
+    await markRunning(t.db, battleId);
+    await markInFlight(t.db, matchId, battleId, new Date().toISOString());
+
+    const advanceCalls: TournamentMatchRow[] = [];
+    const orchestrator = {
+      advanceMatch: async (m: TournamentMatchRow): Promise<void> => {
+        advanceCalls.push(m);
+      },
+    };
+
+    let activeSource: FakeSseSource | null = null;
+    const fetchImpl = makeFetchImpl({
+      onStreamConnect: () => {
+        const s = new FakeSseSource();
+        activeSource = s;
+        return s;
+      },
+    });
+
+    const listener = new GlobalEventListener({
+      db: t.db,
+      sortBotApiUrl: UPSTREAM,
+      runListener: true,
+      fetchImpl,
+      sleep: () => Promise.resolve(),
+      random: () => 0,
+      orchestrator,
+    });
+    listener.start();
+    try {
+      const source = await waitFor(() => activeSource);
+      source.pushChunk(
+        'event: battle_complete\n' +
+          `data: {"battle_id":"${battleId}","winner_bot_id":"bot_alpha","bot_a_wins":2,"bot_b_wins":1,"ties":0}\n\n`,
+      );
+      await waitForEvents(listener, 1);
+
+      // Flush the dispatch handler's awaited db reads.
+      await new Promise((r) => setTimeout(r, 10));
+
+      // The match should be marked complete with the right winner.
+      const row = await t.db.execute({
+        sql: 'SELECT status, winner_bot_id FROM tournament_matches WHERE match_id = ?',
+        args: [matchId],
+      });
+      expect(row.rows[0]?.['status']).toBe('complete');
+      expect(row.rows[0]?.['winner_bot_id']).toBe('bot_alpha');
+
+      // The orchestrator was called exactly once with the right row.
+      expect(advanceCalls).toHaveLength(1);
+      expect(advanceCalls[0]?.match_id).toBe(matchId);
+      expect(advanceCalls[0]?.tournament_id).toBe(tournamentId);
+      expect(advanceCalls[0]?.winner_bot_id).toBe('bot_alpha');
+      expect(advanceCalls[0]?.status).toBe('complete');
+    } finally {
+      await listener.stop();
+    }
+  });
+
+  it('battle_complete on a non-tournament battle does NOT call orchestrator.advanceMatch', async () => {
+    const t = await makeTestApp({ sortBotApiBaseUrl: UPSTREAM });
+    // Insert a plain in-flight battle with no tournament_matches row.
+    await insertPending(t.db, {
+      battle_id: 'bat_plain_1',
+      bot_a_id: 'bot_a',
+      bot_b_id: 'bot_b',
+      pair_key: 'bot_a:bot_b',
+      initiator_user_id: 'u1',
+      weight_class: null,
+    });
+    await markRunning(t.db, 'bat_plain_1');
+
+    const advanceCalls: TournamentMatchRow[] = [];
+    const orchestrator = {
+      advanceMatch: async (m: TournamentMatchRow): Promise<void> => {
+        advanceCalls.push(m);
+      },
+    };
+
+    let activeSource: FakeSseSource | null = null;
+    const fetchImpl = makeFetchImpl({
+      onStreamConnect: () => {
+        const s = new FakeSseSource();
+        activeSource = s;
+        return s;
+      },
+    });
+
+    const listener = new GlobalEventListener({
+      db: t.db,
+      sortBotApiUrl: UPSTREAM,
+      runListener: true,
+      fetchImpl,
+      sleep: () => Promise.resolve(),
+      random: () => 0,
+      orchestrator,
+    });
+    listener.start();
+    try {
+      const source = await waitFor(() => activeSource);
+      source.pushChunk(
+        'event: battle_complete\n' +
+          'data: {"battle_id":"bat_plain_1","winner_bot_id":"bot_a","bot_a_wins":2,"bot_b_wins":1,"ties":0}\n\n',
+      );
+      await waitForEvents(listener, 1);
+      await new Promise((r) => setTimeout(r, 10));
+
+      // Plain battle was marked complete.
+      const row = await t.db.execute({
+        sql: 'SELECT status FROM recent_battles WHERE battle_id = ?',
+        args: ['bat_plain_1'],
+      });
+      expect(row.rows[0]?.['status']).toBe('complete');
+      // Orchestrator never called — no tournament_matches row mapped.
+      expect(advanceCalls).toHaveLength(0);
     } finally {
       await listener.stop();
     }

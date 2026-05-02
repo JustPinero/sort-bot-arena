@@ -11,6 +11,7 @@ import {
   BotRunSchema,
   BotSchema,
   BotSnapshotSchema,
+  CreateTournamentResponseSchema,
   CursorPageSchema,
   HealthResponseSchema,
   HomeSnapshotSchema,
@@ -341,8 +342,12 @@ export interface StartTournamentInput {
 export function useStartTournament() {
   const queryClient = useQueryClient();
   return useMutation({
+    // Slice D4 — server now returns the clean `{tournament_id, status}`
+    // envelope (CreateTournamentResponseSchema). The rich `Tournament`
+    // shape is fetched by `useTournament(id)` on the bracket page after
+    // the redirect; this resolves the B6-flagged contract drift.
     mutationFn: (input: StartTournamentInput) =>
-      apiClient.post('/api/v1/tournaments', input, { schema: TournamentSchema }),
+      apiClient.post('/api/v1/tournaments', input, { schema: CreateTournamentResponseSchema }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tournaments'] });
     },

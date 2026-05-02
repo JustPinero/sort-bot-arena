@@ -53,22 +53,76 @@ async function readBody(req: IncomingMessage): Promise<unknown> {
   });
 }
 
-function fixtureBot(id: string, displayName: string): Record<string, unknown> {
+// Shape matches `ApiBot` in
+// server/src/clients/sort-bot-api/types.ts — the upstream contract
+// the arena server consumes and re-synthesizes for the frontend.
+function fixtureBot(
+  id: string,
+  displayName: string,
+  language: 'python' | 'node' | 'binary' = 'python',
+): Record<string, unknown> {
   return {
-    bot_id: id,
+    id,
     user_id: 'user_stub',
     display_name: displayName,
-    language: 'python',
+    language,
+    source_size_bytes: 256,
+    source_sha256: '0'.repeat(64),
+    status: 'evaluated',
     submitted_at: '2026-04-29T00:00:00.000Z',
-    rank: 1,
-    score: 0,
-    wins: 0,
-    losses: 0,
-    draws: 0,
-    eligible: true,
-    retired: false,
+    evaluation_completed_at: '2026-04-29T00:00:01.000Z',
   };
 }
+
+// Minimal but complete BotProfileResponse — synthesizeBot reads
+// rank, best_input, worst_input, per_input, rank_history.
+function fixtureProfile(id: string, displayName: string): Record<string, unknown> {
+  return {
+    bot: fixtureBot(id, displayName),
+    rank: 1,
+    score: 0,
+    incomplete: false,
+    inputs_covered: 0,
+    total_inputs: 0,
+    best_input: { input_id: 1, median_ms: 12.5 },
+    worst_input: { input_id: 2, median_ms: 50.0 },
+    per_input: [],
+    rank_history: [],
+  };
+}
+
+// In-process map so freshly submitted bots are retrievable by id —
+// otherwise GET /v1/bots/:id returns a fixture with the wrong
+// display_name, which breaks the BotProfilePage assertion.
+const submittedBots = new Map<string, { display_name: string; language: string }>();
+
+// Pre-seeded fighters used by the login-battle-fight-end spec (G3).
+// Two bots are the minimum the BotSlotPicker needs to enable the
+// "Start match" button. Names are descriptive so the spec can
+// disambiguate the red vs blue corner picks if it ever needs to.
+const PRESEEDED_BOTS: Array<{
+  bot_id: string;
+  display_name: string;
+  language: 'python' | 'node' | 'binary';
+}> = [
+  { bot_id: 'bot_e2e_red', display_name: 'Red Mauler', language: 'python' },
+  { bot_id: 'bot_e2e_blue', display_name: 'Blue Crusher', language: 'node' },
+];
+for (const b of PRESEEDED_BOTS) {
+  submittedBots.set(b.bot_id, { display_name: b.display_name, language: b.language });
+}
+
+// In-memory state for the most recent /v1/battles POST so the
+// follow-up GET /v1/battles/:id (driven by the BattlePage's
+// useBattle query) can hand back a coherent BattleResponse without
+// us needing to bolt on a real persistence layer.
+interface StubBattleState {
+  battle_id: string;
+  bot_a: string;
+  bot_b: string;
+  created_at: string;
+}
+let lastBattle: StubBattleState | null = null;
 
 const routes: StubRoute[] = [
   // Health probes (the arena server's /api/readyz pings upstream /healthz).
@@ -80,13 +134,29 @@ const routes: StubRoute[] = [
       res.end('ok');
     },
   },
-  // Empty leaderboard for the smoke spec — homepage shows the empty
-  // champion-corner state.
+  // Leaderboard returns the pre-seeded fighters so the BotSlotPicker
+  // (and useEligibleFighters) has at least 2 options. The smoke spec
+  // doesn't care about the contents — only that the homepage renders.
+  // The shape matches `LeaderboardResponse` in
+  // server/src/clients/sort-bot-api/types.ts.
   {
     method: 'GET',
     match: (p) => p === '/v1/leaderboard',
     handler: (_req, res) => {
-      json(res, 200, { bots: [], total: 0 });
+      json(res, 200, {
+        filter: {},
+        total_inputs: 0,
+        bots: PRESEEDED_BOTS.map((b, i) => ({
+          bot_id: b.bot_id,
+          display_name: b.display_name,
+          language: b.language,
+          score: 100 - i,
+          inputs_covered: 0,
+          total_inputs: 0,
+          incomplete: false,
+          rank: i + 1,
+        })),
+      });
     },
   },
   // Per-input leaderboards aren't called by the smoke spec but kept
@@ -138,13 +208,233 @@ const routes: StubRoute[] = [
       });
     },
   },
-  // Catch-alls so missing endpoints in later slices fail loudly with
-  // a 501 instead of a confusing CORS error from a 404 HTML response.
+  // Bot submission. The arena server forwards a multipart/form-data
+  // body (display_name, language, source). We don't parse it — the
+  // wire-format invariants are covered by the contract-drift test.
+  // We just drain the body, mint a unique bot id, and remember it so
+  // the immediately-following GET /v1/bots/:id returns the same name.
+  {
+    method: 'POST',
+    match: (p) => p === '/v1/bots',
+    handler: async (req, res) => {
+      const ct = (req.headers['content-type'] ?? '').toString();
+      const buffers: Buffer[] = [];
+      await new Promise<void>((resolve, reject) => {
+        req.on('data', (c: Buffer) => buffers.push(c));
+        req.on('end', () => resolve());
+        req.on('error', reject);
+      });
+      const raw = Buffer.concat(buffers).toString('utf8');
+      let displayName = 'Stub Bot';
+      let language: 'python' | 'node' | 'binary' = 'python';
+      if (ct.startsWith('multipart/form-data')) {
+        const dn = raw.match(
+          /name="display_name"\r?\n\r?\n([\s\S]*?)\r?\n--/,
+        );
+        const lg = raw.match(/name="language"\r?\n\r?\n([\s\S]*?)\r?\n--/);
+        if (dn?.[1]) displayName = dn[1];
+        if (lg?.[1]) {
+          const v = lg[1];
+          if (v === 'python' || v === 'node' || v === 'binary') language = v;
+        }
+      }
+      const id = `bot_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+      submittedBots.set(id, { display_name: displayName, language });
+      json(res, 201, fixtureBot(id, displayName, language));
+    },
+  },
+  // Per-bot profile, analysis, rank-history. Order matters — these
+  // must precede the generic /v1/bots/:id catch-all below.
   {
     method: 'GET',
-    match: (p) => p.startsWith('/v1/bots/'),
+    match: (p) => /^\/v1\/bots\/[^/]+\/profile$/.test(p),
     handler: (_req, res, url) => {
-      json(res, 200, fixtureBot(url.pathname.split('/').pop() ?? 'bot_stub', 'Stub Bot'));
+      const id = url.pathname.split('/')[3] ?? 'bot_stub';
+      const remembered = submittedBots.get(id);
+      json(res, 200, fixtureProfile(id, remembered?.display_name ?? 'Stub Bot'));
+    },
+  },
+  {
+    method: 'GET',
+    match: (p) => /^\/v1\/bots\/[^/]+\/analysis$/.test(p),
+    handler: (_req, res) => {
+      // The arena server wraps this in formatAnalysis() before sending
+      // to the frontend — any structurally-valid analysis works.
+      json(res, 200, {
+        algorithm: 'quicksort',
+        time_complexity_estimate: 'O(n log n)',
+        space_complexity_estimate: 'O(log n)',
+        strengths: ['simple', 'in-place'],
+        weaknesses: ['adversarial inputs'],
+        suggested_use_cases: ['general purpose'],
+        anti_patterns: ['nearly-sorted data'],
+        reasoning: 'A standard quicksort with median-of-three pivot.',
+      });
+    },
+  },
+  {
+    method: 'GET',
+    match: (p) => /^\/v1\/bots\/[^/]+\/rank-history$/.test(p),
+    handler: (_req, res, url) => {
+      const id = url.pathname.split('/')[3] ?? 'bot_stub';
+      json(res, 200, { bot_id: id, count: 0, history: [] });
+    },
+  },
+  {
+    method: 'GET',
+    match: (p) => /^\/v1\/bots\/[^/]+\/runs$/.test(p),
+    handler: (_req, res, url) => {
+      const id = url.pathname.split('/')[3] ?? 'bot_stub';
+      json(res, 200, { bot_id: id, runs: [], total: 0 });
+    },
+  },
+  {
+    method: 'GET',
+    match: (p) => /^\/v1\/bots\/[^/]+\/badge\.svg$/.test(p),
+    handler: (_req, res) => {
+      res.writeHead(200, { 'content-type': 'image/svg+xml' });
+      res.end('<svg xmlns="http://www.w3.org/2000/svg"/>');
+    },
+  },
+  // Catch-all for /v1/bots/:id — must run last among the bot routes
+  // so the more-specific paths above win.
+  {
+    method: 'GET',
+    match: (p) => /^\/v1\/bots\/[^/]+$/.test(p),
+    handler: (_req, res, url) => {
+      const id = url.pathname.split('/').pop() ?? 'bot_stub';
+      const remembered = submittedBots.get(id);
+      json(
+        res,
+        200,
+        fixtureBot(
+          id,
+          remembered?.display_name ?? 'Stub Bot',
+          (remembered?.language as 'python' | 'node' | 'binary') ?? 'python',
+        ),
+      );
+    },
+  },
+  // Battle creation — returns a `CreateBattleResponse` shape per
+  // server/src/clients/sort-bot-api/types.ts. The arena server
+  // forwards POST /api/v1/battles into this endpoint, then reassigns
+  // its placeholder primary key to the upstream `battle_id`.
+  {
+    method: 'POST',
+    match: (p) => p === '/v1/battles',
+    handler: async (req, res) => {
+      const body = (await readBody(req)) as {
+        bot_a?: string;
+        bot_b?: string;
+        input_ids?: number[];
+        count?: number;
+      } | null;
+      const battle_id = `bat_e2e_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+      const created_at = new Date().toISOString();
+      lastBattle = {
+        battle_id,
+        bot_a: body?.bot_a ?? PRESEEDED_BOTS[0]!.bot_id,
+        bot_b: body?.bot_b ?? PRESEEDED_BOTS[1]!.bot_id,
+        created_at,
+      };
+      json(res, 201, {
+        battle_id,
+        bot_a: lastBattle.bot_a,
+        bot_b: lastBattle.bot_b,
+        input_ids: body?.input_ids ?? [],
+        status: 'running',
+        created_at,
+      });
+    },
+  },
+  // Per-battle SSE feed. The arena server proxies this stream back
+  // to the browser via /api/v1/battles/:id/events. We emit the four
+  // canonical phases — battle_start, run_start, run_complete,
+  // battle_complete — with small write+timeout chains so the
+  // BattleViewer sees them arrive in order. Today's BattlePage
+  // synthesizes events client-side via playMockBattle and never
+  // subscribes here, but the endpoint exists so future SSE-driven
+  // viewers (and the arena server's polling fallback) have something
+  // to talk to instead of 404'ing.
+  {
+    method: 'GET',
+    match: (p) => /^\/v1\/battles\/[^/]+\/events$/.test(p),
+    handler: (_req, res, url) => {
+      const id = url.pathname.split('/')[3] ?? 'bat_stub';
+      const a = lastBattle?.bot_a ?? PRESEEDED_BOTS[0]!.bot_id;
+      const b = lastBattle?.bot_b ?? PRESEEDED_BOTS[1]!.bot_id;
+      res.writeHead(200, {
+        'content-type': 'text/event-stream',
+        'cache-control': 'no-cache',
+        connection: 'keep-alive',
+      });
+      const send = (event: string, data: unknown) => {
+        if (res.writableEnded) return;
+        res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+      };
+      send('battle_start', { battle_id: id, bot_a: a, bot_b: b });
+      const t1 = setTimeout(() => {
+        send('run_start', { battle_id: id, run_id: 1, input_id: 1 });
+      }, 80);
+      const t2 = setTimeout(() => {
+        send('run_complete', {
+          battle_id: id,
+          run_id: 1,
+          input_id: 1,
+          winner_bot_id: a,
+          bot_a_duration_ms: 12,
+          bot_b_duration_ms: 28,
+        });
+      }, 200);
+      const t3 = setTimeout(() => {
+        send('battle_complete', {
+          battle_id: id,
+          winner_bot_id: a,
+          bot_a_wins: 1,
+          bot_b_wins: 0,
+        });
+      }, 320);
+      const t4 = setTimeout(() => {
+        if (!res.writableEnded) res.end();
+      }, 400);
+      // Stop emitting if the client hangs up early.
+      const cleanup = () => {
+        clearTimeout(t1);
+        clearTimeout(t2);
+        clearTimeout(t3);
+        clearTimeout(t4);
+      };
+      res.on('close', cleanup);
+    },
+  },
+  // Per-battle materialized state. Drives the BattlePage's useBattle
+  // query (and the arena server's polling fallback when SSE drops).
+  // We hand back a coherent BattleResponse keyed off the most recent
+  // POST so the FE sees its own newly-created battle.
+  {
+    method: 'GET',
+    match: (p) => /^\/v1\/battles\/[^/]+$/.test(p),
+    handler: (_req, res, url) => {
+      const id = url.pathname.split('/').pop() ?? 'bat_stub';
+      const a = lastBattle?.bot_a ?? PRESEEDED_BOTS[0]!.bot_id;
+      const b = lastBattle?.bot_b ?? PRESEEDED_BOTS[1]!.bot_id;
+      const created_at = lastBattle?.created_at ?? new Date().toISOString();
+      json(res, 200, {
+        battle: {
+          id,
+          bot_a_id: a,
+          bot_b_id: b,
+          initiator_id: 'user_stub',
+          status: 'running',
+          winner_bot_id: null,
+          bot_a_wins: 0,
+          bot_b_wins: 0,
+          ties: 0,
+          created_at,
+          completed_at: null,
+        },
+        runs: [],
+      });
     },
   },
 ];

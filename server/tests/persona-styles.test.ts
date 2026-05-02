@@ -30,16 +30,10 @@ describe('pickStyle', () => {
     }
   });
 
-  it('approximates uniform distribution over 8000 calls (±~25%)', () => {
-    const counts: Record<string, number> = {};
-    for (const s of STYLES) counts[s] = 0;
-    for (let i = 0; i < 8000; i++) {
-      const s = pickStyle();
-      counts[s] = (counts[s] ?? 0) + 1;
-    }
-    for (const s of STYLES) {
-      expect(counts[s], `${s} count out of band`).toBeGreaterThanOrEqual(800);
-      expect(counts[s], `${s} count out of band`).toBeLessThanOrEqual(1200);
+  it('maps RNG output deterministically to style index', () => {
+    for (let i = 0; i < STYLES.length; i++) {
+      const value = (i + 0.5) / STYLES.length;
+      expect(pickStyle(() => value)).toBe(STYLES[i]);
     }
   });
 });

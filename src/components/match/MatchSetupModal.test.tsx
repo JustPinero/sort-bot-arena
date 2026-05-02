@@ -249,65 +249,42 @@ describe('<MatchSetupModal />', () => {
 });
 
 describe('<MatchSetupModal /> tooltips', () => {
-  it('exposes tooltips on the major form controls (red corner, blue corner, preset bundle)', async () => {
+  // Radix Tooltip opens on pointerMove and focus. Fire pointer events directly
+  // — userEvent.hover trips on Radix's pointer-events:none body in jsdom.
+  it.each([
+    ['red corner', /red corner/i, /red corner badge|fighter a/i],
+    ['blue corner', /blue corner/i, /different from the red/i],
+    ['preset bundle', /preset bundle/i, /weight class chip|bigger bundle/i],
+  ])('shows tooltip on the %s control', async (_label, controlLabel, contentRegex) => {
     renderModal();
     await screen.findByRole('tab', { name: /preset/i });
 
     const red = (await screen.findByLabelText(/red corner/i)) as HTMLSelectElement;
     await waitFor(() => expect(red.options.length).toBeGreaterThan(1));
 
-    // Radix Tooltip opens on pointerMove and focus. Fire pointer events directly
-    // — userEvent.hover trips on Radix's pointer-events:none body in jsdom.
-    fireEvent.pointerMove(red);
+    const trigger = await screen.findByLabelText(controlLabel);
+    fireEvent.pointerMove(trigger);
     await waitFor(async () => {
       const tips = await screen.findAllByRole('tooltip');
-      expect(tips.some((t) => /red corner badge|fighter a/i.test(t.textContent ?? ''))).toBe(true);
-    });
-
-    const blue = (await screen.findByLabelText(/blue corner/i)) as HTMLSelectElement;
-    fireEvent.pointerMove(blue);
-    await waitFor(async () => {
-      const tips = await screen.findAllByRole('tooltip');
-      expect(tips.some((t) => /different from the red/i.test(t.textContent ?? ''))).toBe(true);
-    });
-
-    const presetSelect = await screen.findByLabelText(/preset bundle/i);
-    fireEvent.pointerMove(presetSelect);
-    await waitFor(async () => {
-      const tips = await screen.findAllByRole('tooltip');
-      expect(tips.some((t) => /weight class chip|bigger bundle/i.test(t.textContent ?? ''))).toBe(
-        true,
-      );
+      expect(tips.some((t) => contentRegex.test(t.textContent ?? ''))).toBe(true);
     });
   });
 });
 
 describe('<MatchSetupModal /> tab tooltips', () => {
-  it('exposes tooltips on Preset/Manual/Upload tab triggers', async () => {
+  // Tooltip triggers wrap each tab in a span.
+  it.each([
+    ['preset', /preset/i, /bundled inputs|weight class/i],
+    ['manual', /manual/i, /cherry-pick|shared pool/i],
+    ['upload', /upload/i, /integer array|saved globally/i],
+  ])('shows tooltip on the %s tab trigger', async (_label, tabName, contentRegex) => {
     renderModal();
-    const presetTab = await screen.findByRole('tab', { name: /preset/i });
-    const manualTab = screen.getByRole('tab', { name: /manual/i });
-    const uploadTab = screen.getByRole('tab', { name: /upload/i });
+    const tab = await screen.findByRole('tab', { name: tabName });
 
-    // Tooltip triggers wrap each tab in a span.
-    fireEvent.pointerMove(presetTab.parentElement as HTMLElement);
+    fireEvent.pointerMove(tab.parentElement as HTMLElement);
     await waitFor(async () => {
       const tips = await screen.findAllByRole('tooltip');
-      expect(tips.some((t) => /bundled inputs|weight class/i.test(t.textContent ?? ''))).toBe(true);
-    });
-
-    fireEvent.pointerMove(manualTab.parentElement as HTMLElement);
-    await waitFor(async () => {
-      const tips = await screen.findAllByRole('tooltip');
-      expect(tips.some((t) => /cherry-pick|shared pool/i.test(t.textContent ?? ''))).toBe(true);
-    });
-
-    fireEvent.pointerMove(uploadTab.parentElement as HTMLElement);
-    await waitFor(async () => {
-      const tips = await screen.findAllByRole('tooltip');
-      expect(tips.some((t) => /integer array|saved globally/i.test(t.textContent ?? ''))).toBe(
-        true,
-      );
+      expect(tips.some((t) => contentRegex.test(t.textContent ?? ''))).toBe(true);
     });
   });
 });

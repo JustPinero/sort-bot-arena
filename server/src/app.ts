@@ -15,7 +15,7 @@ import { leaderboardRoutes } from './routes/leaderboard.js';
 import { perInputLeaderboardRoutes } from './routes/per-input-leaderboard.js';
 import { statsRoutes } from './routes/stats.js';
 import { testRoutes } from './routes/test.js';
-import { tournamentsRoutes } from './routes/tournaments.js';
+import { tournamentsRoutes, type OrchestratorHandle } from './routes/tournaments.js';
 import { userRoutes } from './routes/users.js';
 
 import type { AppContext } from './auth/middleware.js';
@@ -46,6 +46,10 @@ export interface AppDeps {
   // events_processed:0 but `ready` stays true (listener isn't on the
   // critical request path).
   listener?: ListenerHealth | null;
+  // Slice D4 — orchestrator handle wired into the tournaments POST
+  // handler. Optional so `makeTestApp()` callers that only exercise
+  // unrelated routes can omit it.
+  orchestrator?: OrchestratorHandle;
   // When true, mounts `/api/test/reset` (drops + re-runs migrations).
   // GATED: production must NEVER set this. Real-server Playwright specs
   // toggle this via `ENABLE_TEST_RESET=true` on the server boot command.
@@ -171,6 +175,7 @@ export function createApp(deps: AppDeps): Hono<AppContext> {
       sortBotApi: deps.sortBotApi,
       persona: deps.persona,
       sessionSecret: deps.sessionSecret,
+      ...(deps.orchestrator ? { orchestrator: deps.orchestrator } : {}),
     }),
   );
   app.route(

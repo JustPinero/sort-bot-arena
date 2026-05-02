@@ -19,6 +19,7 @@ import {
   BotRunStrictSchema,
   BotSnapshotStrictSchema,
   BotStrictSchema,
+  CreateTournamentResponseStrictSchema,
   CursorPageSchema,
   HomeSnapshotStrictSchema,
   InputPerformanceStrictSchema,
@@ -595,13 +596,11 @@ describe('contract drift — every endpoint matches src/api/schemas.ts', () => {
       StartBattleResponseStrictSchema.parse(await res.json());
     });
 
-    it('POST /api/v1/tournaments matches the response shape useStartTournament expects', async () => {
-      // Drift watch: useStartTournament currently parses against TournamentSchema,
-      // but the server returns the upstream `{tournament_id, ...}` envelope
-      // verbatim. We assert against the shape the server actually returns —
-      // the matching frontend schema fix is tracked separately. If the server
-      // ever flips to returning the rich Tournament shape, this assertion
-      // tightens to TournamentStrictSchema.
+    it('POST /api/v1/tournaments matches CreateTournamentResponseStrictSchema (B6 drift resolved by D4)', async () => {
+      // Slice D4 — server now returns the clean `{tournament_id, status}`
+      // envelope (CreateTournamentResponseSchema) and the frontend's
+      // `useStartTournament` parses against the matching schema. This
+      // closes the B6 drift the test originally flagged.
       const { t, cookie } = await signedUpApp();
       server.use(
         http.post(`${UPSTREAM}/v1/tournaments`, () =>
@@ -625,10 +624,7 @@ describe('contract drift — every endpoint matches src/api/schemas.ts', () => {
         }),
       });
       expect([200, 201]).toContain(res.status);
-      const body = await res.json();
-      // Server returns CreateTournamentResponse envelope (drift from
-      // useStartTournament's TournamentSchema expectation).
-      z.object({ tournament_id: z.string() }).passthrough().parse(body);
+      CreateTournamentResponseStrictSchema.parse(await res.json());
     });
   });
 });

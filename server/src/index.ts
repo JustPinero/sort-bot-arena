@@ -3,6 +3,7 @@ import { serve } from '@hono/node-server';
 import { createClient } from '@libsql/client';
 
 import { createApp } from './app.js';
+import { decryptString } from './auth/encrypt.js';
 import { SortBotApiClient } from './clients/sort-bot-api/index.js';
 import { runMigrations } from './db/migrate.js';
 import { loadEnv } from './env.js';
@@ -11,6 +12,7 @@ import { log } from './lib/log.js';
 import { initSentry } from './lib/sentry.js';
 import { BattleSweeper } from './listener/battle-sweep.js';
 import { GlobalEventListener } from './listener/global-listener.js';
+import { TournamentOrchestrator } from './orchestrator/tournament.js';
 import { AnthropicClient } from './persona/anthropic.js';
 import { LeonardoClient } from './persona/leonardo.js';
 import { PersonaService } from './persona/service.js';
@@ -45,6 +47,17 @@ async function bootstrap(): Promise<void> {
     },
     'persona generators wired',
   );
+  // Slice D4 — orchestrator core constructed first so the listener and
+  // tournaments POST handler can both hold a handle to it. The
+  // listener's `advanceMatch` callback closes the loop (battle_complete
+  // → mark match complete → schedule next round); the POST handler's
+  // fire-and-forget `schedule(...)` kicks off round 1.
+  const orchestrator = new TournamentOrchestrator({
+    db,
+    sortBotApi,
+    decryptKey: (blob) => decryptString(blob, env.SESSION_SECRET),
+  });
+
   // Slice C4 (D-8) — reactive `running → complete` transitions via the
   // upstream `/v1/events/stream`. Single-instance per environment (Railway
   // single-replica + RUN_LISTENER set on exactly that replica). The 60s
@@ -57,6 +70,7 @@ async function bootstrap(): Promise<void> {
     db,
     sortBotApiUrl: env.SORT_BOT_API_URL,
     runListener: env.RUN_LISTENER,
+    orchestrator,
   });
 
   const app = createApp({
@@ -70,6 +84,7 @@ async function bootstrap(): Promise<void> {
       .map((s) => s.trim())
       .filter(Boolean),
     listener: env.RUN_LISTENER ? listener : null,
+    orchestrator,
     enableTestReset: env.ENABLE_TEST_RESET,
   });
 

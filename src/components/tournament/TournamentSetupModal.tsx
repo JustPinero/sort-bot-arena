@@ -86,7 +86,10 @@ export function TournamentSetupModal({
       // navigation; selection cleared per spec.
       reset();
       setOpen(false);
-      navigate(`/tournaments/${result.id}`);
+      // Slice D4 — server returns the `{tournament_id, status}`
+      // envelope. The bracket page hydrates the rich shape via
+      // `useTournament(id)`.
+      navigate(`/tournaments/${result.tournament_id}`);
     } catch (err) {
       if (err instanceof ApiError) {
         setError(err.message || `Could not start tournament (${err.status})`);

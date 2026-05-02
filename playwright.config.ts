@@ -23,6 +23,12 @@ const SESSION_SECRET = 'test_secret_at_least_32_chars_for_jose_xx';
 
 export default defineConfig({
   fullyParallel: false,
+  // Real-server specs share a single in-memory libsql + Hono process,
+  // so clean() in one spec's beforeEach can wipe the DB out from
+  // under a sibling spec running in a parallel worker. Cap at 1
+  // worker to serialize the whole run. (The mocked project has a
+  // single spec; this costs us nothing there.)
+  workers: 1,
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 2 : 0,
   reporter: [['html', { open: 'never' }]],

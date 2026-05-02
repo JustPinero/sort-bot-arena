@@ -292,12 +292,30 @@ export type Battle = z.infer<typeof BattleSchema>;
 // Submit + evaluation events
 // ---------------------------------------------------------------------------
 
-export const SubmitBotResponseSchema = z
-  .object({
-    bot_id: z.string(),
-  })
-  .passthrough();
-export const SubmitBotResponseStrictSchema = SubmitBotResponseSchema.strict();
+// The arena server's `POST /api/v1/bots` returns the synthesized rich Bot
+// shape (asserted by `server/tests/contract-drift.test.ts`), keyed off
+// `id`. The frontend has historically read `res.bot_id` from this call, so
+// we preprocess to bridge the two — accept either `bot_id` directly or
+// derive `bot_id` from `id` — without forcing a wider rename through every
+// caller of `useSubmitBot`. The G2 real-server E2E surfaced the gap; this
+// preprocess closes it.
+const submitBotPreprocess = (v: unknown): unknown => {
+  if (v && typeof v === 'object' && v !== null) {
+    const obj = v as Record<string, unknown>;
+    if (!('bot_id' in obj) && typeof obj['id'] === 'string') {
+      return { ...obj, bot_id: obj['id'] };
+    }
+  }
+  return v;
+};
+export const SubmitBotResponseSchema = z.preprocess(
+  submitBotPreprocess,
+  z.object({ bot_id: z.string() }).passthrough(),
+);
+export const SubmitBotResponseStrictSchema = z.preprocess(
+  submitBotPreprocess,
+  z.object({ bot_id: z.string() }).strict(),
+);
 export type SubmitBotResponse = z.infer<typeof SubmitBotResponseSchema>;
 
 const evalBaseTs = z.object({ ts: z.string() });
@@ -383,6 +401,17 @@ export const TournamentSchema = z
   .passthrough();
 export const TournamentStrictSchema = TournamentSchema.strict();
 export type Tournament = z.infer<typeof TournamentSchema>;
+
+// Slice D4 — POST /api/v1/tournaments now returns a clean envelope
+// (`{tournament_id, status: 'pending'}`) instead of the upstream
+// CreateTournamentResponse passed through verbatim. The frontend's
+// `useStartTournament` consumes this shape; the rich `Tournament` is
+// fetched separately by `useTournament(id)` after the redirect.
+export const CreateTournamentResponseSchema = z
+  .object({ tournament_id: z.string(), status: z.string() })
+  .passthrough();
+export const CreateTournamentResponseStrictSchema = CreateTournamentResponseSchema.strict();
+export type CreateTournamentResponse = z.infer<typeof CreateTournamentResponseSchema>;
 
 // ---------------------------------------------------------------------------
 // Feed + home snapshot

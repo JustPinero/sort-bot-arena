@@ -352,23 +352,14 @@ describe('<TournamentSetupModal />', () => {
 
   it('successful submit redirects to /tournaments/<id>', async () => {
     useLeaderboardHandler(makeBots(12));
+    // Slice D4 — server returns the clean `{tournament_id, status}`
+    // envelope (CreateTournamentResponseSchema). The frontend redirects
+    // to /tournaments/:id and the bracket page fetches the rich
+    // Tournament shape via `useTournament(id)`.
     server.use(
       http.post(`${BASE}/api/v1/tournaments`, () =>
         HttpResponse.json(
-          {
-            id: 'trn_yay',
-            name: 'Yay',
-            status: 'upcoming',
-            participant_count: 8,
-            weight_class_filter: null,
-            prize_description: null,
-            scheduled_at: '2026-04-29T20:00:00Z',
-            rounds_total: 3,
-            current_round: 0,
-            champion_bot_id: null,
-            participants: [],
-            matches: [],
-          },
+          { tournament_id: 'trn_yay', status: 'pending' },
           { status: 201 },
         ),
       ),

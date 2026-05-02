@@ -18,9 +18,20 @@
 
 import { log } from '../lib/log.js';
 import { insertCompletedFromUpstream } from '../store/recent-battles.js';
+import {
+  markComplete as markTournamentMatchComplete,
+  type TournamentMatchRow,
+} from '../store/tournament-matches.js';
 import { SseLineParser, type ParsedEvent } from './sse-parser.js';
 
 import type { Client } from '@libsql/client';
+
+// Slice D4 — listener calls into the orchestrator on `battle_complete`
+// when the battle maps to a tournament match. Structural type so tests
+// can pass a stub/spy without standing up the full orchestrator core.
+export interface OrchestratorAdvancer {
+  advanceMatch(match: TournamentMatchRow): Promise<void>;
+}
 
 export const RECONNECT_BACKOFFS_MS = [1000, 2000, 5000, 10000, 30000] as const;
 const MAX_BACKOFF_MS = 30_000;
@@ -44,6 +55,12 @@ export interface GlobalEventListenerOpts {
   sleep?: (ms: number) => Promise<void>;
   // Optional jitter source for backoff (0..1). Defaults to Math.random.
   random?: () => number;
+  // Slice D4 — when present, `battle_complete` events that map to a
+  // tournament_matches row (joined on battle_id) trigger `advanceMatch`
+  // after the match's status is flipped to `complete`. Optional so the
+  // listener can run without the orchestrator wired (the 60s sweep is
+  // the safety net).
+  orchestrator?: OrchestratorAdvancer;
 }
 
 interface BattleCompletePayload {
@@ -62,6 +79,7 @@ export class GlobalEventListener {
   private readonly onEventCount: ((count: number) => void) | undefined;
   private readonly sleep: (ms: number) => Promise<void>;
   private readonly random: () => number;
+  private readonly orchestrator: OrchestratorAdvancer | undefined;
 
   private running = false;
   private stopped = false;
@@ -88,6 +106,7 @@ export class GlobalEventListener {
           }
         }));
     this.random = opts.random ?? Math.random;
+    this.orchestrator = opts.orchestrator;
   }
 
   start(): void {
@@ -232,6 +251,12 @@ export class GlobalEventListener {
     });
     if (updateRes.rowsAffected > 0) {
       log.info({ battle_id: battleId, winner_bot_id: winnerBotId }, 'global listener: battle marked complete');
+      // Slice D4 — if this battle is a tournament match, mark the match
+      // complete and hand off to the orchestrator. The
+      // `WHERE status != 'complete'` guard on the lookup keeps replays
+      // idempotent (a second event for the same battle finds no row,
+      // skips the advance).
+      await this.maybeAdvanceTournamentMatch(battleId, winnerBotId, completedAt);
       return;
     }
 
@@ -268,6 +293,63 @@ export class GlobalEventListener {
           err: err instanceof Error ? err.message : String(err),
         },
         'global listener: failed to backfill unknown battle',
+      );
+    }
+  }
+
+  private async maybeAdvanceTournamentMatch(
+    battleId: string,
+    winnerBotId: string | null,
+    completedAt: string,
+  ): Promise<void> {
+    if (!this.orchestrator) return;
+    if (!winnerBotId) return; // no winner = orchestrator can't promote
+    // Look up the tournament_matches row joined to this battle_id. The
+    // `status != 'complete'` filter keeps replays idempotent — a
+    // re-delivered event for an already-advanced match finds nothing
+    // here and short-circuits without calling advanceMatch.
+    const res = await this.db.execute({
+      sql: `SELECT match_id, tournament_id, round, bracket_position,
+                   bot_a_id, bot_b_id, battle_id, status,
+                   winner_bot_id, scheduled_at, completed_at
+              FROM tournament_matches
+             WHERE battle_id = ?
+               AND status != 'complete'
+             LIMIT 1`,
+      args: [battleId],
+    });
+    const row = res.rows[0];
+    if (!row) return;
+    const r = row as unknown as Record<string, unknown>;
+    const matchId = r['match_id'] as string;
+    // Mark the match complete first; the orchestrator's `advanceMatch`
+    // re-reads the row under its per-tournament lock so it sees the
+    // freshest state. We pass the row with the resolved winner so the
+    // orchestrator can slot it into the next round directly.
+    await markTournamentMatchComplete(this.db, matchId, winnerBotId, completedAt);
+    const matchRow: TournamentMatchRow = {
+      match_id: matchId,
+      tournament_id: r['tournament_id'] as string,
+      round: Number(r['round']),
+      bracket_position: Number(r['bracket_position']),
+      bot_a_id: (r['bot_a_id'] as string | null) ?? null,
+      bot_b_id: (r['bot_b_id'] as string | null) ?? null,
+      battle_id: (r['battle_id'] as string | null) ?? null,
+      status: 'complete',
+      winner_bot_id: winnerBotId,
+      scheduled_at: (r['scheduled_at'] as string | null) ?? null,
+      completed_at: completedAt,
+    };
+    try {
+      await this.orchestrator.advanceMatch(matchRow);
+    } catch (err) {
+      log.warn(
+        {
+          battle_id: battleId,
+          match_id: matchId,
+          err: err instanceof Error ? err.message : String(err),
+        },
+        'global listener: advanceMatch failed',
       );
     }
   }
