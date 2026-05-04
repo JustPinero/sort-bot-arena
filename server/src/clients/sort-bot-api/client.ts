@@ -334,7 +334,10 @@ export class SortBotApiClient {
   async getBattle(id: string): Promise<BattleResponse> {
     const raw = await this.request<{
       battle: Record<string, unknown>;
-      runs: Array<Record<string, unknown>>;
+      // Upstream returns `null` (not `[]`) for a freshly-started battle
+      // that hasn't recorded any runs yet. Type as nullable so we
+      // remember to guard.
+      runs: Array<Record<string, unknown>> | null;
     }>({ path: `/v1/battles/${id}` });
     const battle: BattleSummary = {
       id: raw.battle['id'] as string,
@@ -349,7 +352,7 @@ export class SortBotApiClient {
       created_at: raw.battle['created_at'] as string,
       completed_at: nullStr(raw.battle['completed_at']),
     };
-    const runs: BattleRun[] = raw.runs.map((r) => ({
+    const runs: BattleRun[] = (raw.runs ?? []).map((r) => ({
       id: r['id'] as number,
       battle_id: r['battle_id'] as string,
       input_id: r['input_id'] as number,

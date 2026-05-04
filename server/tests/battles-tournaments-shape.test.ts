@@ -472,4 +472,59 @@ describe('GET /api/v1/tournaments/:id — Slice D5 our-DB-driven path', () => {
     expect(parsed.status).toBe('completed');
     expect(parsed.champion_bot_id).toBe('bot_a');
   });
+
+  it('returns 200 with placeholder participant when one bot 404s upstream (resilience)', async () => {
+    // Phase 10 follow-up — the D5 path used to 500 the entire tournament
+    // GET if a single participant 404'd upstream (Promise.all fail-fast).
+    // Now per-bot fetches are caught and degraded to a synthesized
+    // placeholder so the bracket still renders.
+    const t = await makeTestApp({ sortBotApiBaseUrl: UPSTREAM });
+    const { recordTournament } = await import('../src/store/recent-tournaments.js');
+    const { insertInitialMatches } = await import('../src/store/tournament-matches.js');
+
+    const tid = 'tour_d5_resilience_404';
+    await recordTournament(t.db, {
+      tournament_id: tid,
+      initiator_user_id: 'u1',
+      participant_count: 4,
+      bracket_size: 4,
+      input_mode: 'flat_random',
+      status: 'running',
+    });
+    await insertInitialMatches(t.db, tid, [
+      {
+        match_id: 'r1p0',
+        round: 1,
+        bracket_position: 0,
+        bot_a_id: 'bot_a',
+        bot_b_id: 'bot_missing',
+        status: 'pending',
+        winner_bot_id: null,
+      },
+    ]);
+
+    server.use(
+      http.get(`${UPSTREAM}/v1/bots/bot_a`, () => HttpResponse.json(botA)),
+      http.get(`${UPSTREAM}/v1/bots/bot_missing`, () =>
+        HttpResponse.json({ error: 'not_found', code: 'not_found' }, { status: 404 }),
+      ),
+    );
+
+    const res = await t.app.request(`/api/v1/tournaments/${tid}`);
+    expect(res.status).toBe(200);
+    const parsed = TournamentStrictSchema.parse(await res.json());
+    expect(parsed.participants).toHaveLength(2);
+
+    const real = parsed.participants.find((p) => p.bot_id === 'bot_a');
+    const placeholder = parsed.participants.find((p) => p.bot_id === 'bot_missing');
+    expect(real?.display_name).toBe('Alpha Bot');
+    // Placeholder degrades gracefully: deterministic nickname from
+    // nicknameFor(), language='unknown', no portrait. The rest of the
+    // bracket payload is preserved.
+    expect(placeholder).toBeDefined();
+    expect(placeholder?.nickname).toBeTruthy();
+    expect(placeholder?.language).toBe('unknown');
+    expect(placeholder?.portrait_url).toBeNull();
+    expect(placeholder?.display_name).toMatch(/^Bot bot_miss/i);
+  });
 });
