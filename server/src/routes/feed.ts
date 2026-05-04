@@ -40,7 +40,9 @@ export function feedRoutes(deps: {
   r.get('/snapshot', async (c) => {
     const lb = await deps.sortBotApi.getLeaderboard({ limit: 3 }).catch(() => null);
     const top = lb?.bots ?? [];
-    const personas = await Promise.all(top.map((b) => deps.persona.get(b.bot_id).catch(() => null)));
+    const personas = await Promise.all(
+      top.map((b) => deps.persona.get(b.bot_id).catch(() => null)),
+    );
 
     // Backfill personas for any bot we're about to surface. Covers the
     // top-3 ticker bots regardless of whether they end up populating

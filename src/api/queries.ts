@@ -1,30 +1,81 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { z } from 'zod';
 
-import { apiClient } from './client';
+import { ApiError, apiClient } from './client';
+import { config } from './config';
+import { retryNon4xx } from './error-helpers';
+import {
+  AchievementDefinitionSchema,
+  AnalysisResponseSchema,
+  BattleSchema,
+  BotRunSchema,
+  BotSchema,
+  BotSnapshotSchema,
+  CreateTournamentResponseSchema,
+  CursorPageSchema,
+  HomeSnapshotSchema,
+  InputPerformanceSchema,
+  InputSummarySchema,
+  LeaderboardEntrySchema,
+  PerInputLeaderboardEntrySchema,
+  SessionUserSchema,
+  SubmitBotResponseSchema,
+  TournamentSchema,
+} from './schemas';
 
+import type { HealthResponseSchema } from './schemas';
 import type {
-  AchievementDefinition,
-  AnalysisResponse,
-  Battle,
-  Bot,
-  BotRun,
-  BotSnapshot,
   CursorPage,
-  HealthResponse,
-  HomeSnapshot,
-  InputPerformance,
   InputSummary,
   LeaderboardEntry,
   LeaderboardFilters,
   PerInputLeaderboardEntry,
-  SubmitBotResponse,
-  Tournament,
 } from './types';
+
+// `/api/healthz` returns `text/plain "ok"` on the deployed server, not JSON.
+// We synthesize the historical `{status: 'ok'}` shape from a 200 response so
+// callers (and `HealthResponseSchema`) keep working unchanged.
+async function pingHealth(): Promise<z.infer<typeof HealthResponseSchema>> {
+  let response: Response;
+  try {
+    response = await fetch(`${config.apiBaseUrl}/api/healthz`, {
+      method: 'GET',
+      credentials: 'include',
+    });
+  } catch (err) {
+    throw new ApiError({
+      status: 0,
+      code: 'network_error',
+      message: err instanceof Error ? err.message : 'unknown network error',
+      retryable: true,
+    });
+  }
+  if (!response.ok) {
+    let errorMessage = response.statusText || 'request failed';
+    let code = `http_${response.status}`;
+    try {
+      const envelope = (await response.json()) as { error?: string; code?: string };
+      if (envelope.code) code = envelope.code;
+      else if (envelope.error) code = envelope.error;
+      if (envelope.error) errorMessage = envelope.error;
+    } catch {
+      // body may not be JSON; fall through with statusText
+    }
+    throw new ApiError({
+      status: response.status,
+      code,
+      message: errorMessage,
+      requestId: response.headers.get('X-Request-Id') ?? undefined,
+      retryable: response.status >= 500,
+    });
+  }
+  return { status: 'ok' };
+}
 
 export function usePing() {
   return useQuery({
     queryKey: ['health'],
-    queryFn: () => apiClient.get<HealthResponse>('/api/healthz', { skipAuth: true }),
+    queryFn: pingHealth,
     staleTime: 30 * 1000,
   });
 }
@@ -32,14 +83,10 @@ export function usePing() {
 export function useBot(botId: string | undefined) {
   return useQuery({
     queryKey: ['bots', botId],
-    queryFn: () => apiClient.get<Bot>(`/api/v1/bots/${botId}`),
+    queryFn: () => apiClient.get(`/api/v1/bots/${botId}`, { schema: BotSchema }),
     enabled: Boolean(botId),
     staleTime: 5 * 60 * 1000,
-    retry: (failureCount, err) => {
-      const status = (err as { status?: number } | null)?.status;
-      if (status && status >= 400 && status < 500) return false;
-      return failureCount < 1;
-    },
+    retry: retryNon4xx,
   });
 }
 
@@ -47,6 +94,8 @@ interface UseBotRunsOptions {
   cursor?: string;
   limit?: number;
 }
+
+const BotRunsPageSchema = CursorPageSchema(BotRunSchema);
 
 export function useBotRuns(botId: string | undefined, opts?: UseBotRunsOptions) {
   const params = new URLSearchParams();
@@ -57,25 +106,30 @@ export function useBotRuns(botId: string | undefined, opts?: UseBotRunsOptions) 
 
   return useQuery({
     queryKey: ['bots', botId, 'runs', opts?.cursor ?? null, opts?.limit ?? null],
-    queryFn: () => apiClient.get<CursorPage<BotRun>>(path),
+    queryFn: () => apiClient.get(path, { schema: BotRunsPageSchema }),
     enabled: Boolean(botId),
     staleTime: 60 * 1000,
   });
 }
 
+const BotSnapshotsSchema = z.array(BotSnapshotSchema);
+
 export function useBotSnapshots(botId: string | undefined) {
   return useQuery({
     queryKey: ['bots', botId, 'snapshots'],
-    queryFn: () => apiClient.get<BotSnapshot[]>(`/api/v1/bots/${botId}/snapshots`),
+    queryFn: () => apiClient.get(`/api/v1/bots/${botId}/snapshots`, { schema: BotSnapshotsSchema }),
     enabled: Boolean(botId),
     staleTime: 5 * 60 * 1000,
   });
 }
 
+const InputPerformanceListSchema = z.array(InputPerformanceSchema);
+
 export function useBotInputPerformance(botId: string | undefined) {
   return useQuery({
     queryKey: ['bots', botId, 'inputs'],
-    queryFn: () => apiClient.get<InputPerformance[]>(`/api/v1/bots/${botId}/inputs`),
+    queryFn: () =>
+      apiClient.get(`/api/v1/bots/${botId}/inputs`, { schema: InputPerformanceListSchema }),
     enabled: Boolean(botId),
     staleTime: 5 * 60 * 1000,
   });
@@ -84,7 +138,8 @@ export function useBotInputPerformance(botId: string | undefined) {
 export function useBotAnalysis(botId: string | undefined, opts?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ['bots', botId, 'analysis'],
-    queryFn: () => apiClient.get<AnalysisResponse>(`/api/v1/bots/${botId}/analysis`),
+    queryFn: () =>
+      apiClient.get(`/api/v1/bots/${botId}/analysis`, { schema: AnalysisResponseSchema }),
     enabled: Boolean(botId) && (opts?.enabled ?? true),
     retry: false,
     staleTime: 5 * 60 * 1000,
@@ -106,10 +161,15 @@ export interface LeaderboardResponse extends CursorPage<LeaderboardEntry> {
   stale_age_ms?: number;
 }
 
+const LeaderboardResponseSchema = CursorPageSchema(LeaderboardEntrySchema).extend({
+  stale: z.boolean().optional(),
+  stale_age_ms: z.number().optional(),
+});
+
 export function useLeaderboard(filters: LeaderboardFilters) {
   return useQuery({
     queryKey: ['leaderboard', filters],
-    queryFn: () => apiClient.get<LeaderboardResponse>(leaderboardPath(filters)),
+    queryFn: () => apiClient.get(leaderboardPath(filters), { schema: LeaderboardResponseSchema }),
     staleTime: 60 * 1000,
   });
 }
@@ -120,33 +180,43 @@ export interface PerInputLeaderboardResponse {
   next_cursor: string | null;
 }
 
+const PerInputLeaderboardResponseSchema = z
+  .object({
+    input: InputSummarySchema,
+    items: z.array(PerInputLeaderboardEntrySchema),
+    next_cursor: z.string().nullable(),
+  })
+  .passthrough();
+
 export function usePerInputLeaderboard(inputId: string | undefined) {
   return useQuery({
     queryKey: ['leaderboard', 'inputs', inputId],
     queryFn: () =>
-      apiClient.get<PerInputLeaderboardResponse>(`/api/v1/leaderboard/inputs/${inputId}`),
+      apiClient.get(`/api/v1/leaderboard/inputs/${inputId}`, {
+        schema: PerInputLeaderboardResponseSchema,
+      }),
     enabled: Boolean(inputId),
     staleTime: 60 * 1000,
-    retry: (failureCount, err) => {
-      const status = (err as { status?: number } | null)?.status;
-      if (status && status >= 400 && status < 500) return false;
-      return failureCount < 1;
-    },
+    retry: retryNon4xx,
   });
 }
+
+const InputsPageSchema = CursorPageSchema(InputSummarySchema);
 
 export function useInputs() {
   return useQuery({
     queryKey: ['inputs'],
-    queryFn: () => apiClient.get<CursorPage<InputSummary>>('/api/v1/inputs'),
+    queryFn: () => apiClient.get('/api/v1/inputs', { schema: InputsPageSchema }),
     staleTime: 5 * 60 * 1000,
   });
 }
 
+const BattlesPageSchema = CursorPageSchema(BattleSchema);
+
 export function useBattles() {
   return useQuery({
     queryKey: ['battles'],
-    queryFn: () => apiClient.get<CursorPage<Battle>>('/api/v1/battles'),
+    queryFn: () => apiClient.get('/api/v1/battles', { schema: BattlesPageSchema }),
     staleTime: 30 * 1000,
   });
 }
@@ -154,14 +224,10 @@ export function useBattles() {
 export function useBattle(battleId: string | undefined) {
   return useQuery({
     queryKey: ['battles', battleId],
-    queryFn: () => apiClient.get<Battle>(`/api/v1/battles/${battleId}`),
+    queryFn: () => apiClient.get(`/api/v1/battles/${battleId}`, { schema: BattleSchema }),
     enabled: Boolean(battleId),
     staleTime: 30 * 1000,
-    retry: (failureCount, err) => {
-      const status = (err as { status?: number } | null)?.status;
-      if (status && status >= 400 && status < 500) return false;
-      return failureCount < 1;
-    },
+    retry: retryNon4xx,
   });
 }
 
@@ -178,7 +244,7 @@ export function useSubmitBot() {
     mutationFn: async (input: SubmitBotInput) => {
       // Backend Phase 5 will accept multipart; JSON works for now (sort-bot-api's
       // OpenAPI will dictate the wire format once it ships).
-      return apiClient.post<SubmitBotResponse>('/api/v1/bots', input);
+      return apiClient.post('/api/v1/bots', input, { schema: SubmitBotResponseSchema });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['leaderboard'] });
@@ -187,10 +253,12 @@ export function useSubmitBot() {
   });
 }
 
+const BotListSchema = z.array(BotSchema);
+
 export function useMyBots() {
   return useQuery({
     queryKey: ['users', 'me', 'bots'],
-    queryFn: () => apiClient.get<Bot[]>('/api/v1/users/me/bots'),
+    queryFn: () => apiClient.get('/api/v1/users/me/bots', { schema: BotListSchema }),
     staleTime: 60 * 1000,
   });
 }
@@ -198,7 +266,8 @@ export function useMyBots() {
 export function useRetireBot() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (botId: string) => apiClient.patch<Bot>(`/api/v1/bots/${botId}`, { retired: true }),
+    mutationFn: (botId: string) =>
+      apiClient.patch(`/api/v1/bots/${botId}`, { retired: true }, { schema: BotSchema }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users', 'me', 'bots'] });
       queryClient.invalidateQueries({ queryKey: ['leaderboard'] });
@@ -217,10 +286,16 @@ export interface StartBattleResponse {
   battle_id: string;
 }
 
+const StartBattleResponseSchema = z.object({ battle_id: z.string() }).passthrough();
+
 export function useStartBattle() {
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: StartBattleInput) =>
-      apiClient.post<StartBattleResponse>('/api/v1/battles', input),
+      apiClient.post('/api/v1/battles', input, { schema: StartBattleResponseSchema }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['battles'] });
+    },
   });
 }
 
@@ -233,17 +308,20 @@ export interface UploadInputInput {
 export function useUploadInput() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: UploadInputInput) => apiClient.post<InputSummary>('/api/v1/inputs', input),
+    mutationFn: (input: UploadInputInput) =>
+      apiClient.post('/api/v1/inputs', input, { schema: InputSummarySchema }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['inputs'] });
     },
   });
 }
 
+const TournamentsPageSchema = CursorPageSchema(TournamentSchema);
+
 export function useTournaments() {
   return useQuery({
     queryKey: ['tournaments'],
-    queryFn: () => apiClient.get<CursorPage<Tournament>>('/api/v1/tournaments'),
+    queryFn: () => apiClient.get('/api/v1/tournaments', { schema: TournamentsPageSchema }),
     staleTime: 60 * 1000,
   });
 }
@@ -262,8 +340,12 @@ export interface StartTournamentInput {
 export function useStartTournament() {
   const queryClient = useQueryClient();
   return useMutation({
+    // Slice D4 — server now returns the clean `{tournament_id, status}`
+    // envelope (CreateTournamentResponseSchema). The rich `Tournament`
+    // shape is fetched by `useTournament(id)` on the bracket page after
+    // the redirect; this resolves the B6-flagged contract drift.
     mutationFn: (input: StartTournamentInput) =>
-      apiClient.post<Tournament>('/api/v1/tournaments', input),
+      apiClient.post('/api/v1/tournaments', input, { schema: CreateTournamentResponseSchema }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tournaments'] });
     },
@@ -273,21 +355,17 @@ export function useStartTournament() {
 export function useTournament(id: string | undefined) {
   return useQuery({
     queryKey: ['tournaments', id],
-    queryFn: () => apiClient.get<Tournament>(`/api/v1/tournaments/${id}`),
+    queryFn: () => apiClient.get(`/api/v1/tournaments/${id}`, { schema: TournamentSchema }),
     enabled: Boolean(id),
     staleTime: 60 * 1000,
-    retry: (failureCount, err) => {
-      const status = (err as { status?: number } | null)?.status;
-      if (status && status >= 400 && status < 500) return false;
-      return failureCount < 1;
-    },
+    retry: retryNon4xx,
   });
 }
 
 export function useHomeSnapshot() {
   return useQuery({
     queryKey: ['feed', 'snapshot'],
-    queryFn: () => apiClient.get<HomeSnapshot>('/api/v1/feed/snapshot'),
+    queryFn: () => apiClient.get('/api/v1/feed/snapshot', { schema: HomeSnapshotSchema }),
     staleTime: 30 * 1000,
   });
 }
@@ -295,15 +373,43 @@ export function useHomeSnapshot() {
 export function useHallOfFame() {
   return useQuery({
     queryKey: ['halloffame'],
-    queryFn: () => apiClient.get<Bot[]>('/api/v1/halloffame'),
+    queryFn: () => apiClient.get('/api/v1/halloffame', { schema: BotListSchema }),
     staleTime: 5 * 60 * 1000,
   });
 }
 
+export interface SignupInput {
+  display_name: string;
+  email: string;
+  password: string;
+}
+
+export function useSignup() {
+  return useMutation({
+    mutationFn: (input: SignupInput) =>
+      apiClient.post('/api/v1/auth/signup', input, { schema: SessionUserSchema }),
+  });
+}
+
+export interface LoginInput {
+  email: string;
+  password: string;
+}
+
+export function useLogin() {
+  return useMutation({
+    mutationFn: (input: LoginInput) =>
+      apiClient.post('/api/v1/auth/login', input, { schema: SessionUserSchema }),
+  });
+}
+
+const AchievementDefinitionListSchema = z.array(AchievementDefinitionSchema);
+
 export function useAchievementsCatalog() {
   return useQuery({
     queryKey: ['achievements'],
-    queryFn: () => apiClient.get<AchievementDefinition[]>('/api/v1/achievements'),
+    queryFn: () =>
+      apiClient.get('/api/v1/achievements', { schema: AchievementDefinitionListSchema }),
     staleTime: 5 * 60 * 1000,
   });
 }

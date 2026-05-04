@@ -117,7 +117,6 @@ export function InputPickerTabs({
                     type="checkbox"
                     checked={checked}
                     onChange={() => onToggleInput(inp.id)}
-                    aria-label={inp.name}
                   />
                   <label
                     htmlFor={`input-${inp.id}`}
@@ -299,7 +298,10 @@ export function parseValues(raw: string, format: 'comma' | 'space' | 'newline'):
   const trimmed = raw.trim();
   if (!trimmed) return { values: [] };
   const sep = format === 'comma' ? /\s*,\s*/ : format === 'space' ? /\s+/ : /\r?\n/;
-  const parts = trimmed.split(sep).map((s) => s.trim()).filter(Boolean);
+  const parts = trimmed
+    .split(sep)
+    .map((s) => s.trim())
+    .filter(Boolean);
   const out: number[] = [];
   for (const p of parts) {
     if (!/^-?\d+$/.test(p)) {

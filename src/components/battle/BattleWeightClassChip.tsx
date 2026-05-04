@@ -1,6 +1,5 @@
-import { cn } from '@/lib/cn';
-
 import type { BattleWeightClass } from '@/api/types';
+import { cn } from '@/lib/cn';
 
 interface BattleWeightClassChipProps {
   weightClass: BattleWeightClass | null | undefined;

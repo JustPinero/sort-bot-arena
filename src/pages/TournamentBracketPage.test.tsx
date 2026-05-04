@@ -2,6 +2,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { describe, expect, it } from 'vitest';
+import { axe } from 'vitest-axe';
 
 import { createQueryClient } from '@/api/queryClient';
 
@@ -64,9 +65,7 @@ describe('<TournamentBracketPage />', () => {
 
   it('shows BYE matches as a single fighter advancing on bye', async () => {
     renderAt('/tournaments/trn_completed');
-    await waitFor(() =>
-      expect(screen.getByText(/advances on bye/i)).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText(/advances on bye/i)).toBeInTheDocument());
     // The participant who got the bye must still be named on the card.
     const byeCopy = screen.getByText(/advances on bye/i);
     const card = byeCopy.closest('article');
@@ -81,5 +80,17 @@ describe('<TournamentBracketPage />', () => {
       () => expect(screen.getByText(/tournament not on the card/i)).toBeInTheDocument(),
       { timeout: 3000 },
     );
+  });
+
+  describe('a11y', () => {
+    it('renders without axe violations', async () => {
+      const { container } = renderAt('/tournaments/trn_active');
+      await waitFor(() =>
+        expect(
+          screen.getByRole('heading', { level: 1, name: /rumble in the stack/i }),
+        ).toBeInTheDocument(),
+      );
+      expect(await axe(container)).toHaveNoViolations();
+    });
   });
 });

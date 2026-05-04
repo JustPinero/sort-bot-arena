@@ -180,9 +180,33 @@ describe('POST /api/v1/battles weight_class derivation', () => {
       http.get(`${UPSTREAM}/v1/inputs`, () =>
         HttpResponse.json({
           inputs: [
-            { id: 1, size_class: 'small', case_index: 0, array_len: 100, is_custom: false, uploader_id: null, created_at: 'T' },
-            { id: 2, size_class: 'small', case_index: 1, array_len: 100, is_custom: false, uploader_id: null, created_at: 'T' },
-            { id: 50, size_class: 'large', case_index: 0, array_len: 100000, is_custom: false, uploader_id: null, created_at: 'T' },
+            {
+              id: 1,
+              size_class: 'small',
+              case_index: 0,
+              array_len: 100,
+              is_custom: false,
+              uploader_id: null,
+              created_at: 'T',
+            },
+            {
+              id: 2,
+              size_class: 'small',
+              case_index: 1,
+              array_len: 100,
+              is_custom: false,
+              uploader_id: null,
+              created_at: 'T',
+            },
+            {
+              id: 50,
+              size_class: 'large',
+              case_index: 0,
+              array_len: 100000,
+              is_custom: false,
+              uploader_id: null,
+              created_at: 'T',
+            },
           ],
           total: 3,
         }),
@@ -258,9 +282,33 @@ describe('GET /api/v1/battles/:id surfaces weight_class', () => {
       http.get(`${UPSTREAM}/v1/inputs`, () =>
         HttpResponse.json({
           inputs: [
-            { id: 39, size_class: 'large', case_index: 0, array_len: 100000, is_custom: false, uploader_id: null, created_at: 'T' },
-            { id: 40, size_class: 'large', case_index: 1, array_len: 100000, is_custom: false, uploader_id: null, created_at: 'T' },
-            { id: 30, size_class: 'medium', case_index: 0, array_len: 50000, is_custom: false, uploader_id: null, created_at: 'T' },
+            {
+              id: 39,
+              size_class: 'large',
+              case_index: 0,
+              array_len: 100000,
+              is_custom: false,
+              uploader_id: null,
+              created_at: 'T',
+            },
+            {
+              id: 40,
+              size_class: 'large',
+              case_index: 1,
+              array_len: 100000,
+              is_custom: false,
+              uploader_id: null,
+              created_at: 'T',
+            },
+            {
+              id: 30,
+              size_class: 'medium',
+              case_index: 0,
+              array_len: 50000,
+              is_custom: false,
+              uploader_id: null,
+              created_at: 'T',
+            },
           ],
           total: 3,
         }),

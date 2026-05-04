@@ -76,11 +76,7 @@ export function MatchCard({ match, participantsById, className }: MatchCardProps
       </header>
       {isBye ? (
         <>
-          <FighterRow
-            participant={(a ?? b) ?? null}
-            isWinner={false}
-            emphasized
-          />
+          <FighterRow participant={a ?? b ?? null} isWinner={false} emphasized />
           <div className="border-t" />
           <p className="px-3 py-2 font-mono text-[11px] uppercase tracking-widest text-text-tertiary">
             Advances on bye

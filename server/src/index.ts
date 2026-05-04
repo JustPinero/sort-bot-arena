@@ -3,12 +3,16 @@ import { serve } from '@hono/node-server';
 import { createClient } from '@libsql/client';
 
 import { createApp } from './app.js';
+import { decryptString } from './auth/encrypt.js';
 import { SortBotApiClient } from './clients/sort-bot-api/index.js';
 import { runMigrations } from './db/migrate.js';
 import { loadEnv } from './env.js';
 import { CACHE_PRUNE_INTERVAL_MS } from './lib/cache-ttl.js';
 import { log } from './lib/log.js';
 import { initSentry } from './lib/sentry.js';
+import { BattleSweeper } from './listener/battle-sweep.js';
+import { GlobalEventListener } from './listener/global-listener.js';
+import { TournamentOrchestrator } from './orchestrator/tournament.js';
 import { AnthropicClient } from './persona/anthropic.js';
 import { LeonardoClient } from './persona/leonardo.js';
 import { PersonaService } from './persona/service.js';
@@ -43,6 +47,32 @@ async function bootstrap(): Promise<void> {
     },
     'persona generators wired',
   );
+  // Slice D4 — orchestrator core constructed first so the listener and
+  // tournaments POST handler can both hold a handle to it. The
+  // listener's `advanceMatch` callback closes the loop (battle_complete
+  // → mark match complete → schedule next round); the POST handler's
+  // fire-and-forget `schedule(...)` kicks off round 1.
+  const orchestrator = new TournamentOrchestrator({
+    db,
+    sortBotApi,
+    decryptKey: (blob) => decryptString(blob, env.SESSION_SECRET),
+  });
+
+  // Slice C4 (D-8) — reactive `running → complete` transitions via the
+  // upstream `/v1/events/stream`. Single-instance per environment (Railway
+  // single-replica + RUN_LISTENER set on exactly that replica). The 60s
+  // sweep below is the safety net for events lost during reconnect windows.
+  // Constructed before `createApp` so its health getters can be passed
+  // into `/api/readyz` (slice C5). When RUN_LISTENER=false the instance
+  // is still constructed — `start()` is a no-op and `isRunning()` stays
+  // false, which is exactly what readyz wants to surface.
+  const listener = new GlobalEventListener({
+    db,
+    sortBotApiUrl: env.SORT_BOT_API_URL,
+    runListener: env.RUN_LISTENER,
+    orchestrator,
+  });
+
   const app = createApp({
     db,
     sortBotApi,
@@ -53,6 +83,9 @@ async function bootstrap(): Promise<void> {
     allowedOrigins: env.ALLOWED_ORIGINS.split(',')
       .map((s) => s.trim())
       .filter(Boolean),
+    listener: env.RUN_LISTENER ? listener : null,
+    orchestrator,
+    enableTestReset: env.ENABLE_TEST_RESET,
   });
 
   const pruneHandle = setInterval(() => {
@@ -65,6 +98,13 @@ async function bootstrap(): Promise<void> {
       });
   }, CACHE_PRUNE_INTERVAL_MS);
   pruneHandle.unref();
+
+  // Slice C3 (D-10) — reconcile orphaned recent_battles.status='running'
+  // rows whose upstream battle has long since completed. Belt-and-suspenders
+  // for the cooldown rule when the listener misses an event.
+  new BattleSweeper({ db, sortBotApi }).start();
+
+  listener.start();
 
   serve({ fetch: app.fetch, port: env.PORT }, (info) => {
     log.info({ port: info.port }, 'sort-bot-arena server listening');

@@ -2,6 +2,12 @@ import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
+import {
+  AnalysisResponseStrictSchema,
+  BotRunStrictSchema,
+  CursorPageSchema,
+} from '../../src/api/schemas.js';
+
 import { makeTestApp } from './helpers/test-app.js';
 
 const UPSTREAM = 'http://api.test';
@@ -29,19 +35,13 @@ describe('GET /api/v1/bots/:id/analysis', () => {
     const t = await makeTestApp({ sortBotApiBaseUrl: UPSTREAM });
     const res = await t.app.request('/api/v1/bots/bot_xyz/analysis');
     expect(res.status).toBe(200);
-    const body = (await res.json()) as {
-      bot_id: string;
-      analysis: string;
-      generated_at: string;
-    };
-    expect(body.bot_id).toBe('bot_xyz');
-    expect(typeof body.analysis).toBe('string');
-    expect(typeof body.generated_at).toBe('string');
-    expect(body.analysis).toContain('Timsort');
-    expect(body.analysis).toContain('Python defers to Timsort');
-    expect(body.analysis).toContain('**Algorithm:**');
-    expect(body.analysis).toContain('**Strengths**');
-    expect(body.analysis).toContain('- Stable');
+    const parsed = AnalysisResponseStrictSchema.parse(await res.json());
+    expect(parsed.bot_id).toBe('bot_xyz');
+    expect(parsed.analysis).toContain('Timsort');
+    expect(parsed.analysis).toContain('Python defers to Timsort');
+    expect(parsed.analysis).toContain('**Algorithm:**');
+    expect(parsed.analysis).toContain('**Strengths**');
+    expect(parsed.analysis).toContain('- Stable');
   });
 
   it('skips missing fields gracefully', async () => {
@@ -53,10 +53,9 @@ describe('GET /api/v1/bots/:id/analysis', () => {
     const t = await makeTestApp({ sortBotApiBaseUrl: UPSTREAM });
     const res = await t.app.request('/api/v1/bots/bot_min/analysis');
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { analysis: string };
-    expect(typeof body.analysis).toBe('string');
-    expect(body.analysis).toContain('Quicksort');
-    expect(body.analysis).not.toContain('**Strengths**');
+    const parsed = AnalysisResponseStrictSchema.parse(await res.json());
+    expect(parsed.analysis).toContain('Quicksort');
+    expect(parsed.analysis).not.toContain('**Strengths**');
   });
 
   it('404s when sort-bot-api 404s', async () => {
@@ -78,7 +77,8 @@ describe('GET /api/v1/bots/:id/runs', () => {
     const t = await makeTestApp({ sortBotApiBaseUrl: UPSTREAM });
     const res = await t.app.request('/api/v1/bots/bot_xyz/runs');
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { items: unknown[]; next_cursor: null };
-    expect(body).toEqual({ items: [], next_cursor: null });
+    const parsed = CursorPageSchema(BotRunStrictSchema).parse(await res.json());
+    expect(parsed.items).toEqual([]);
+    expect(parsed.next_cursor).toBeNull();
   });
 });

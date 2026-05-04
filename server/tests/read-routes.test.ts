@@ -2,6 +2,12 @@ import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
+import {
+  BotStrictSchema,
+  CursorPageSchema,
+  LeaderboardEntryStrictSchema,
+} from '../../src/api/schemas.js';
+
 import { makeTestApp } from './helpers/test-app.js';
 
 const UPSTREAM = 'http://api.test';
@@ -47,14 +53,14 @@ describe('GET /api/v1/leaderboard', () => {
     const t = await makeTestApp({ sortBotApiBaseUrl: UPSTREAM });
     const res = await t.app.request('/api/v1/leaderboard?limit=10');
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { items: Array<{ bot_id: string; nickname: string }> };
-    expect(body.items).toHaveLength(1);
-    expect(body.items[0]?.bot_id).toBe('bot_xyz');
-    expect(body.items[0]?.nickname).toBeTruthy();
+    const parsed = CursorPageSchema(LeaderboardEntryStrictSchema).parse(await res.json());
+    expect(parsed.items).toHaveLength(1);
+    expect(parsed.items[0]?.bot_id).toBe('bot_xyz');
+    expect(parsed.items[0]?.nickname).toBeTruthy();
     // determinism check: same bot_id always gets the same nickname
     const second = await t.app.request('/api/v1/leaderboard?limit=10');
-    const body2 = (await second.json()) as { items: Array<{ nickname: string }> };
-    expect(body2.items[0]?.nickname).toBe(body.items[0]?.nickname);
+    const parsed2 = CursorPageSchema(LeaderboardEntryStrictSchema).parse(await second.json());
+    expect(parsed2.items[0]?.nickname).toBe(parsed.items[0]?.nickname);
   });
 });
 
@@ -83,16 +89,16 @@ describe('GET /api/v1/bots/:id', () => {
     const t = await makeTestApp({ sortBotApiBaseUrl: UPSTREAM });
     const res = await t.app.request('/api/v1/bots/bot_xyz');
     expect(res.status).toBe(200);
-    const body = (await res.json()) as Record<string, unknown>;
-    expect(body['id']).toBe('bot_xyz');
-    expect(body['nickname']).toBeTruthy();
-    expect(body['rank']).toBe(1);
-    expect(body['algorithm']).toBe('Timsort');
-    expect(body['signature_input']).toMatchObject({ input_id: '3', time_seconds: 0.007 });
-    expect(body['achilles_heel']).toMatchObject({ input_id: '45', time_seconds: 0.216 });
-    expect(body['record']).toEqual({ wins: 0, losses: 0, draws: 0 });
-    expect(body['analysis_url']).toBe('/api/v1/bots/bot_xyz/analysis');
-    expect(body['retired']).toBe(false);
+    const parsed = BotStrictSchema.parse(await res.json());
+    expect(parsed.id).toBe('bot_xyz');
+    expect(parsed.nickname).toBeTruthy();
+    expect(parsed.rank).toBe(1);
+    expect(parsed.algorithm).toBe('Timsort');
+    expect(parsed.signature_input).toMatchObject({ input_id: '3', time_seconds: 0.007 });
+    expect(parsed.achilles_heel).toMatchObject({ input_id: '45', time_seconds: 0.216 });
+    expect(parsed.record).toEqual({ wins: 0, losses: 0, draws: 0 });
+    expect(parsed.analysis_url).toBe('/api/v1/bots/bot_xyz/analysis');
+    expect(parsed.retired).toBe(false);
   });
 
   it('404s when sort-bot-api 404s', async () => {

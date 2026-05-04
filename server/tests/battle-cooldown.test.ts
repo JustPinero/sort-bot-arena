@@ -232,9 +232,7 @@ describe('POST /api/v1/battles', () => {
         // after their await yields and collide on the upstream battle_id.
         const myId = 'bat_race_' + upstreamHits;
         const sent = (await request.json()) as { bot_a: string; bot_b: string };
-        return HttpResponse.json(
-          upstreamBattleResponse(myId, sent.bot_a, sent.bot_b),
-        );
+        return HttpResponse.json(upstreamBattleResponse(myId, sent.bot_a, sent.bot_b));
       }),
     );
 

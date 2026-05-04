@@ -43,9 +43,7 @@ export function BracketSizeSelect({ value, onChange, className }: BracketSizeSel
               ))}
             </select>
           </TooltipTrigger>
-          <TooltipContent>
-            Number of bots in the bracket. 6 and 12 add round-1 byes.
-          </TooltipContent>
+          <TooltipContent>Number of bots in the bracket. 6 and 12 add round-1 byes.</TooltipContent>
         </Tooltip>
       </div>
       {hint ? (

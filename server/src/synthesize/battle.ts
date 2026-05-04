@@ -10,11 +10,7 @@
 
 import { nicknameFor } from '../persona/nicknames.js';
 
-import type {
-  ApiBot,
-  BattleResponse,
-  BattleRun,
-} from '../clients/sort-bot-api/index.js';
+import type { ApiBot, BattleResponse, BattleRun } from '../clients/sort-bot-api/index.js';
 import type { BotPersonaRow } from '../persona/store.js';
 
 export type Corner = 'red' | 'blue';
@@ -76,9 +72,11 @@ export function deriveOutcome(
 ): RichBattleOutcome | null {
   if (battle.status !== 'complete' && battle.status !== 'failed') return null;
   if (battle.winner_bot_id === null) return 'draw';
-  const allKo = runs.length > 0 && runs.every((run) => {
-    return run.bot_a_status !== 'success' || run.bot_b_status !== 'success';
-  });
+  const allKo =
+    runs.length > 0 &&
+    runs.every((run) => {
+      return run.bot_a_status !== 'success' || run.bot_b_status !== 'success';
+    });
   if (allKo) return 'ko';
   return 'decision';
 }

@@ -1,11 +1,12 @@
 import { useMemo } from 'react';
 import { Link, useParams } from 'react-router-dom';
 
+import { apiErrorStatus } from '@/api/error-helpers';
 import { useTournament } from '@/api/queries';
 import type { TournamentMatch, TournamentParticipant } from '@/api/types';
 import { ChampionBelt } from '@/components/design-system/ChampionBelt';
 import { HazardStripes } from '@/components/design-system/HazardStripes';
-import { MatchCard } from '@/components/tournaments/MatchCard';
+import { MatchCard } from '@/components/tournament/MatchCard';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { fmtDate } from '@/lib/format';
@@ -33,7 +34,7 @@ export default function TournamentBracketPage() {
   }, [data]);
 
   if (isError) {
-    const status = (error as { status?: number } | null)?.status ?? 0;
+    const status = apiErrorStatus(error) ?? 0;
     return (
       <section className="mx-auto max-w-2xl px-4 py-16 text-center">
         <HazardStripes thickness="thick" />

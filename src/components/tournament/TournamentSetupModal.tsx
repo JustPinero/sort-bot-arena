@@ -1,9 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { ApiError } from '@/api/client';
-import { useLeaderboard, useStartTournament } from '@/api/queries';
-import type { LeaderboardEntry } from '@/api/types';
+import { useEligibleFighters } from '@/api/eligible-fighters';
+import { useStartTournament } from '@/api/queries';
 import { LoadingGear } from '@/components/LoadingGear';
 import { Button } from '@/components/ui/button';
 import {
@@ -11,15 +11,9 @@ import {
   DialogContent,
   DialogDescription,
   DialogTitle,
-  DialogTrigger,
+  DialogTriggerButton,
 } from '@/components/ui/dialog';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
-import { cn } from '@/lib/cn';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 import { BotTilePicker } from './BotTilePicker';
 import { type BracketSize, pickRandomBots } from './bracket';
@@ -46,16 +40,8 @@ export function TournamentSetupModal({
   const navigate = useNavigate();
   const startTournament = useStartTournament();
 
-  const leaderboard = useLeaderboard({
-    weight: 'all',
-    activity: 'all',
-    language: null,
-    sort: 'rank',
-  });
-
-  const eligibleBots: LeaderboardEntry[] = useMemo(() => {
-    return (leaderboard.data?.items ?? []).filter((entry) => !entry.retired);
-  }, [leaderboard.data]);
+  const eligibleFighters = useEligibleFighters();
+  const eligibleBots = eligibleFighters.fighters;
 
   const reset = () => {
     setSelected([]);
@@ -100,7 +86,10 @@ export function TournamentSetupModal({
       // navigation; selection cleared per spec.
       reset();
       setOpen(false);
-      navigate(`/tournaments/${result.id}`);
+      // Slice D4 — server returns the `{tournament_id, status}`
+      // envelope. The bracket page hydrates the rich shape via
+      // `useTournament(id)`.
+      navigate(`/tournaments/${result.tournament_id}`);
     } catch (err) {
       if (err instanceof ApiError) {
         setError(err.message || `Could not start tournament (${err.status})`);
@@ -110,8 +99,8 @@ export function TournamentSetupModal({
     }
   };
 
-  const enoughBots = eligibleBots.length >= bracketSize;
-  const randomDisabled = !enoughBots || leaderboard.isLoading;
+  const enoughBots = eligibleFighters.hasEnough(bracketSize);
+  const randomDisabled = !enoughBots || eligibleFighters.isLoading;
   const randomTooltip = enoughBots
     ? 'Fills the bracket with random bots. You can still swap before Start.'
     : `Need ≥${bracketSize} evaluated bots in the leaderboard.`;
@@ -120,25 +109,14 @@ export function TournamentSetupModal({
   return (
     <TooltipProvider delayDuration={150}>
       <Dialog open={open} onOpenChange={handleOpenChange}>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <span className="inline-flex">
-              <DialogTrigger asChild>
-                <button
-                  type="button"
-                  className={cn(
-                    'inline-flex h-8 items-center rounded-sm px-3 font-mono text-xs font-bold uppercase tracking-wide bg-tech text-black hover:opacity-90',
-                    triggerClassName,
-                  )}
-                  data-testid="setup-tournament-cta"
-                >
-                  {triggerLabel}
-                </button>
-              </DialogTrigger>
-            </span>
-          </TooltipTrigger>
-          <TooltipContent>Open the tournament builder to pick a bracket.</TooltipContent>
-        </Tooltip>
+        <DialogTriggerButton
+          variant="combat"
+          tooltip="Open the tournament builder to pick a bracket."
+          testId="setup-tournament-cta"
+          className={triggerClassName}
+        >
+          {triggerLabel}
+        </DialogTriggerButton>
         <DialogContent className="max-w-3xl">
           <header className="flex flex-col gap-1">
             <DialogTitle>Setup a tournament</DialogTitle>
@@ -177,7 +155,7 @@ export function TournamentSetupModal({
               </TooltipTrigger>
               <TooltipContent>{randomTooltip}</TooltipContent>
             </Tooltip>
-            {!enoughBots && !leaderboard.isLoading ? (
+            {!enoughBots && !eligibleFighters.isLoading ? (
               <span
                 role="note"
                 className="font-mono text-[11px] uppercase tracking-wide text-text-tertiary"
@@ -228,7 +206,9 @@ export function TournamentSetupModal({
                   )}
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>POSTs to /tournaments and redirects to the bracket page.</TooltipContent>
+              <TooltipContent>
+                POSTs to /tournaments and redirects to the bracket page.
+              </TooltipContent>
             </Tooltip>
           </div>
         </DialogContent>

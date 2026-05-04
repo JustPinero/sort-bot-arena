@@ -1,5 +1,6 @@
 import { Link, useParams } from 'react-router-dom';
 
+import { apiErrorStatus } from '@/api/error-helpers';
 import { usePerInputLeaderboard } from '@/api/queries';
 import { CornerColorBadge } from '@/components/design-system/CornerColorBadge';
 import { HazardStripes } from '@/components/design-system/HazardStripes';
@@ -12,7 +13,7 @@ export default function PerInputLeaderboardPage() {
   const { data, isLoading, isError, error } = usePerInputLeaderboard(inputId);
 
   if (isError) {
-    const status = (error as { status?: number } | null)?.status ?? 0;
+    const status = apiErrorStatus(error) ?? 0;
     return (
       <section className="mx-auto max-w-2xl px-4 py-16 text-center">
         <HazardStripes thickness="thick" />

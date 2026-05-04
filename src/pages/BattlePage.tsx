@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 
+import { apiErrorStatus } from '@/api/error-helpers';
 import { useBattle, useBot } from '@/api/queries';
 import type { BattleEvent } from '@/api/types';
 import { LiveBattle } from '@/components/arena/LiveBattle';
@@ -73,7 +74,7 @@ export default function BattlePage() {
   }
 
   if (battleQuery.isError || !battle) {
-    const status = (battleQuery.error as { status?: number } | null)?.status ?? 0;
+    const status = apiErrorStatus(battleQuery.error) ?? 0;
     return (
       <section className="mx-auto max-w-2xl px-4 py-16 text-center">
         <HazardStripes thickness="thick" />

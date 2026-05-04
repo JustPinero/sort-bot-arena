@@ -1,6 +1,9 @@
 import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { z } from 'zod';
+
+import { AchievementDefinitionStrictSchema, BotStrictSchema } from '../../src/api/schemas.js';
 
 import { makeTestApp } from './helpers/test-app.js';
 
@@ -51,9 +54,8 @@ describe('array-shape contract routes', () => {
     const { t } = await signedUpApp();
     const res = await t.app.request('/api/v1/halloffame');
     expect(res.status).toBe(200);
-    const body = (await res.json()) as unknown;
-    expect(Array.isArray(body)).toBe(true);
-    expect((body as { bots?: unknown }).bots).toBeUndefined();
+    const body = await res.json();
+    z.array(BotStrictSchema).parse(body);
   });
 
   it('GET /api/v1/achievements returns a bare array of 5 fully-shaped items', async () => {
@@ -70,23 +72,9 @@ describe('array-shape contract routes', () => {
     const t = await makeTestApp({ sortBotApiBaseUrl: UPSTREAM });
     const res = await t.app.request('/api/v1/achievements');
     expect(res.status).toBe(200);
-    const body = (await res.json()) as unknown;
-    expect(Array.isArray(body)).toBe(true);
-    const arr = body as Array<Record<string, unknown>>;
-    expect(arr).toHaveLength(5);
-    for (const item of arr) {
-      expect(item).toEqual(
-        expect.objectContaining({
-          id: expect.any(String),
-          name: expect.any(String),
-          icon: expect.any(String),
-          description: expect.any(String),
-          unlocked_at: expect.any(String),
-          rarity_pct: expect.any(Number),
-          unlocked_pct: expect.any(Number),
-        }),
-      );
-    }
+    const body = await res.json();
+    const parsed = z.array(AchievementDefinitionStrictSchema).parse(body);
+    expect(parsed).toHaveLength(5);
   });
 
   it('GET /api/v1/users/me/bots returns a bare array with the submitted bot', async () => {
@@ -123,11 +111,9 @@ describe('array-shape contract routes', () => {
 
     const res = await t.app.request('/api/v1/users/me/bots', { headers: { cookie } });
     expect(res.status).toBe(200);
-    const body = (await res.json()) as unknown;
-    expect(Array.isArray(body)).toBe(true);
-    const arr = body as Array<{ id: string }>;
-    expect(arr.length).toBeGreaterThanOrEqual(1);
-    expect(arr[0]?.id).toBe('sba_bot_1');
-    expect((body as { bots?: unknown }).bots).toBeUndefined();
+    const body = await res.json();
+    const parsed = z.array(BotStrictSchema).parse(body);
+    expect(parsed.length).toBeGreaterThanOrEqual(1);
+    expect(parsed[0]?.id).toBe('sba_bot_1');
   });
 });

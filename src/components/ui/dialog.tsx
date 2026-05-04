@@ -2,9 +2,17 @@ import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
 import { forwardRef } from 'react';
 
+import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/cn';
 
-import type { ComponentPropsWithoutRef, ElementRef, HTMLAttributes } from 'react';
+import type {
+  ButtonHTMLAttributes,
+  ComponentPropsWithoutRef,
+  ElementRef,
+  HTMLAttributes,
+  ReactNode,
+} from 'react';
 
 export const Dialog = DialogPrimitive.Root;
 export const DialogTrigger = DialogPrimitive.Trigger;
@@ -82,3 +90,41 @@ export const DialogDescription = forwardRef<
   />
 ));
 DialogDescription.displayName = DialogPrimitive.Description.displayName;
+
+export interface DialogTriggerButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+  tooltip?: ReactNode;
+  variant?: 'combat' | 'default' | 'ghost';
+  testId?: string;
+}
+
+export const DialogTriggerButton = forwardRef<HTMLButtonElement, DialogTriggerButtonProps>(
+  function DialogTriggerButton(
+    { tooltip, variant = 'default', testId, children, className, disabled, ...rest },
+    ref,
+  ) {
+    const trigger = (
+      <DialogTrigger asChild>
+        <Button
+          ref={ref}
+          variant={variant}
+          disabled={disabled}
+          data-testid={testId}
+          className={className}
+          {...rest}
+        >
+          {children}
+        </Button>
+      </DialogTrigger>
+    );
+    if (!tooltip) return trigger;
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="inline-flex">{trigger}</span>
+        </TooltipTrigger>
+        <TooltipContent>{tooltip}</TooltipContent>
+      </Tooltip>
+    );
+  },
+);
+DialogTriggerButton.displayName = 'DialogTriggerButton';

@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { ApiError } from '@/api/client';
-import { useInputs, useLeaderboard, useStartBattle } from '@/api/queries';
-import type { InputSummary, LeaderboardEntry } from '@/api/types';
+import { useEligibleFighters } from '@/api/eligible-fighters';
+import { useInputs, useStartBattle } from '@/api/queries';
+import type { InputSummary } from '@/api/types';
 import { LoadingGear } from '@/components/LoadingGear';
 import { Button } from '@/components/ui/button';
 import {
@@ -11,18 +12,12 @@ import {
   DialogContent,
   DialogDescription,
   DialogTitle,
-  DialogTrigger,
+  DialogTriggerButton,
 } from '@/components/ui/dialog';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 import { BotSlotPicker } from './BotSlotPicker';
 import { InputPickerTabs, presetCount, type PresetKey } from './InputPickerTabs';
-
 
 interface MatchSetupModalProps {
   triggerLabel?: string;
@@ -41,22 +36,14 @@ export function MatchSetupModal({
   return (
     <TooltipProvider delayDuration={150}>
       <Dialog open={open} onOpenChange={setOpen}>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <span className="inline-flex">
-              <DialogTrigger asChild>
-                <Button
-                  variant="combat"
-                  className={triggerClassName}
-                  data-testid="setup-match-cta"
-                >
-                  {triggerLabel}
-                </Button>
-              </DialogTrigger>
-            </span>
-          </TooltipTrigger>
-          <TooltipContent>Open the match builder to pick fighters and inputs.</TooltipContent>
-        </Tooltip>
+        <DialogTriggerButton
+          variant="combat"
+          tooltip="Open the match builder to pick fighters and inputs."
+          testId="setup-match-cta"
+          className={triggerClassName}
+        >
+          {triggerLabel}
+        </DialogTriggerButton>
         <DialogContent className="max-w-2xl">
           <MatchSetupForm onClose={() => setOpen(false)} />
         </DialogContent>
@@ -71,12 +58,7 @@ interface MatchSetupFormProps {
 
 function MatchSetupForm({ onClose }: MatchSetupFormProps) {
   const navigate = useNavigate();
-  const leaderboard = useLeaderboard({
-    weight: 'all',
-    activity: 'all',
-    language: null,
-    sort: 'rank',
-  });
+  const eligibleFighters = useEligibleFighters();
   const inputsQuery = useInputs();
   const startBattle = useStartBattle();
 
@@ -88,7 +70,7 @@ function MatchSetupForm({ onClose }: MatchSetupFormProps) {
   const [extraInputs, setExtraInputs] = useState<InputSummary[]>([]);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  const bots: LeaderboardEntry[] = leaderboard.data?.items ?? [];
+  const bots = eligibleFighters.fighters;
 
   const allInputs = useMemo(() => {
     const base = inputsQuery.data?.items ?? [];
@@ -101,15 +83,11 @@ function MatchSetupForm({ onClose }: MatchSetupFormProps) {
   }, [inputsQuery.data, extraInputs]);
 
   const distinctBots = redBotId !== null && blueBotId !== null && redBotId !== blueBotId;
-  const tabValid =
-    tab === 'preset'
-      ? true
-      : tab === 'manual'
-        ? selectedInputIds.size > 0
-        : false;
+  const tabValid = tab === 'preset' ? true : tab === 'manual' ? selectedInputIds.size > 0 : false;
   const canSubmit = distinctBots && tabValid && !startBattle.isPending;
 
   const onToggleInput = (id: string) => {
+    setSubmitError(null);
     setSelectedInputIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
@@ -127,10 +105,25 @@ function MatchSetupForm({ onClose }: MatchSetupFormProps) {
     });
   };
 
-  // Auto-clear submit error when user changes inputs
-  useEffect(() => {
+  const onChangeRed = (id: string | null) => {
     setSubmitError(null);
-  }, [redBotId, blueBotId, tab, preset, selectedInputIds]);
+    setRedBotId(id);
+  };
+
+  const onChangeBlue = (id: string | null) => {
+    setSubmitError(null);
+    setBlueBotId(id);
+  };
+
+  const onChangeTab = (next: TabKey) => {
+    setSubmitError(null);
+    setTab(next);
+  };
+
+  const onChangePreset = (next: PresetKey) => {
+    setSubmitError(null);
+    setPreset(next);
+  };
 
   const onSubmit = async () => {
     if (!redBotId || !blueBotId || redBotId === blueBotId) return;
@@ -167,11 +160,11 @@ function MatchSetupForm({ onClose }: MatchSetupFormProps) {
       <BotSlotPicker
         redBotId={redBotId}
         blueBotId={blueBotId}
-        onChangeRed={setRedBotId}
-        onChangeBlue={setBlueBotId}
+        onChangeRed={onChangeRed}
+        onChangeBlue={onChangeBlue}
         bots={bots}
-        isLoading={leaderboard.isLoading}
-        error={leaderboard.isError}
+        isLoading={eligibleFighters.isLoading}
+        error={eligibleFighters.isError}
       />
 
       {redBotId && blueBotId && redBotId === blueBotId ? (
@@ -183,11 +176,11 @@ function MatchSetupForm({ onClose }: MatchSetupFormProps) {
       <InputPickerTabs
         inputs={allInputs}
         preset={preset}
-        onChangePreset={setPreset}
+        onChangePreset={onChangePreset}
         selectedInputIds={selectedInputIds}
         onToggleInput={onToggleInput}
         activeTab={tab}
-        onChangeTab={setTab}
+        onChangeTab={onChangeTab}
         onInputUploaded={onInputUploaded}
       />
 

@@ -1,5 +1,6 @@
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 
+import { apiErrorStatus } from '@/api/error-helpers';
 import {
   useBot,
   useBotAnalysis,
@@ -67,8 +68,7 @@ export default function BotProfilePage() {
   }
 
   if (botQuery.isError) {
-    const err = botQuery.error as { status?: number } | null;
-    if (err?.status === 404) return <NotFoundPanel id={botId ?? '—'} />;
+    if (apiErrorStatus(botQuery.error) === 404) return <NotFoundPanel id={botId ?? '—'} />;
     return (
       <section className="mx-auto max-w-2xl px-4 py-16 text-center">
         <p className="text-combat">Could not load this fighter. Try again.</p>

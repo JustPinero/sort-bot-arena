@@ -3,6 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { describe, expect, it } from 'vitest';
+import { axe } from 'vitest-axe';
 
 import { createQueryClient } from '@/api/queryClient';
 import { championBot, noAnalysisBot, rookieBot } from '@/test/msw/fixtures';
@@ -82,5 +83,15 @@ describe('<BotProfilePage />', () => {
     await waitFor(() =>
       expect(screen.getByText(/fighter not in the database/i)).toBeInTheDocument(),
     );
+  });
+
+  describe('a11y', () => {
+    it('renders without axe violations', async () => {
+      const { container } = renderAt(`/bots/${championBot.id}`);
+      await waitFor(() =>
+        expect(screen.getByRole('heading', { name: /the algorithm/i })).toBeInTheDocument(),
+      );
+      expect(await axe(container)).toHaveNoViolations();
+    });
   });
 });

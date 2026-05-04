@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { describe, expect, it } from 'vitest';
+import { axe } from 'vitest-axe';
 
 import { createQueryClient } from '@/api/queryClient';
 import type { LeaderboardEntry } from '@/api/types';
@@ -336,7 +337,7 @@ describe('<TournamentSetupModal />', () => {
     await userEvent.click(escRadio);
     expect(escRadio.checked).toBe(true);
     expect(screen.getByTestId('input-mode-tooltip-escalation')).toHaveTextContent(
-      /per-match input selection/i,
+      /round 1 draws from small/i,
     );
 
     const random = screen.getByRole('button', { name: /random fill/i });
@@ -351,25 +352,13 @@ describe('<TournamentSetupModal />', () => {
 
   it('successful submit redirects to /tournaments/<id>', async () => {
     useLeaderboardHandler(makeBots(12));
+    // Slice D4 — server returns the clean `{tournament_id, status}`
+    // envelope (CreateTournamentResponseSchema). The frontend redirects
+    // to /tournaments/:id and the bracket page fetches the rich
+    // Tournament shape via `useTournament(id)`.
     server.use(
       http.post(`${BASE}/api/v1/tournaments`, () =>
-        HttpResponse.json(
-          {
-            id: 'trn_yay',
-            name: 'Yay',
-            status: 'upcoming',
-            participant_count: 8,
-            weight_class_filter: null,
-            prize_description: null,
-            scheduled_at: '2026-04-29T20:00:00Z',
-            rounds_total: 3,
-            current_round: 0,
-            champion_bot_id: null,
-            participants: [],
-            matches: [],
-          },
-          { status: 201 },
-        ),
+        HttpResponse.json({ tournament_id: 'trn_yay', status: 'pending' }, { status: 201 }),
       ),
     );
 
@@ -457,6 +446,28 @@ describe('<TournamentSetupModal /> tooltips', () => {
   });
 });
 
+describe('<TournamentSetupModal /> a11y', () => {
+  it('initial render (manual fill state) has no axe violations', async () => {
+    useLeaderboardHandler(makeBots(12));
+    const { container } = renderModal({ defaultOpen: true });
+    await screen.findByRole('dialog');
+    // Wait for tiles to render so the picker is fully painted
+    await screen.findAllByRole('button', { name: /select fighter/i });
+    expect(await axe(container)).toHaveNoViolations();
+  });
+
+  it('after Random fill (selected tiles state) has no axe violations', async () => {
+    useLeaderboardHandler(makeBots(12));
+    const { container } = renderModal({ defaultOpen: true });
+    await screen.findByRole('dialog');
+    const random = await screen.findByRole('button', { name: /random fill/i });
+    await waitFor(() => expect(random).not.toBeDisabled());
+    await userEvent.click(random);
+    await waitFor(() => expect(screen.getByTestId('selected-count')).toHaveTextContent('8'));
+    expect(await axe(container)).toHaveNoViolations();
+  });
+});
+
 describe('<BotTilePicker /> standalone', () => {
   it('renders selected count vs bracket size', () => {
     const bots = makeBots(4);
@@ -473,11 +484,14 @@ describe('<BotTilePicker /> standalone', () => {
     expect(counter!.textContent?.replace(/\s+/g, ' ').trim()).toBe('2 / 4 selected');
   });
 
-  it('filters out retired bots', () => {
+  it('renders bots passed in (presentational; parent owns retired filter)', () => {
+    // The picker is now presentational — its parent (TournamentSetupModal) uses
+    // useEligibleFighters to filter retired bots before passing them in. The
+    // picker itself shows whatever it receives.
     const bots = makeBots(3);
     bots[0]!.retired = true;
     render(<BotTilePicker bots={bots} selected={[]} bracketSize={3} onToggle={() => {}} />);
-    expect(screen.queryByRole('button', { name: /select fighter 1/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /select fighter 1/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /select fighter 2/i })).toBeInTheDocument();
   });
 });

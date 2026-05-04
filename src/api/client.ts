@@ -1,5 +1,7 @@
 import { config } from './config';
 
+import type { ZodType, ZodTypeAny, z } from 'zod';
+
 const DEFAULT_TIMEOUT_MS = 15_000;
 
 export interface ApiErrorField {
@@ -40,6 +42,14 @@ export interface RequestOptions {
   signal?: AbortSignal;
   skipAuth?: boolean;
   headers?: Record<string, string>;
+  schema?: ZodType<unknown>;
+}
+
+export interface RequestOptionsWithSchema<S extends ZodTypeAny> extends Omit<
+  RequestOptions,
+  'schema'
+> {
+  schema: S;
 }
 
 interface ErrorEnvelope {
@@ -110,7 +120,7 @@ async function request<T>(
     const retryAfterSeconds = retryAfterRaw ? Number(retryAfterRaw) : undefined;
     throw new ApiError({
       status: response.status,
-      code: envelope.code ?? envelope.error ?? `http_${response.status}`,
+      code: envelope.code ?? `http_${response.status}`,
       message: envelope.error ?? (response.statusText || 'request failed'),
       requestId: envelope.request_id ?? response.headers.get('X-Request-Id') ?? undefined,
       fields: envelope.fields,
@@ -123,23 +133,64 @@ async function request<T>(
   }
 
   if (response.status === 204) return undefined as T;
-  return (await response.json()) as T;
+  const raw: unknown = await response.json();
+  if (opts?.schema) {
+    const parsed = opts.schema.safeParse(raw);
+    if (!parsed.success) {
+      throw new ApiError({
+        status: 0,
+        code: 'malformed_response',
+        message: `${path}: ${parsed.error.issues[0]?.message ?? 'response did not match schema'}`,
+        retryable: false,
+      });
+    }
+    return parsed.data as T;
+  }
+  return raw as T;
 }
 
-export const apiClient = {
-  get<T>(path: string, opts?: RequestOptions): Promise<T> {
-    return request<T>('GET', path, undefined, opts);
+interface ApiClient {
+  get<S extends ZodTypeAny>(path: string, opts: RequestOptionsWithSchema<S>): Promise<z.infer<S>>;
+  get<T>(path: string, opts?: RequestOptions): Promise<T>;
+  post<S extends ZodTypeAny>(
+    path: string,
+    body: unknown,
+    opts: RequestOptionsWithSchema<S>,
+  ): Promise<z.infer<S>>;
+  post<T>(path: string, body: unknown, opts?: RequestOptions): Promise<T>;
+  patch<S extends ZodTypeAny>(
+    path: string,
+    body: unknown,
+    opts: RequestOptionsWithSchema<S>,
+  ): Promise<z.infer<S>>;
+  patch<T>(path: string, body: unknown, opts?: RequestOptions): Promise<T>;
+  put<S extends ZodTypeAny>(
+    path: string,
+    body: unknown,
+    opts: RequestOptionsWithSchema<S>,
+  ): Promise<z.infer<S>>;
+  put<T>(path: string, body: unknown, opts?: RequestOptions): Promise<T>;
+  delete<S extends ZodTypeAny>(
+    path: string,
+    opts: RequestOptionsWithSchema<S>,
+  ): Promise<z.infer<S>>;
+  delete<T>(path: string, opts?: RequestOptions): Promise<T>;
+}
+
+export const apiClient: ApiClient = {
+  get(path: string, opts?: RequestOptions) {
+    return request('GET', path, undefined, opts);
   },
-  post<T>(path: string, body: unknown, opts?: RequestOptions): Promise<T> {
-    return request<T>('POST', path, body, opts);
+  post(path: string, body: unknown, opts?: RequestOptions) {
+    return request('POST', path, body, opts);
   },
-  patch<T>(path: string, body: unknown, opts?: RequestOptions): Promise<T> {
-    return request<T>('PATCH', path, body, opts);
+  patch(path: string, body: unknown, opts?: RequestOptions) {
+    return request('PATCH', path, body, opts);
   },
-  put<T>(path: string, body: unknown, opts?: RequestOptions): Promise<T> {
-    return request<T>('PUT', path, body, opts);
+  put(path: string, body: unknown, opts?: RequestOptions) {
+    return request('PUT', path, body, opts);
   },
-  delete<T>(path: string, opts?: RequestOptions): Promise<T> {
-    return request<T>('DELETE', path, undefined, opts);
+  delete(path: string, opts?: RequestOptions) {
+    return request('DELETE', path, undefined, opts);
   },
 };

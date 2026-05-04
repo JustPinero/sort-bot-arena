@@ -23,10 +23,7 @@ interface InputsPayload {
 }
 
 const uploadSchema = z.object({
-  values: z
-    .array(z.number().int())
-    .min(1)
-    .max(50_000),
+  values: z.array(z.number().int()).min(1).max(50_000),
   format: z.enum(['comma', 'space', 'newline']).optional().default('comma'),
   display_name: z.string().min(1).max(80).optional(),
 });

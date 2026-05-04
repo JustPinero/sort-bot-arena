@@ -109,6 +109,47 @@ Vercel's default Node version may lag local. Pin via `engines.node` in `package.
 - **Never `echo` env vars to logs.** Even non-secret ones, because pipelines that get exfiltrated leak everything. Use `printf` or skip logging entirely.
 - **Git secrets check on staged files.** Hook in `.claude/hooks/pre-tool-use-secrets.sh` blocks accidental commits of values that look like API keys. Don't disable it.
 
+## Branch protection on `main` (slice A4)
+
+Configured in the GitHub repo Settings → Branches. Phase 10 locks the
+`main` branch behind these required status checks:
+
+- `validate / validate` — lint + format-check + frontend & server typecheck +
+  frontend & server vitest with coverage thresholds + frontend & server
+  build (the workflow at `.github/workflows/ci.yml`).
+- `e2e-mocked / e2e-mocked` — `pnpm exec playwright test --project=mocked`
+  (the legacy MSW-in-browser outage spec).
+- `e2e-real-server / e2e-real-server` — `pnpm exec playwright test
+  --project=real-server` (smoke + G2-G6 flows against the real Hono
+  server + libsql + stubbed sort-bot-api).
+- `contract-drift / contract-drift` — runs `server/tests/contract-drift.test.ts`
+  against every endpoint listed in `src/api/queries.ts`. The phase 8
+  contract-drift bug would have been caught here.
+
+Additional rules:
+
+- **Require linear history.** No merge commits — squash or rebase only.
+- **Require pull requests.** No direct pushes to `main`.
+- **Require branches to be up to date before merging.** Forces the PR
+  author to rebase if `main` advanced since the PR opened.
+- **Restrict force pushes.** Off for everyone, including admins.
+
+Coverage thresholds (gated by CI through the new vitest configs):
+
+- Frontend (`vitest.config.ts`): lines 80 / branches 75 / functions 80 / statements 80.
+- Server (`server/vitest.config.ts`): same — lines 80 / branches 75 / functions 80 / statements 80.
+
+Drop below + CI fails. The `coverage.exclude` carve-outs keep test files,
+the entry point, generated types, and config files out of the denominator.
+
+Husky hooks (slice A3) provide a fast pre-merge gate locally:
+
+- `.husky/pre-commit` — runs `pnpm exec lint-staged` (eslint --fix +
+  prettier --write on staged files).
+- `.husky/pre-push` — runs `pnpm typecheck` (frontend + node configs).
+
+The `prepare` npm lifecycle script wires husky on `pnpm install`.
+
 ## What a clean deploy looks like
 
 1. `pnpm install --frozen-lockfile` succeeds.

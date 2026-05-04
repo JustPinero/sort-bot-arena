@@ -61,11 +61,7 @@ interface Battle {
   weight_class: WeightClass | null;
 }
 
-function buildFighter(
-  bot: ApiBot,
-  persona: BotPersonaRow | null,
-  corner: Corner,
-): BattleFighter {
+function buildFighter(bot: ApiBot, persona: BotPersonaRow | null, corner: Corner): BattleFighter {
   return {
     bot_id: bot.id,
     nickname: persona?.nickname ?? nicknameFor(bot.id),
@@ -84,15 +80,14 @@ function mapStatus(upstream: BattleResponse['battle']['status']): BattleStatus {
   return 'completed';
 }
 
-function deriveOutcome(
-  battle: BattleResponse['battle'],
-  runs: BattleRun[],
-): BattleOutcome | null {
+function deriveOutcome(battle: BattleResponse['battle'], runs: BattleRun[]): BattleOutcome | null {
   if (battle.status !== 'complete' && battle.status !== 'failed') return null;
   if (battle.winner_bot_id === null) return 'draw';
-  const allKo = runs.length > 0 && runs.every((run) => {
-    return run.bot_a_status !== 'success' || run.bot_b_status !== 'success';
-  });
+  const allKo =
+    runs.length > 0 &&
+    runs.every((run) => {
+      return run.bot_a_status !== 'success' || run.bot_b_status !== 'success';
+    });
   if (allKo) return 'ko';
   return 'decision';
 }
@@ -101,10 +96,23 @@ function countCompletedRuns(runs: BattleRun[]): number {
   return runs.filter((r) => r.winner_bot_id !== null || r.completed_at).length;
 }
 
+// Accept input ids as either number or numeric string. The FE keeps
+// `InputSummary.id` as a string everywhere (the upstream surfaces it
+// as an int), so the manual-tab path in MatchSetupModal posts string
+// ids. We coerce here before forwarding to upstream, which expects
+// `number[]`.
+const inputIdSchema = z.union([
+  z.number().int(),
+  z
+    .string()
+    .regex(/^\d+$/)
+    .transform((v) => Number(v)),
+]);
+
 const startBattleSchema = z.object({
   bot_a: z.string().min(1),
   bot_b: z.string().min(1),
-  input_ids: z.array(z.number().int()).optional(),
+  input_ids: z.array(inputIdSchema).optional(),
   count: z.number().int().positive().optional(),
 });
 

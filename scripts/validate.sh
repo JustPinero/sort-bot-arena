@@ -25,19 +25,31 @@ step "prettier --check"
 pnpm run format:check
 ok "prettier passed"
 
-# 3. typecheck
-step "tsc --noEmit"
+# 3. typecheck (frontend + server)
+step "tsc --noEmit (frontend)"
 pnpm run typecheck
-ok "typecheck passed"
+ok "typecheck (frontend) passed"
 
-# 4. unit tests
-step "vitest run"
-pnpm run test
-ok "unit tests passed"
+step "tsc --noEmit (server)"
+pnpm --filter @sort-bot-arena/server typecheck
+ok "typecheck (server) passed"
 
-# 5. build
+# 4. unit tests with coverage (frontend + server) — A2 enforces thresholds
+step "vitest run --coverage (frontend)"
+pnpm run test:coverage
+ok "unit tests + coverage (frontend) passed"
+
+step "vitest run --coverage (server)"
+pnpm --filter @sort-bot-arena/server exec vitest run --coverage --passWithNoTests
+ok "unit tests + coverage (server) passed"
+
+# 5. build (frontend + server)
 step "vite build"
 pnpm run build
-ok "build passed"
+ok "build (frontend) passed"
+
+step "tsc -p tsconfig.build.json (server)"
+pnpm --filter @sort-bot-arena/server build
+ok "build (server) passed"
 
 printf "\n\033[1;32m✓ all checks passed\033[0m\n"

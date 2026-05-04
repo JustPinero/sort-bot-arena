@@ -45,6 +45,20 @@ function renderList() {
 }
 
 describe('<RecentTournamentsList />', () => {
+  it('exposes the section with data-testid and aria-labelledby', async () => {
+    server.use(
+      http.get(`${BASE}/api/v1/tournaments`, () =>
+        HttpResponse.json({ items: [], next_cursor: null }),
+      ),
+    );
+    renderList();
+    const section = await screen.findByTestId('recent-tournaments');
+    expect(section.tagName).toBe('SECTION');
+    expect(section).toHaveAttribute('aria-labelledby', 'recent-tournaments-heading');
+    const heading = screen.getByRole('heading', { name: /recent tournaments/i });
+    expect(heading).toHaveAttribute('id', 'recent-tournaments-heading');
+  });
+
   it('renders the loading skeleton while fetching', () => {
     server.use(
       http.get(`${BASE}/api/v1/tournaments`, async () => {
@@ -63,11 +77,7 @@ describe('<RecentTournamentsList />', () => {
       ),
     );
     renderList();
-    await waitFor(() =>
-      expect(
-        screen.getByText(/no recent tournaments yet/i),
-      ).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText(/no recent tournaments yet/i)).toBeInTheDocument());
   });
 
   it('renders cards for each recent tournament with name, participants, status and link', async () => {
@@ -94,9 +104,7 @@ describe('<RecentTournamentsList />', () => {
     );
     renderList();
 
-    await waitFor(() =>
-      expect(screen.getByText(/tournament alpha-1/i)).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText(/tournament alpha-1/i)).toBeInTheDocument());
     expect(screen.getByText(/tournament beta-2/i)).toBeInTheDocument();
     expect(screen.getByText(/8 fighters/i)).toBeInTheDocument();
     expect(screen.getByText(/6 fighters/i)).toBeInTheDocument();

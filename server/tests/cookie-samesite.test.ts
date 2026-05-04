@@ -4,10 +4,7 @@
 // false) it falls back to SameSite=Lax (Secure isn't allowed on http).
 import { describe, expect, it } from 'vitest';
 
-import {
-  buildLogoutCookie,
-  buildSessionCookie,
-} from '../src/auth/sessions.js';
+import { buildLogoutCookie, buildSessionCookie } from '../src/auth/sessions.js';
 
 describe('session cookie attributes', () => {
   it('uses SameSite=None; Secure in production (secure: true)', () => {

@@ -25,10 +25,12 @@ describe('<ScoutingReport />', () => {
     expect(container.querySelector('[aria-busy="true"]')).toBeTruthy();
   });
 
-  it('escapes HTML — never uses dangerouslySetInnerHTML', () => {
-    render(<ScoutingReport analysis="<script>alert('xss')</script>danger" />);
-    expect(screen.queryByText('danger')).not.toBeInTheDocument();
-    expect(screen.getByText(/script/)).toBeInTheDocument();
+  it('strips raw HTML script tags via the markdown sanitizer', () => {
+    const { container } = render(
+      <ScoutingReport analysis={"**Strong** <script>alert('xss')</script> safe"} />,
+    );
+    expect(container.querySelector('script')).toBeNull();
+    expect(container.querySelector('strong')).toBeTruthy();
   });
 
   it('has no a11y violations', async () => {

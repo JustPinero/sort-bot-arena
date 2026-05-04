@@ -11,6 +11,12 @@ import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
+import {
+  BattleStrictSchema,
+  CursorPageSchema,
+  TournamentStrictSchema,
+} from '../../src/api/schemas.js';
+
 import { makeTestApp } from './helpers/test-app.js';
 
 import type { Client } from '@libsql/client';
@@ -37,9 +43,7 @@ function botFixture(id: string, displayName = id, language = 'python') {
 
 function stubBots(ids: string[]) {
   for (const id of ids) {
-    server.use(
-      http.get(`${UPSTREAM}/v1/bots/${id}`, () => HttpResponse.json(botFixture(id))),
-    );
+    server.use(http.get(`${UPSTREAM}/v1/bots/${id}`, () => HttpResponse.json(botFixture(id))));
   }
 }
 
@@ -121,7 +125,9 @@ describe('GET /api/v1/battles (list)', () => {
     const t = await makeTestApp({ sortBotApiBaseUrl: UPSTREAM });
     const res = await t.app.request('/api/v1/battles');
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ items: [], next_cursor: null });
+    const parsed = CursorPageSchema(BattleStrictSchema).parse(await res.json());
+    expect(parsed.items).toEqual([]);
+    expect(parsed.next_cursor).toBeNull();
   });
 
   it('returns rows ordered by created_at DESC with hydrated fighters and required Battle keys', async () => {
@@ -156,47 +162,27 @@ describe('GET /api/v1/battles (list)', () => {
 
     const res = await t.app.request('/api/v1/battles');
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { items: Array<Record<string, unknown>>; next_cursor: string | null };
-    expect(body.items).toHaveLength(3);
-    expect(body.next_cursor).toBeNull();
-    expect(body.items.map((b) => b['id'])).toEqual(['bat_3', 'bat_2', 'bat_1']);
+    const parsed = CursorPageSchema(BattleStrictSchema).parse(await res.json());
+    expect(parsed.items).toHaveLength(3);
+    expect(parsed.next_cursor).toBeNull();
+    expect(parsed.items.map((b) => b.id)).toEqual(['bat_3', 'bat_2', 'bat_1']);
 
-    // Each item matches the Battle shape from src/api/types.ts:149-162.
-    const requiredKeys = [
-      'id',
-      'status',
-      'fighter_a',
-      'fighter_b',
-      'rounds_total',
-      'current_round',
-      'scheduled_at',
-      'started_at',
-      'completed_at',
-      'winner_bot_id',
-      'outcome',
-    ];
-    for (const item of body.items) {
-      for (const key of requiredKeys) {
-        expect(item, `expected key ${key}`).toHaveProperty(key);
-      }
-      expect(item['weight_class']).toBeDefined();
-      const fa = item['fighter_a'] as Record<string, unknown>;
-      const fb = item['fighter_b'] as Record<string, unknown>;
-      expect(fa['corner']).toBe('red');
-      expect(fb['corner']).toBe('blue');
-      expect(fa['display_name']).toBeTruthy();
-      expect(fb['display_name']).toBeTruthy();
+    for (const item of parsed.items) {
+      expect(item.fighter_a.corner).toBe('red');
+      expect(item.fighter_b.corner).toBe('blue');
+      expect(item.fighter_a.display_name).toBeTruthy();
+      expect(item.fighter_b.display_name).toBeTruthy();
     }
 
     // Status mapping matches the rich Battle shape.
-    const byId = Object.fromEntries(body.items.map((i) => [i['id'], i]));
-    expect(byId['bat_1']!['status']).toBe('completed');
-    expect(byId['bat_2']!['status']).toBe('live');
-    expect(byId['bat_3']!['status']).toBe('pre_fight');
-    expect(byId['bat_1']!['winner_bot_id']).toBe('bot_a');
-    expect(byId['bat_1']!['weight_class']).toBe('sparring');
-    expect(byId['bat_2']!['weight_class']).toBe('exhibition');
-    expect(byId['bat_3']!['weight_class']).toBe('title_fight');
+    const byId = Object.fromEntries(parsed.items.map((i) => [i.id, i]));
+    expect(byId['bat_1']!.status).toBe('completed');
+    expect(byId['bat_2']!.status).toBe('live');
+    expect(byId['bat_3']!.status).toBe('pre_fight');
+    expect(byId['bat_1']!.winner_bot_id).toBe('bot_a');
+    expect(byId['bat_1']!.weight_class).toBe('sparring');
+    expect(byId['bat_2']!.weight_class).toBe('exhibition');
+    expect(byId['bat_3']!.weight_class).toBe('title_fight');
   });
 
   it('paginates via ?limit + ?before=<created_at ISO cursor>', async () => {
@@ -227,8 +213,8 @@ describe('GET /api/v1/battles (list)', () => {
         : '/api/v1/battles?limit=10';
       const res = await t.app.request(url);
       expect(res.status).toBe(200);
-      const body = (await res.json()) as { items: Array<Record<string, unknown>>; next_cursor: string | null };
-      for (const item of body.items) drained.push(item['id'] as string);
+      const body = CursorPageSchema(BattleStrictSchema).parse(await res.json());
+      for (const item of body.items) drained.push(item.id);
       cursor = body.next_cursor;
       if (cursor === null) {
         expect(body.items.length).toBeLessThanOrEqual(10);
@@ -287,8 +273,8 @@ describe('GET /api/v1/battles (list)', () => {
 
     const res = await t.app.request('/api/v1/battles?initiator_user_id=u_one');
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { items: Array<Record<string, unknown>> };
-    expect(body.items.map((i) => i['id']).sort()).toEqual(['bat_u1_a', 'bat_u1_b']);
+    const parsed = CursorPageSchema(BattleStrictSchema).parse(await res.json());
+    expect(parsed.items.map((i) => i.id).sort()).toEqual(['bat_u1_a', 'bat_u1_b']);
   });
 });
 
@@ -301,7 +287,9 @@ describe('GET /api/v1/tournaments (list)', () => {
     const t = await makeTestApp({ sortBotApiBaseUrl: UPSTREAM });
     const res = await t.app.request('/api/v1/tournaments');
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ items: [], next_cursor: null });
+    const parsed = CursorPageSchema(TournamentStrictSchema).parse(await res.json());
+    expect(parsed.items).toEqual([]);
+    expect(parsed.next_cursor).toBeNull();
   });
 
   it('returns rows ordered DESC with trimmed Tournament shape (no participants/matches fan-out)', async () => {
@@ -336,41 +324,24 @@ describe('GET /api/v1/tournaments (list)', () => {
 
     const res = await t.app.request('/api/v1/tournaments');
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { items: Array<Record<string, unknown>>; next_cursor: string | null };
-    expect(body.items).toHaveLength(3);
-    expect(body.next_cursor).toBeNull();
-    expect(body.items.map((i) => i['id'])).toEqual(['tour_3', 'tour_2', 'tour_1']);
+    const parsed = CursorPageSchema(TournamentStrictSchema).parse(await res.json());
+    expect(parsed.items).toHaveLength(3);
+    expect(parsed.next_cursor).toBeNull();
+    expect(parsed.items.map((i) => i.id)).toEqual(['tour_3', 'tour_2', 'tour_1']);
 
-    const requiredKeys = [
-      'id',
-      'name',
-      'status',
-      'participant_count',
-      'weight_class_filter',
-      'prize_description',
-      'scheduled_at',
-      'rounds_total',
-      'current_round',
-      'champion_bot_id',
-      'matches',
-      'participants',
-    ];
-    for (const item of body.items) {
-      for (const key of requiredKeys) {
-        expect(item, `expected key ${key}`).toHaveProperty(key);
-      }
+    for (const item of parsed.items) {
       // Trim decision: list endpoint omits fan-out fields.
-      expect(item['matches']).toEqual([]);
-      expect(item['participants']).toEqual([]);
+      expect(item.matches).toEqual([]);
+      expect(item.participants).toEqual([]);
     }
 
-    const byId = Object.fromEntries(body.items.map((i) => [i['id'], i]));
-    expect(byId['tour_1']!['status']).toBe('completed');
-    expect(byId['tour_2']!['status']).toBe('active');
-    expect(byId['tour_3']!['status']).toBe('upcoming');
-    expect(byId['tour_1']!['champion_bot_id']).toBe('bot_a');
-    expect(byId['tour_1']!['participant_count']).toBe(4);
-    expect(byId['tour_1']!['scheduled_at']).toBe('2026-04-29T00:00:00.000Z');
+    const byId = Object.fromEntries(parsed.items.map((i) => [i.id, i]));
+    expect(byId['tour_1']!.status).toBe('completed');
+    expect(byId['tour_2']!.status).toBe('active');
+    expect(byId['tour_3']!.status).toBe('upcoming');
+    expect(byId['tour_1']!.champion_bot_id).toBe('bot_a');
+    expect(byId['tour_1']!.participant_count).toBe(4);
+    expect(byId['tour_1']!.scheduled_at).toBe('2026-04-29T00:00:00.000Z');
   });
 
   it('paginates via ?limit + ?before=<created_at ISO cursor>', async () => {
@@ -396,8 +367,8 @@ describe('GET /api/v1/tournaments (list)', () => {
         : '/api/v1/tournaments?limit=10';
       const res = await t.app.request(url);
       expect(res.status).toBe(200);
-      const body = (await res.json()) as { items: Array<Record<string, unknown>>; next_cursor: string | null };
-      for (const item of body.items) drained.push(item['id'] as string);
+      const body = CursorPageSchema(TournamentStrictSchema).parse(await res.json());
+      for (const item of body.items) drained.push(item.id);
       cursor = body.next_cursor;
       if (cursor === null) {
         expect(body.items.length).toBeLessThanOrEqual(10);
@@ -444,7 +415,7 @@ describe('GET /api/v1/tournaments (list)', () => {
 
     const res = await t.app.request('/api/v1/tournaments?initiator_user_id=u_one');
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { items: Array<Record<string, unknown>> };
-    expect(body.items.map((i) => i['id']).sort()).toEqual(['tour_u1_a', 'tour_u1_b']);
+    const parsed = CursorPageSchema(TournamentStrictSchema).parse(await res.json());
+    expect(parsed.items.map((i) => i.id).sort()).toEqual(['tour_u1_a', 'tour_u1_b']);
   });
 });

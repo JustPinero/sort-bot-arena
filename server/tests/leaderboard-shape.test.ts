@@ -1,6 +1,14 @@
 import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { z } from 'zod';
+
+import {
+  CursorPageSchema,
+  InputSummaryStrictSchema,
+  LeaderboardEntryStrictSchema,
+  PerInputLeaderboardEntryStrictSchema,
+} from '../../src/api/schemas.js';
 
 import { makeTestApp } from './helpers/test-app.js';
 
@@ -88,35 +96,11 @@ describe('GET /api/v1/leaderboard shape', () => {
 
     const res = await t.app.request('/api/v1/leaderboard?limit=10');
     expect(res.status).toBe(200);
-    const body = (await res.json()) as Record<string, unknown> & {
-      items: Array<Record<string, unknown>>;
-      next_cursor: string | null;
-    };
+    const parsed = CursorPageSchema(LeaderboardEntryStrictSchema).parse(await res.json());
 
-    expect(Array.isArray(body.items)).toBe(true);
-    expect(body.next_cursor).toBeNull();
-    expect(body).not.toHaveProperty('entries');
-    expect(body).not.toHaveProperty('total_inputs');
-
-    const first = body.items[0]!;
-    for (const key of [
-      'bot_id',
-      'rank',
-      'trend',
-      'display_name',
-      'nickname',
-      'language',
-      'portrait_url',
-      'record',
-      'ko_percentage',
-      'signature_input',
-      'last_fight_at',
-      'retired',
-    ]) {
-      expect(first).toHaveProperty(key);
-    }
-    expect(first.bot_id).toBe('bot_alpha');
-    expect(first.rank).toBe(1);
+    expect(parsed.next_cursor).toBeNull();
+    expect(parsed.items[0]?.bot_id).toBe('bot_alpha');
+    expect(parsed.items[0]?.rank).toBe(1);
   });
 
   it('surfaces stale + stale_age_ms on the body and X-Stale header when upstream is down', async () => {
@@ -140,16 +124,14 @@ describe('GET /api/v1/leaderboard shape', () => {
     expect(stale.status).toBe(200);
     expect(stale.headers.get('X-Stale')).toBe('true');
 
-    const body = (await stale.json()) as {
-      items: Array<{ bot_id: string }>;
-      next_cursor: string | null;
-      stale: boolean;
-      stale_age_ms: number;
-    };
+    const StalePageSchema = CursorPageSchema(LeaderboardEntryStrictSchema).extend({
+      stale: z.boolean(),
+      stale_age_ms: z.number(),
+    });
+    const body = StalePageSchema.parse(await stale.json());
     expect(body.items[0]?.bot_id).toBe('bot_alpha');
     expect(body.next_cursor).toBeNull();
     expect(body.stale).toBe(true);
-    expect(typeof body.stale_age_ms).toBe('number');
   }, 15_000);
 });
 
@@ -163,34 +145,16 @@ describe('GET /api/v1/leaderboard/inputs/:id shape', () => {
 
     const res = await t.app.request('/api/v1/leaderboard/inputs/1');
     expect(res.status).toBe(200);
-    const body = (await res.json()) as {
-      input: { id: string; name: string; size: number };
-      items: Array<Record<string, unknown>>;
-      next_cursor: string | null;
-    };
+    const PerInputPageSchema = CursorPageSchema(PerInputLeaderboardEntryStrictSchema).extend({
+      input: InputSummaryStrictSchema,
+    });
+    const parsed = PerInputPageSchema.parse(await res.json());
 
-    expect(body.input).toEqual({ id: '1', name: 'Large #1', size: 100000 });
-    expect(body.next_cursor).toBeNull();
-    expect(Array.isArray(body.items)).toBe(true);
-    expect(body.items.length).toBe(2);
-    expect(body).not.toHaveProperty('input_id');
-    expect(body).not.toHaveProperty('entries');
-
-    const first = body.items[0]!;
-    for (const key of [
-      'bot_id',
-      'rank_in_field',
-      'display_name',
-      'nickname',
-      'language',
-      'portrait_url',
-      'time_seconds',
-      'achieved_at',
-    ]) {
-      expect(first).toHaveProperty(key);
-    }
-    expect(first.bot_id).toBe('bot_alpha');
-    expect(first.rank_in_field).toBe(1);
-    expect(first.time_seconds).toBe(1.5);
+    expect(parsed.input).toEqual({ id: '1', name: 'Large #1', size: 100000 });
+    expect(parsed.next_cursor).toBeNull();
+    expect(parsed.items.length).toBe(2);
+    expect(parsed.items[0]?.bot_id).toBe('bot_alpha');
+    expect(parsed.items[0]?.rank_in_field).toBe(1);
+    expect(parsed.items[0]?.time_seconds).toBe(1.5);
   });
 });

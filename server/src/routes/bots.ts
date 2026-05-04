@@ -19,16 +19,10 @@ function formatAnalysis(raw: unknown): string {
   if (typeof a['algorithm'] === 'string' && a['algorithm']) {
     header.push(`**Algorithm:** ${a['algorithm']}`);
   }
-  if (
-    typeof a['time_complexity_estimate'] === 'string' &&
-    a['time_complexity_estimate']
-  ) {
+  if (typeof a['time_complexity_estimate'] === 'string' && a['time_complexity_estimate']) {
     header.push(`**Time complexity:** ${a['time_complexity_estimate']}`);
   }
-  if (
-    typeof a['space_complexity_estimate'] === 'string' &&
-    a['space_complexity_estimate']
-  ) {
+  if (typeof a['space_complexity_estimate'] === 'string' && a['space_complexity_estimate']) {
     header.push(`**Space complexity:** ${a['space_complexity_estimate']}`);
   }
   if (header.length > 0) lines.push(header.join('\n'));

@@ -150,11 +150,7 @@ export function claimPair(
   });
 }
 
-export async function reassignBattleId(
-  db: Client,
-  oldId: string,
-  newId: string,
-): Promise<void> {
+export async function reassignBattleId(db: Client, oldId: string, newId: string): Promise<void> {
   if (oldId === newId) return;
   await db.execute({
     sql: 'UPDATE recent_battles SET battle_id = ? WHERE battle_id = ?',
@@ -192,6 +188,40 @@ export async function markFailed(db: Client, battleId: string): Promise<void> {
   });
 }
 
+export interface InsertCompletedFromUpstreamArgs {
+  battle_id: string;
+  bot_a_id: string;
+  bot_b_id: string;
+  winner_bot_id: string | null;
+  completed_at: string;
+}
+
+// Slice C4 — global listener path for battles initiated outside our app.
+// When sort-bot-api emits a `battle_complete` for a battle_id we have no
+// row for, we backfill a `complete` row with what we can reconstruct from
+// `/v1/battles/:id`. `INSERT OR IGNORE` keeps it idempotent across replays
+// and concurrent reconnects (battle_id is the primary key).
+export async function insertCompletedFromUpstream(
+  db: Client,
+  args: InsertCompletedFromUpstreamArgs,
+): Promise<void> {
+  await db.execute({
+    sql: `INSERT OR IGNORE INTO recent_battles
+            (battle_id, bot_a_id, bot_b_id, pair_key, initiator_user_id,
+             weight_class, status, winner_bot_id, created_at, completed_at)
+          VALUES (?, ?, ?, ?, NULL, NULL, 'complete', ?, ?, ?)`,
+    args: [
+      args.battle_id,
+      args.bot_a_id,
+      args.bot_b_id,
+      pairKey(args.bot_a_id, args.bot_b_id),
+      args.winner_bot_id,
+      args.completed_at,
+      args.completed_at,
+    ],
+  });
+}
+
 // Slice 5: surface the persisted weight_class label on the rich Battle
 // shape returned by GET /api/v1/battles/:id. Returns null for legacy
 // battles that pre-date our recent_battles mirror.
@@ -209,6 +239,39 @@ export async function getWeightClassByBattleId(
   return typeof wc === 'string' ? wc : null;
 }
 
+// Slice C3 (D-10) — background sweep helper. Returns recent_battles
+// rows whose status is still 'running' but whose created_at is older
+// than `ageMs` milliseconds. Lex order on ISO-8601 created_at columns
+// matches chronological order, so we compute the cutoff in JS and
+// compare as strings — same trick the cooldown rule uses.
+export async function listRunningOlderThan(db: Client, ageMs: number): Promise<RecentBattleRow[]> {
+  const cutoffISO = new Date(Date.now() - ageMs).toISOString();
+  const res = await db.execute({
+    sql: `SELECT battle_id, bot_a_id, bot_b_id, pair_key, initiator_user_id,
+                 weight_class, status, winner_bot_id, created_at, completed_at
+            FROM recent_battles
+           WHERE status = 'running'
+             AND created_at <= ?
+        ORDER BY created_at ASC`,
+    args: [cutoffISO],
+  });
+  return res.rows.map((row) => {
+    const r = row as unknown as Record<string, unknown>;
+    return {
+      battle_id: r['battle_id'] as string,
+      bot_a_id: r['bot_a_id'] as string,
+      bot_b_id: r['bot_b_id'] as string,
+      pair_key: r['pair_key'] as string,
+      initiator_user_id: (r['initiator_user_id'] as string | null) ?? null,
+      weight_class: (r['weight_class'] as string | null) ?? null,
+      status: r['status'] as RecentBattleRow['status'],
+      winner_bot_id: (r['winner_bot_id'] as string | null) ?? null,
+      created_at: r['created_at'] as string,
+      completed_at: (r['completed_at'] as string | null) ?? null,
+    };
+  });
+}
+
 export interface ListRecentOpts {
   limit: number;
   before?: string | undefined;
@@ -220,10 +283,7 @@ export interface ListRecentOpts {
 // text — no encoding). Order is strictly created_at DESC and the index
 // `idx_recent_battles_created` covers the unfiltered case;
 // `idx_recent_battles_initiator` covers the initiator-filtered case.
-export async function listRecent(
-  db: Client,
-  opts: ListRecentOpts,
-): Promise<RecentBattleRow[]> {
+export async function listRecent(db: Client, opts: ListRecentOpts): Promise<RecentBattleRow[]> {
   const where: string[] = [];
   const args: Array<string | number> = [];
   if (opts.before !== undefined) {

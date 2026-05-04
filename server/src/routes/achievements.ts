@@ -59,8 +59,7 @@ export function achievementsRoutes(deps: { sortBotApi: SortBotApiClient }): Hono
     // rarity once we have battle data flowing.)
     const stats = await deps.sortBotApi.getStats().catch(() => null);
     const totalBots = stats?.total_bots ?? 0;
-    const pct =
-      totalBots > 0 ? Math.min(100, Math.round((1 / Math.max(totalBots, 5)) * 100)) : 0;
+    const pct = totalBots > 0 ? Math.min(100, Math.round((1 / Math.max(totalBots, 5)) * 100)) : 0;
     // TODO: server has no per-user achievement unlock tracking yet; the
     // frontend type requires `unlocked_at`, so we publish the current
     // server time as a placeholder until Slice 7 wires real unlock data.

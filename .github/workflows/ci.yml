@@ -39,14 +39,23 @@ jobs:
       - name: format check
         run: pnpm run format:check
 
-      - name: typecheck
+      - name: typecheck (frontend)
         run: pnpm run typecheck
 
-      - name: unit tests
-        run: pnpm run test
+      - name: typecheck (server)
+        run: pnpm --filter @sort-bot-arena/server typecheck
 
-      - name: build
+      - name: unit tests (frontend) + coverage
+        run: pnpm run test:coverage
+
+      - name: unit tests (server) + coverage
+        run: pnpm --filter @sort-bot-arena/server exec vitest run --coverage --passWithNoTests
+
+      - name: build (frontend)
         run: pnpm run build
+
+      - name: build (server)
+        run: pnpm --filter @sort-bot-arena/server build
 
       - name: bundle size summary
         if: always()

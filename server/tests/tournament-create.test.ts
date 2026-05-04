@@ -1,4 +1,4 @@
-// Slice 9.5 — POST /api/v1/tournaments
+// Slice 9.5 + Slice D4 — POST /api/v1/tournaments
 //
 // Closes the server-side gap left by slice 9: the frontend modal now
 // sends `bracket_size` + `input_mode` to /api/v1/tournaments but our
@@ -7,10 +7,17 @@
 // to sort-bot-api's `POST /v1/tournaments`, then mirrors a row into
 // `recent_tournaments` so the slice 7 history list and the new
 // `bracket_size` / `input_mode` columns get populated.
+//
+// Slice D4 extends this with: insertInitialMatches into
+// `tournament_matches`, fire-and-forget orchestrator.schedule(), and
+// the `{tournament_id, status: 'pending'}` envelope shape parseable by
+// CreateTournamentResponseSchema.
 
 import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+
+import { CreateTournamentResponseStrictSchema } from '../../src/api/schemas.js';
 
 import { makeTestApp } from './helpers/test-app.js';
 
@@ -30,7 +37,12 @@ function upstreamCreateTournamentResponse(tournamentId: string, participantCount
   };
 }
 
-async function signedUpApp() {
+async function signedUpApp(opts?: {
+  orchestrator?: {
+    schedule: (id: string) => Promise<void>;
+    advanceMatch: (matchRow: unknown) => Promise<void>;
+  };
+}) {
   server.use(
     http.post(`${UPSTREAM}/v1/users`, () =>
       HttpResponse.json({
@@ -40,7 +52,10 @@ async function signedUpApp() {
       }),
     ),
   );
-  const t = await makeTestApp({ sortBotApiBaseUrl: UPSTREAM });
+  const t = await makeTestApp({
+    sortBotApiBaseUrl: UPSTREAM,
+    ...(opts?.orchestrator ? { orchestrator: opts.orchestrator } : {}),
+  });
   const signup = await t.app.request('/api/v1/auth/signup', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -240,36 +255,33 @@ describe('POST /api/v1/tournaments', () => {
       expect(r['status']).toBe('running');
     });
 
-    it.each([4, 6, 8, 12])(
-      'accepts bracket_size=%i with matching participants',
-      async (size) => {
-        const { t, cookie } = await signedUpApp();
-        server.use(
-          http.post(`${UPSTREAM}/v1/tournaments`, () =>
-            HttpResponse.json(upstreamCreateTournamentResponse(`tour_${size}`, size)),
-          ),
-        );
-        const res = await t.app.request('/api/v1/tournaments', {
-          method: 'POST',
-          headers: { 'content-type': 'application/json', cookie },
-          body: JSON.stringify({
-            participant_bot_ids: ids(size),
-            count: 3,
-            bracket_size: size,
-            input_mode: 'flat_random',
-          }),
-        });
-        expect([200, 201]).toContain(res.status);
-        const row = await t.db.execute({
-          sql: 'SELECT bracket_size, participant_count FROM recent_tournaments WHERE tournament_id = ?',
-          args: [`tour_${size}`],
-        });
-        expect(row.rows).toHaveLength(1);
-        const r = row.rows[0] as unknown as Record<string, unknown>;
-        expect(Number(r['bracket_size'])).toBe(size);
-        expect(Number(r['participant_count'])).toBe(size);
-      },
-    );
+    it.each([4, 6, 8, 12])('accepts bracket_size=%i with matching participants', async (size) => {
+      const { t, cookie } = await signedUpApp();
+      server.use(
+        http.post(`${UPSTREAM}/v1/tournaments`, () =>
+          HttpResponse.json(upstreamCreateTournamentResponse(`tour_${size}`, size)),
+        ),
+      );
+      const res = await t.app.request('/api/v1/tournaments', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', cookie },
+        body: JSON.stringify({
+          participant_bot_ids: ids(size),
+          count: 3,
+          bracket_size: size,
+          input_mode: 'flat_random',
+        }),
+      });
+      expect([200, 201]).toContain(res.status);
+      const row = await t.db.execute({
+        sql: 'SELECT bracket_size, participant_count FROM recent_tournaments WHERE tournament_id = ?',
+        args: [`tour_${size}`],
+      });
+      expect(row.rows).toHaveLength(1);
+      const r = row.rows[0] as unknown as Record<string, unknown>;
+      expect(Number(r['bracket_size'])).toBe(size);
+      expect(Number(r['participant_count'])).toBe(size);
+    });
   });
 
   describe('upstream error envelopes', () => {
@@ -323,6 +335,131 @@ describe('POST /api/v1/tournaments', () => {
       const body = (await res.json()) as Record<string, unknown>;
       expect(body['error']).toBe('upstream_failure');
       expect(body['upstream_status']).toBe(404);
+    });
+  });
+
+  // Slice D4 — orchestrator wiring + initial bracket persistence + new
+  // envelope shape. The route now seeds tournament_matches rows from
+  // `buildInitialBracket`, fire-and-forget invokes
+  // `orchestrator.schedule(...)`, and returns the clean
+  // `{tournament_id, status: 'pending'}` envelope.
+  describe('Slice D4 — orchestrator + initial bracket', () => {
+    it('returns the {tournament_id, status: "pending"} envelope shape (CreateTournamentResponseSchema)', async () => {
+      const { t, cookie } = await signedUpApp();
+      server.use(
+        http.post(`${UPSTREAM}/v1/tournaments`, () =>
+          HttpResponse.json(upstreamCreateTournamentResponse('tour_envelope_1', 4)),
+        ),
+      );
+      const res = await t.app.request('/api/v1/tournaments', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', cookie },
+        body: JSON.stringify({
+          participant_bot_ids: ids(4),
+          count: 3,
+          bracket_size: 4,
+          input_mode: 'flat_random',
+        }),
+      });
+      expect([200, 201]).toContain(res.status);
+      // The envelope parses against the strict frontend schema.
+      const body = CreateTournamentResponseStrictSchema.parse(await res.json());
+      expect(body.tournament_id).toBe('tour_envelope_1');
+      expect(body.status).toBe('pending');
+    });
+
+    it('inserts 2 pending tournament_matches rows for a 4-bracket', async () => {
+      const { t, cookie } = await signedUpApp();
+      server.use(
+        http.post(`${UPSTREAM}/v1/tournaments`, () =>
+          HttpResponse.json(upstreamCreateTournamentResponse('tour_4_matches', 4)),
+        ),
+      );
+      const res = await t.app.request('/api/v1/tournaments', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', cookie },
+        body: JSON.stringify({
+          participant_bot_ids: ids(4),
+          count: 3,
+          bracket_size: 4,
+          input_mode: 'flat_random',
+        }),
+      });
+      expect([200, 201]).toContain(res.status);
+
+      const rows = await t.db.execute({
+        sql: `SELECT round, status FROM tournament_matches
+                WHERE tournament_id = ?
+             ORDER BY bracket_position ASC`,
+        args: ['tour_4_matches'],
+      });
+      expect(rows.rows).toHaveLength(2);
+      for (const row of rows.rows) {
+        const r = row as unknown as Record<string, unknown>;
+        expect(Number(r['round'])).toBe(1);
+        expect(r['status']).toBe('pending');
+      }
+    });
+
+    it('inserts 2 pending + 2 bye tournament_matches rows for a 6-bracket', async () => {
+      const { t, cookie } = await signedUpApp();
+      server.use(
+        http.post(`${UPSTREAM}/v1/tournaments`, () =>
+          HttpResponse.json(upstreamCreateTournamentResponse('tour_6_matches', 6)),
+        ),
+      );
+      const res = await t.app.request('/api/v1/tournaments', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', cookie },
+        body: JSON.stringify({
+          participant_bot_ids: ids(6),
+          count: 3,
+          bracket_size: 6,
+          input_mode: 'flat_random',
+        }),
+      });
+      expect([200, 201]).toContain(res.status);
+
+      const rows = await t.db.execute({
+        sql: `SELECT status FROM tournament_matches
+                WHERE tournament_id = ?
+             ORDER BY bracket_position ASC`,
+        args: ['tour_6_matches'],
+      });
+      expect(rows.rows).toHaveLength(4);
+      const statuses = rows.rows.map((r) => (r as unknown as Record<string, unknown>)['status']);
+      expect(statuses.filter((s) => s === 'bye')).toHaveLength(2);
+      expect(statuses.filter((s) => s === 'pending')).toHaveLength(2);
+    });
+
+    it('invokes orchestrator.schedule with the tournament_id (fire-and-forget)', async () => {
+      const scheduleCalls: string[] = [];
+      const orchestrator = {
+        schedule: async (id: string): Promise<void> => {
+          scheduleCalls.push(id);
+        },
+        advanceMatch: async (): Promise<void> => {},
+      };
+      const { t, cookie } = await signedUpApp({ orchestrator });
+      server.use(
+        http.post(`${UPSTREAM}/v1/tournaments`, () =>
+          HttpResponse.json(upstreamCreateTournamentResponse('tour_sched_1', 4)),
+        ),
+      );
+      const res = await t.app.request('/api/v1/tournaments', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', cookie },
+        body: JSON.stringify({
+          participant_bot_ids: ids(4),
+          count: 3,
+          bracket_size: 4,
+          input_mode: 'flat_random',
+        }),
+      });
+      expect([200, 201]).toContain(res.status);
+      // Allow the fire-and-forget microtask to settle.
+      await new Promise((r) => setImmediate(r));
+      expect(scheduleCalls).toEqual(['tour_sched_1']);
     });
   });
 });

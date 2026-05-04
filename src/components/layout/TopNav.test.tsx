@@ -1,14 +1,21 @@
+import { QueryClientProvider } from '@tanstack/react-query';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it } from 'vitest';
 
+import { createQueryClient } from '@/api/queryClient';
 import { useThemeStore } from '@/stores/theme';
 
 import { TopNav } from './TopNav';
 
 function withRouter(node: React.ReactNode) {
-  return <MemoryRouter>{node}</MemoryRouter>;
+  const client = createQueryClient();
+  return (
+    <QueryClientProvider client={client}>
+      <MemoryRouter>{node}</MemoryRouter>
+    </QueryClientProvider>
+  );
 }
 
 describe('<TopNav />', () => {

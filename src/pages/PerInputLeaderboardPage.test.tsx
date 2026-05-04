@@ -2,6 +2,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { describe, expect, it } from 'vitest';
+import { axe } from 'vitest-axe';
 
 import { createQueryClient } from '@/api/queryClient';
 
@@ -40,6 +41,18 @@ describe('<PerInputLeaderboardPage />', () => {
     renderAt('/leaderboard/inputs/in_does_not_exist');
     await waitFor(() => expect(screen.getByText(/input not found/i)).toBeInTheDocument(), {
       timeout: 3000,
+    });
+  });
+
+  describe('a11y', () => {
+    it('renders without axe violations', async () => {
+      const { container } = renderAt('/leaderboard/inputs/in_killer_quicksort');
+      await waitFor(() =>
+        expect(
+          screen.getByRole('heading', { level: 1, name: /adversarial quicksort killer/i }),
+        ).toBeInTheDocument(),
+      );
+      expect(await axe(container)).toHaveNoViolations();
     });
   });
 });

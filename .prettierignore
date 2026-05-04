@@ -6,3 +6,4 @@ coverage
 pnpm-lock.yaml
 references/
 audits/
+public/mockServiceWorker.js

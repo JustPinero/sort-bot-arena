@@ -1,5 +1,6 @@
 import { http, HttpResponse, delay } from 'msw';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { z } from 'zod';
 
 import { server } from '@/test/msw/server';
 
@@ -76,6 +77,26 @@ describe('apiClient', () => {
       }
     });
 
+    it('falls back to `http_${status}` code when only `error` is set (no `code` discriminator)', async () => {
+      server.use(
+        http.post(`${BASE}/api/v1/bots`, () =>
+          HttpResponse.json({ error: 'human readable message' }, { status: 400 }),
+        ),
+      );
+
+      const promise = apiClient.post('/api/v1/bots', { display_name: '' });
+      await expect(promise).rejects.toBeInstanceOf(ApiError);
+      try {
+        await promise;
+      } catch (err) {
+        expect(err).toMatchObject({
+          status: 400,
+          code: 'http_400',
+          message: 'human readable message',
+        });
+      }
+    });
+
     it('5xx → ApiError flagged retryable', async () => {
       server.use(
         http.get(`${BASE}/api/v1/leaderboard`, () =>
@@ -96,8 +117,10 @@ describe('apiClient', () => {
 
   describe('happy path', () => {
     it('returns the parsed JSON body on 2xx', async () => {
-      const body = await apiClient.get<{ status: string }>('/api/healthz');
-      expect(body.status).toBe('ok');
+      // `/api/healthz` returns text/plain on the deployed server, so we
+      // exercise the JSON happy-path against a JSON endpoint instead.
+      const body = await apiClient.get<{ id: string; email: string }>('/api/v1/auth/me');
+      expect(body.email).toBe('test@example.com');
     });
 
     it('serializes JSON request bodies and sets Content-Type', async () => {
@@ -114,6 +137,75 @@ describe('apiClient', () => {
       await apiClient.post('/api/v1/echo', { display_name: 'test' });
       expect(contentType).toContain('application/json');
       expect(received).toEqual({ display_name: 'test' });
+    });
+  });
+
+  describe('schema validation', () => {
+    const userSchema = z.object({
+      id: z.string(),
+      name: z.string(),
+    });
+
+    it('returns the parsed value when the response matches the schema', async () => {
+      server.use(
+        http.get(`${BASE}/api/v1/user`, () => HttpResponse.json({ id: 'u_1', name: 'Ada' })),
+      );
+
+      const user = await apiClient.get<z.infer<typeof userSchema>>('/api/v1/user', {
+        schema: userSchema,
+      });
+      expect(user).toEqual({ id: 'u_1', name: 'Ada' });
+    });
+
+    it('throws ApiError({code: "malformed_response", status: 0}) when the response fails the schema', async () => {
+      server.use(
+        http.get(`${BASE}/api/v1/user`, () =>
+          HttpResponse.json({ id: 'u_1' /* missing `name` */ }),
+        ),
+      );
+
+      const promise = apiClient.get('/api/v1/user', { schema: userSchema });
+      await expect(promise).rejects.toBeInstanceOf(ApiError);
+      try {
+        await promise;
+      } catch (err) {
+        expect(err).toMatchObject({
+          name: 'ApiError',
+          status: 0,
+          code: 'malformed_response',
+          retryable: false,
+        });
+        expect((err as ApiError).message).toContain('/api/v1/user');
+      }
+    });
+
+    it('preserves existing behavior (returns JSON as T) when no schema is provided', async () => {
+      server.use(
+        http.get(`${BASE}/api/v1/user`, () => HttpResponse.json({ id: 'u_2', extra: 'field' })),
+      );
+
+      const user = await apiClient.get<{ id: string; extra: string }>('/api/v1/user');
+      expect(user).toEqual({ id: 'u_2', extra: 'field' });
+    });
+
+    it('allows extra fields when the schema uses .passthrough()', async () => {
+      const passthroughSchema = z
+        .object({
+          id: z.string(),
+          name: z.string(),
+        })
+        .passthrough();
+
+      server.use(
+        http.get(`${BASE}/api/v1/user`, () =>
+          HttpResponse.json({ id: 'u_3', name: 'Grace', extra: 'allowed' }),
+        ),
+      );
+
+      const user = await apiClient.get<z.infer<typeof passthroughSchema>>('/api/v1/user', {
+        schema: passthroughSchema,
+      });
+      expect(user).toMatchObject({ id: 'u_3', name: 'Grace', extra: 'allowed' });
     });
   });
 });

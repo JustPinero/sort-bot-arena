@@ -2,6 +2,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it } from 'vitest';
+import { axe } from 'vitest-axe';
 
 import { createQueryClient } from '@/api/queryClient';
 
@@ -30,5 +31,13 @@ describe('<TournamentsListPage />', () => {
     expect(screen.getByText(/live tonight/i)).toBeInTheDocument();
     expect(screen.getByText(/upcoming/i)).toBeInTheDocument();
     expect(screen.getByText(/completed/i)).toBeInTheDocument();
+  });
+
+  describe('a11y', () => {
+    it('renders without axe violations', async () => {
+      const { container } = renderPage();
+      await waitFor(() => expect(screen.getByText(/rumble in the stack/i)).toBeInTheDocument());
+      expect(await axe(container)).toHaveNoViolations();
+    });
   });
 });

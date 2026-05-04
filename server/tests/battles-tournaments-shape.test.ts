@@ -2,6 +2,12 @@ import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
+import {
+  BattleStrictSchema,
+  CursorPageSchema,
+  TournamentStrictSchema,
+} from '../../src/api/schemas.js';
+
 import { makeTestApp } from './helpers/test-app.js';
 
 const UPSTREAM = 'http://api.test';
@@ -90,8 +96,9 @@ describe('GET /api/v1/battles', () => {
     const t = await makeTestApp({ sortBotApiBaseUrl: UPSTREAM });
     const res = await t.app.request('/api/v1/battles');
     expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(body).toEqual({ items: [], next_cursor: null });
+    const parsed = CursorPageSchema(BattleStrictSchema).parse(await res.json());
+    expect(parsed.items).toEqual([]);
+    expect(parsed.next_cursor).toBeNull();
   });
 });
 
@@ -105,26 +112,24 @@ describe('GET /api/v1/battles/:id', () => {
     const t = await makeTestApp({ sortBotApiBaseUrl: UPSTREAM });
     const res = await t.app.request('/api/v1/battles/bat_1');
     expect(res.status).toBe(200);
-    const body = (await res.json()) as Record<string, unknown>;
+    const parsed = BattleStrictSchema.parse(await res.json());
 
-    expect(body['id']).toBe('bat_1');
-    expect(body['status']).toBe('completed');
-    expect(body['rounds_total']).toBe(3);
-    expect(body['current_round']).toBe(3);
-    expect(body['winner_bot_id']).toBe('bot_a');
-    expect(body['outcome']).toBe('decision');
-    expect(body['scheduled_at']).toBe('2026-04-29T00:00:00Z');
-    expect(body['completed_at']).toBe('2026-04-29T00:05:00Z');
+    expect(parsed.id).toBe('bat_1');
+    expect(parsed.status).toBe('completed');
+    expect(parsed.rounds_total).toBe(3);
+    expect(parsed.current_round).toBe(3);
+    expect(parsed.winner_bot_id).toBe('bot_a');
+    expect(parsed.outcome).toBe('decision');
+    expect(parsed.scheduled_at).toBe('2026-04-29T00:00:00Z');
+    expect(parsed.completed_at).toBe('2026-04-29T00:05:00Z');
 
-    const fa = body['fighter_a'] as Record<string, unknown>;
-    const fb = body['fighter_b'] as Record<string, unknown>;
-    expect(fa['bot_id']).toBe('bot_a');
-    expect(fa['corner']).toBe('red');
-    expect(fa['display_name']).toBe('Alpha Bot');
-    expect(fa['nickname']).toBeTruthy();
-    expect(fb['bot_id']).toBe('bot_b');
-    expect(fb['corner']).toBe('blue');
-    expect(fb['display_name']).toBe('Bravo Bot');
+    expect(parsed.fighter_a.bot_id).toBe('bot_a');
+    expect(parsed.fighter_a.corner).toBe('red');
+    expect(parsed.fighter_a.display_name).toBe('Alpha Bot');
+    expect(parsed.fighter_a.nickname).toBeTruthy();
+    expect(parsed.fighter_b.bot_id).toBe('bot_b');
+    expect(parsed.fighter_b.corner).toBe('blue');
+    expect(parsed.fighter_b.display_name).toBe('Bravo Bot');
   });
 
   it('404s when upstream 404s', async () => {
@@ -179,7 +184,9 @@ describe('GET /api/v1/tournaments', () => {
     const t = await makeTestApp({ sortBotApiBaseUrl: UPSTREAM });
     const res = await t.app.request('/api/v1/tournaments');
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ items: [], next_cursor: null });
+    const parsed = CursorPageSchema(TournamentStrictSchema).parse(await res.json());
+    expect(parsed.items).toEqual([]);
+    expect(parsed.next_cursor).toBeNull();
   });
 });
 
@@ -230,34 +237,30 @@ describe('GET /api/v1/tournaments/:id', () => {
     );
 
     const t = await makeTestApp({ sortBotApiBaseUrl: UPSTREAM });
-    const res = await t.app.request(
-      '/api/v1/tournaments/tour_357ebddb20442ac59c297d7ea421da97',
-    );
+    const res = await t.app.request('/api/v1/tournaments/tour_357ebddb20442ac59c297d7ea421da97');
     expect(res.status).toBe(200);
-    const body = (await res.json()) as Record<string, unknown>;
+    const parsed = TournamentStrictSchema.parse(await res.json());
 
-    expect(body['id']).toBe('tour_357ebddb20442ac59c297d7ea421da97');
-    expect(body['status']).toBe('active');
-    expect(body['name']).toBe('Tournament tour_357');
-    expect(body['rounds_total']).toBe(2);
-    expect(body['current_round']).toBe(1);
-    expect(body['scheduled_at']).toBe('2026-04-29T00:00:00Z');
-    expect(body['weight_class_filter']).toBeNull();
-    expect(body['prize_description']).toBeNull();
-    expect(body['champion_bot_id']).toBeNull();
+    expect(parsed.id).toBe('tour_357ebddb20442ac59c297d7ea421da97');
+    expect(parsed.status).toBe('active');
+    expect(parsed.name).toBe('Tournament tour_357');
+    expect(parsed.rounds_total).toBe(2);
+    expect(parsed.current_round).toBe(1);
+    expect(parsed.scheduled_at).toBe('2026-04-29T00:00:00Z');
+    expect(parsed.weight_class_filter).toBeNull();
+    expect(parsed.prize_description).toBeNull();
+    expect(parsed.champion_bot_id).toBeNull();
 
-    const participants = body['participants'] as Array<Record<string, unknown>>;
-    expect(participants).toHaveLength(2);
-    const participantIds = participants.map((p) => p['bot_id']).sort();
+    expect(parsed.participants).toHaveLength(2);
+    const participantIds = parsed.participants.map((p) => p.bot_id).sort();
     expect(participantIds).toEqual(['bot_a', 'bot_b']);
-    for (const p of participants) {
-      expect(p['nickname']).toBeTruthy();
-      expect(p['display_name']).toBeTruthy();
+    for (const p of parsed.participants) {
+      expect(p.nickname).toBeTruthy();
+      expect(p.display_name).toBeTruthy();
     }
 
-    const matches = body['matches'] as Array<Record<string, unknown>>;
-    expect(matches).toHaveLength(2);
-    expect(matches[0]).toMatchObject({
+    expect(parsed.matches).toHaveLength(2);
+    expect(parsed.matches[0]).toMatchObject({
       id: '1',
       round: 1,
       position: 0,
@@ -267,7 +270,7 @@ describe('GET /api/v1/tournaments/:id', () => {
       status: 'completed',
       battle_id: 'bat_1',
     });
-    expect(matches[1]).toMatchObject({
+    expect(parsed.matches[1]).toMatchObject({
       id: '2',
       round: 2,
       position: 0,
@@ -277,5 +280,196 @@ describe('GET /api/v1/tournaments/:id', () => {
       status: 'bye',
       battle_id: null,
     });
+  });
+});
+
+// Slice D5 — when a row exists in `recent_tournaments` (i.e. the
+// tournament was created via our POST handler post-D4), the GET handler
+// reads from our DB instead of upstream. This tests the new path:
+// match status mapping, current_round computation, rounds_total derived
+// from bracket_size, and bye row rendering.
+describe('GET /api/v1/tournaments/:id — Slice D5 our-DB-driven path', () => {
+  it('reads from recent_tournaments + tournament_matches and maps match status correctly', async () => {
+    const t = await makeTestApp({ sortBotApiBaseUrl: UPSTREAM });
+
+    // Seed our DB directly. recordTournament + insertInitialMatches
+    // mirror what the POST handler does; we skip the HTTP path so the
+    // test is focused on the GET path's read shape.
+    const { recordTournament } = await import('../src/store/recent-tournaments.js');
+    const { insertInitialMatches, markInFlight, markComplete } =
+      await import('../src/store/tournament-matches.js');
+
+    const tid = 'tour_d5_test_001';
+    await recordTournament(t.db, {
+      tournament_id: tid,
+      initiator_user_id: 'u1',
+      participant_count: 4,
+      bracket_size: 4,
+      input_mode: 'flat_random',
+      status: 'running',
+    });
+    await insertInitialMatches(t.db, tid, [
+      {
+        match_id: 'r1p0',
+        round: 1,
+        bracket_position: 0,
+        bot_a_id: 'bot_a',
+        bot_b_id: 'bot_b',
+        status: 'pending',
+        winner_bot_id: null,
+      },
+      {
+        match_id: 'r1p1',
+        round: 1,
+        bracket_position: 1,
+        bot_a_id: 'bot_c',
+        bot_b_id: 'bot_d',
+        status: 'pending',
+        winner_bot_id: null,
+      },
+    ]);
+    // Walk match 0 to in_flight, match 1 to complete.
+    await markInFlight(t.db, `${tid}_r1p0`, 'bat_x', '2026-05-01T00:00:00Z');
+    await markComplete(t.db, `${tid}_r1p1`, 'bot_c', '2026-05-01T00:01:00Z');
+
+    server.use(
+      http.get(`${UPSTREAM}/v1/bots/bot_a`, () => HttpResponse.json(botA)),
+      http.get(`${UPSTREAM}/v1/bots/bot_b`, () => HttpResponse.json(botB)),
+      http.get(`${UPSTREAM}/v1/bots/bot_c`, () =>
+        HttpResponse.json({ ...botA, id: 'bot_c', display_name: 'Charlie Bot' }),
+      ),
+      http.get(`${UPSTREAM}/v1/bots/bot_d`, () =>
+        HttpResponse.json({ ...botB, id: 'bot_d', display_name: 'Delta Bot' }),
+      ),
+    );
+
+    const res = await t.app.request(`/api/v1/tournaments/${tid}`);
+    expect(res.status).toBe(200);
+    const parsed = TournamentStrictSchema.parse(await res.json());
+
+    expect(parsed.id).toBe(tid);
+    expect(parsed.status).toBe('active');
+    expect(parsed.participant_count).toBe(4);
+    expect(parsed.rounds_total).toBe(2); // log2(4) = 2 rounds
+    expect(parsed.current_round).toBe(1); // R1 has non-pending rows
+    expect(parsed.champion_bot_id).toBeNull();
+
+    expect(parsed.participants).toHaveLength(4);
+    expect(parsed.participants.map((p) => p.bot_id).sort()).toEqual([
+      'bot_a',
+      'bot_b',
+      'bot_c',
+      'bot_d',
+    ]);
+
+    expect(parsed.matches).toHaveLength(2);
+    const inFlight = parsed.matches.find((m) => m.fighter_a_bot_id === 'bot_a');
+    const complete = parsed.matches.find((m) => m.fighter_a_bot_id === 'bot_c');
+    expect(inFlight?.status).toBe('live'); // in_flight → live
+    expect(inFlight?.battle_id).toBe('bat_x');
+    expect(complete?.status).toBe('completed'); // complete → completed
+    expect(complete?.winner_bot_id).toBe('bot_c');
+  });
+
+  it('maps a bye row to status=bye and a 6-bracket to rounds_total=3', async () => {
+    const t = await makeTestApp({ sortBotApiBaseUrl: UPSTREAM });
+
+    const { recordTournament } = await import('../src/store/recent-tournaments.js');
+    const { insertInitialMatches } = await import('../src/store/tournament-matches.js');
+
+    const tid = 'tour_d5_test_bye';
+    await recordTournament(t.db, {
+      tournament_id: tid,
+      initiator_user_id: 'u1',
+      participant_count: 6,
+      bracket_size: 6,
+      input_mode: 'escalation',
+      status: 'pending',
+    });
+    // 6-bracket: 2 R1 matches + 2 byes (top seeds advance free)
+    await insertInitialMatches(t.db, tid, [
+      {
+        match_id: 'r1bye0',
+        round: 1,
+        bracket_position: 0,
+        bot_a_id: 'bot_a',
+        bot_b_id: null,
+        status: 'bye',
+        winner_bot_id: 'bot_a',
+      },
+      {
+        match_id: 'r1p1',
+        round: 1,
+        bracket_position: 1,
+        bot_a_id: 'bot_b',
+        bot_b_id: 'bot_c',
+        status: 'pending',
+        winner_bot_id: null,
+      },
+    ]);
+
+    server.use(
+      http.get(`${UPSTREAM}/v1/bots/bot_a`, () => HttpResponse.json(botA)),
+      http.get(`${UPSTREAM}/v1/bots/bot_b`, () => HttpResponse.json(botB)),
+      http.get(`${UPSTREAM}/v1/bots/bot_c`, () =>
+        HttpResponse.json({ ...botA, id: 'bot_c', display_name: 'Charlie Bot' }),
+      ),
+    );
+
+    const res = await t.app.request(`/api/v1/tournaments/${tid}`);
+    expect(res.status).toBe(200);
+    const parsed = TournamentStrictSchema.parse(await res.json());
+
+    expect(parsed.status).toBe('upcoming');
+    expect(parsed.rounds_total).toBe(3); // log2(6) ceil = 3 rounds
+    expect(parsed.current_round).toBe(1); // bye row counts as a non-pending R1 cell
+
+    const byeMatch = parsed.matches.find((m) => m.fighter_b_bot_id === null);
+    expect(byeMatch?.status).toBe('bye');
+    expect(byeMatch?.winner_bot_id).toBe('bot_a');
+  });
+
+  it('reports champion_bot_id once the recent_tournaments row is marked complete', async () => {
+    const t = await makeTestApp({ sortBotApiBaseUrl: UPSTREAM });
+
+    const { recordTournament, markComplete: markTournamentComplete } =
+      await import('../src/store/recent-tournaments.js');
+    const { insertInitialMatches, markComplete: markMatchComplete } =
+      await import('../src/store/tournament-matches.js');
+
+    const tid = 'tour_d5_test_champ';
+    await recordTournament(t.db, {
+      tournament_id: tid,
+      initiator_user_id: 'u1',
+      participant_count: 4,
+      bracket_size: 4,
+      input_mode: 'flat_random',
+      status: 'running',
+    });
+    await insertInitialMatches(t.db, tid, [
+      {
+        match_id: 'r1p0',
+        round: 1,
+        bracket_position: 0,
+        bot_a_id: 'bot_a',
+        bot_b_id: 'bot_b',
+        status: 'pending',
+        winner_bot_id: null,
+      },
+    ]);
+    await markMatchComplete(t.db, `${tid}_r1p0`, 'bot_a', '2026-05-01T00:01:00Z');
+    await markTournamentComplete(t.db, tid, 'bot_a');
+
+    server.use(
+      http.get(`${UPSTREAM}/v1/bots/bot_a`, () => HttpResponse.json(botA)),
+      http.get(`${UPSTREAM}/v1/bots/bot_b`, () => HttpResponse.json(botB)),
+    );
+
+    const res = await t.app.request(`/api/v1/tournaments/${tid}`);
+    expect(res.status).toBe(200);
+    const parsed = TournamentStrictSchema.parse(await res.json());
+
+    expect(parsed.status).toBe('completed');
+    expect(parsed.champion_bot_id).toBe('bot_a');
   });
 });
