@@ -289,6 +289,50 @@ export const BattleStrictSchema = BattleSchema.strict();
 export type Battle = z.infer<typeof BattleSchema>;
 
 // ---------------------------------------------------------------------------
+// Battle replay payload (poll fallback)
+// ---------------------------------------------------------------------------
+
+// Mirrors the synthesized payload returned by `GET /api/v1/battles/:id/replay`
+// (server-side: `server/src/api/battles.ts`). Consumed by `useBattleEvents`'s
+// SSE→polling fallback in `src/api/sse.ts`. The `outcome` union is what
+// `mapOutcome` expects — keep the literals in lockstep.
+export const ReplayRoundSchema = z
+  .object({
+    round: z.number(),
+    input_id: z.string(),
+    input_name: z.string(),
+    a_time_seconds: z.number(),
+    b_time_seconds: z.number(),
+    delta_seconds: z.number(),
+    winner_bot_id: z.string().nullable(),
+  })
+  .passthrough();
+export const ReplayRoundStrictSchema = ReplayRoundSchema.strict();
+export type ReplayRound = z.infer<typeof ReplayRoundSchema>;
+
+export const ReplayOutcomeSchema = z
+  .enum(['a_ko', 'b_ko', 'a_decision', 'b_decision', 'draw'])
+  .nullable();
+export type ReplayOutcome = z.infer<typeof ReplayOutcomeSchema>;
+
+export const ReplayPayloadSchema = z
+  .object({
+    battle_id: z.string(),
+    status: z.enum(['pending', 'running', 'complete', 'failed']),
+    bot_a_id: z.string(),
+    bot_b_id: z.string(),
+    winner_bot_id: z.string().nullable(),
+    outcome: ReplayOutcomeSchema,
+    a_rounds_won: z.number(),
+    b_rounds_won: z.number(),
+    rounds: z.array(ReplayRoundSchema),
+    completed_at: z.string().nullable(),
+  })
+  .passthrough();
+export const ReplayPayloadStrictSchema = ReplayPayloadSchema.strict();
+export type ReplayPayload = z.infer<typeof ReplayPayloadSchema>;
+
+// ---------------------------------------------------------------------------
 // Submit + evaluation events
 // ---------------------------------------------------------------------------
 
@@ -412,6 +456,33 @@ export const CreateTournamentResponseSchema = z
   .passthrough();
 export const CreateTournamentResponseStrictSchema = CreateTournamentResponseSchema.strict();
 export type CreateTournamentResponse = z.infer<typeof CreateTournamentResponseSchema>;
+
+// Phase 11 T4.1 — Canonical error envelope our routes emit when an
+// upstream call fails or a request body fails validation. Three known
+// shapes today:
+//   {error: 'bad_field', issues: ZodIssue[]}
+//   {error: 'upstream_failure', upstream_status: number, code?: string}
+//   {error: 'unauthenticated' | 'not_found' | ... }   (bare message)
+//   {error: 'tournament_unavailable', tournament_id}  (D5 fallback)
+// Generic shape: `error: string` with arbitrary further keys.
+// Passthrough so route-specific extras (`issues`, `code`,
+// `upstream_status`, `tournament_id`) flow through. Strict variant for
+// contract-drift assertions.
+export const ApiErrorEnvelopeSchema = z
+  .object({
+    error: z.string(),
+    upstream_status: z.number().int().optional(),
+    code: z.string().optional(),
+  })
+  .passthrough();
+export const ApiErrorEnvelopeStrictSchema = z
+  .object({
+    error: z.string(),
+    upstream_status: z.number().int().optional(),
+    code: z.string().optional(),
+  })
+  .strict();
+export type ApiErrorEnvelope = z.infer<typeof ApiErrorEnvelopeSchema>;
 
 // ---------------------------------------------------------------------------
 // Feed + home snapshot

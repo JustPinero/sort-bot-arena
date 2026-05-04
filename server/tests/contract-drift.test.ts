@@ -15,6 +15,7 @@ import { z } from 'zod';
 import {
   AchievementDefinitionStrictSchema,
   AnalysisResponseStrictSchema,
+  ApiErrorEnvelopeStrictSchema,
   BattleStrictSchema,
   BotRunStrictSchema,
   BotSnapshotStrictSchema,
@@ -29,6 +30,7 @@ import {
   SessionUserStrictSchema,
   TournamentStrictSchema,
 } from '../../src/api/schemas.js';
+import { SortBotApiError } from '../src/clients/sort-bot-api/index.js';
 
 import { makeTestApp } from './helpers/test-app.js';
 
@@ -626,6 +628,245 @@ describe('contract drift — every endpoint matches src/api/schemas.ts', () => {
       });
       expect([200, 201]).toContain(res.status);
       CreateTournamentResponseStrictSchema.parse(await res.json());
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase 11 T4.1 — upstream-error envelope coverage.
+//
+// The happy-path block above guards FE-shape drift on 200s. This block
+// guards the OTHER half of every endpoint's contract: the error envelope
+// emitted when the upstream is down or our breaker is open. Routes today
+// emit `{error: 'upstream_failure', upstream_status, code?}` for upstream
+// failures; the strict schema below would fail-fast if any route grew a
+// new top-level key (e.g. `request_id`, `retry_after`) without us
+// widening `ApiErrorEnvelopeSchema` in lockstep.
+// ---------------------------------------------------------------------------
+
+describe('contract drift — upstream-error envelopes', () => {
+  describe('write endpoints — upstream 503 → ApiErrorEnvelope', () => {
+    it('POST /api/v1/auth/signup emits ApiErrorEnvelope when upstream is 503', async () => {
+      server.use(
+        http.post(`${UPSTREAM}/v1/users`, () =>
+          HttpResponse.json({ error: 'down' }, { status: 503 }),
+        ),
+      );
+      const t = await makeTestApp({ sortBotApiBaseUrl: UPSTREAM });
+      const res = await t.app.request('/api/v1/auth/signup', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: SIGNUP_BODY,
+      });
+      expect(res.status).toBe(502);
+      ApiErrorEnvelopeStrictSchema.parse(await res.json());
+    });
+
+    it('POST /api/v1/auth/login emits ApiErrorEnvelope when upstream is 503 during signup', async () => {
+      // login itself doesn't touch upstream — only signup does. Cover the
+      // upstream-failure path at signup-time (the only login-flow point
+      // where upstream can fail) so this row isn't a false negative.
+      server.use(
+        http.post(`${UPSTREAM}/v1/users`, () =>
+          HttpResponse.json({ error: 'down' }, { status: 502 }),
+        ),
+      );
+      const t = await makeTestApp({ sortBotApiBaseUrl: UPSTREAM });
+      const res = await t.app.request('/api/v1/auth/signup', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: SIGNUP_BODY,
+      });
+      expect(res.status).toBe(502);
+      ApiErrorEnvelopeStrictSchema.parse(await res.json());
+    });
+
+    it('POST /api/v1/bots emits ApiErrorEnvelope when upstream is 503', async () => {
+      const { t, cookie } = await signedUpApp();
+      server.use(
+        http.post(`${UPSTREAM}/v1/bots`, () =>
+          HttpResponse.json({ error: 'down' }, { status: 503 }),
+        ),
+      );
+      const res = await t.app.request('/api/v1/bots', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', cookie },
+        body: JSON.stringify({
+          display_name: 'Recon Bot',
+          language: 'python',
+          source: 'print(1)',
+        }),
+      });
+      expect(res.status).toBe(502);
+      ApiErrorEnvelopeStrictSchema.parse(await res.json());
+    });
+
+    it('POST /api/v1/battles emits ApiErrorEnvelope when upstream is 503', async () => {
+      const { t, cookie } = await signedUpApp();
+      server.use(
+        http.get(`${UPSTREAM}/v1/inputs`, () => HttpResponse.json(apiInputsOne)),
+        http.post(`${UPSTREAM}/v1/battles`, () =>
+          HttpResponse.json({ error: 'down' }, { status: 503 }),
+        ),
+      );
+      const res = await t.app.request('/api/v1/battles', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', cookie },
+        body: JSON.stringify({ bot_a: 'bot_a', bot_b: 'bot_b', input_ids: [1] }),
+      });
+      expect(res.status).toBe(502);
+      ApiErrorEnvelopeStrictSchema.parse(await res.json());
+    });
+
+    it('POST /api/v1/inputs emits ApiErrorEnvelope when upstream is 503', async () => {
+      const { t, cookie } = await signedUpApp();
+      server.use(
+        http.post(`${UPSTREAM}/v1/inputs`, () =>
+          HttpResponse.json({ error: 'down' }, { status: 503 }),
+        ),
+      );
+      const res = await t.app.request('/api/v1/inputs', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', cookie },
+        body: JSON.stringify({ values: [1, 2, 3, 4, 5], format: 'comma' }),
+      });
+      expect(res.status).toBe(502);
+      ApiErrorEnvelopeStrictSchema.parse(await res.json());
+    });
+
+    it('POST /api/v1/tournaments emits ApiErrorEnvelope when upstream is 503', async () => {
+      const { t, cookie } = await signedUpApp();
+      server.use(
+        http.post(`${UPSTREAM}/v1/tournaments`, () =>
+          HttpResponse.json({ error: 'down' }, { status: 503 }),
+        ),
+      );
+      const res = await t.app.request('/api/v1/tournaments', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', cookie },
+        body: JSON.stringify({
+          participant_bot_ids: ['bot_1', 'bot_2', 'bot_3', 'bot_4'],
+          count: 3,
+          bracket_size: 4,
+          input_mode: 'flat_random',
+        }),
+      });
+      expect(res.status).toBe(502);
+      ApiErrorEnvelopeStrictSchema.parse(await res.json());
+    });
+  });
+
+  describe('read endpoints with withStaleFallback — cache-hit path serves stale', () => {
+    // Routes that wrap their upstream fetch in `withStaleFallback`: a fresh
+    // request populates the cache, a subsequent 503 from upstream is
+    // absorbed by the fallback, and the stale-cache response is served
+    // with the `X-Stale: true` header. `leaderboard` additionally mirrors
+    // `stale: true` + `stale_age_ms` on the body; `inputs`/`stats` only
+    // set the headers.
+    it('GET /api/v1/leaderboard serves stale cache + headers + body marker on upstream 503', async () => {
+      let upstreamUp = true;
+      server.use(
+        http.get(`${UPSTREAM}/v1/leaderboard`, () => {
+          if (!upstreamUp) return HttpResponse.json({ error: 'down' }, { status: 503 });
+          return HttpResponse.json(apiLeaderboardOne);
+        }),
+      );
+      const t = await makeTestApp({ sortBotApiBaseUrl: UPSTREAM });
+
+      const fresh = await t.app.request('/api/v1/leaderboard?limit=10');
+      expect(fresh.status).toBe(200);
+      expect(fresh.headers.get('X-Stale')).toBeNull();
+
+      upstreamUp = false;
+      const stale = await t.app.request('/api/v1/leaderboard?limit=10');
+      expect(stale.status).toBe(200);
+      expect(stale.headers.get('X-Stale')).toBe('true');
+      expect(stale.headers.get('X-Stale-Age-Ms')).not.toBeNull();
+
+      const StalePageSchema = CursorPageSchema(LeaderboardEntryStrictSchema).extend({
+        stale: z.boolean(),
+        stale_age_ms: z.number(),
+      });
+      const body = StalePageSchema.parse(await stale.json());
+      expect(body.stale).toBe(true);
+    }, 15_000);
+
+    it('GET /api/v1/inputs serves stale cache + X-Stale header on upstream 503', async () => {
+      let upstreamUp = true;
+      server.use(
+        http.get(`${UPSTREAM}/v1/inputs`, () => {
+          if (!upstreamUp) return HttpResponse.json({ error: 'down' }, { status: 503 });
+          return HttpResponse.json(apiInputsOne);
+        }),
+      );
+      const t = await makeTestApp({ sortBotApiBaseUrl: UPSTREAM });
+
+      const fresh = await t.app.request('/api/v1/inputs');
+      expect(fresh.status).toBe(200);
+      expect(fresh.headers.get('X-Stale')).toBeNull();
+
+      upstreamUp = false;
+      const stale = await t.app.request('/api/v1/inputs');
+      expect(stale.status).toBe(200);
+      expect(stale.headers.get('X-Stale')).toBe('true');
+      expect(stale.headers.get('X-Stale-Age-Ms')).not.toBeNull();
+      // Body is still the InputSummary cursor page; no `stale` body marker
+      // for this route (only leaderboard mirrors it on the body).
+      CursorPageSchema(InputSummaryStrictSchema).parse(await stale.json());
+    }, 15_000);
+
+    it('GET /api/v1/stats serves stale cache + X-Stale header on upstream 503', async () => {
+      let upstreamUp = true;
+      server.use(
+        http.get(`${UPSTREAM}/v1/stats`, () => {
+          if (!upstreamUp) return HttpResponse.json({ error: 'down' }, { status: 503 });
+          return HttpResponse.json(apiStats);
+        }),
+      );
+      const t = await makeTestApp({ sortBotApiBaseUrl: UPSTREAM });
+
+      const fresh = await t.app.request('/api/v1/stats');
+      expect(fresh.status).toBe(200);
+      expect(fresh.headers.get('X-Stale')).toBeNull();
+
+      upstreamUp = false;
+      const stale = await t.app.request('/api/v1/stats');
+      expect(stale.status).toBe(200);
+      expect(stale.headers.get('X-Stale')).toBe('true');
+      expect(stale.headers.get('X-Stale-Age-Ms')).not.toBeNull();
+    }, 15_000);
+  });
+
+  describe('breaker-open path emits ApiErrorEnvelope', () => {
+    it('GET /api/v1/leaderboard emits ApiErrorEnvelope when the breaker is open', async () => {
+      // No upstream handlers registered — every fetch would fail with
+      // "unhandled request" (MSW is configured with `onUnhandledRequest:
+      // 'error'`). Instead of letting MSW fire, force-trip the breaker by
+      // running 5 transient failures through it directly. The breaker's
+      // failureThreshold is 5 (DEFAULT_BREAKER), so 5 consecutive 503s
+      // open it; the 6th request short-circuits with
+      // `SortBotApiError({status: 503, code: 'circuit_open'})`. The
+      // leaderboard route catches `SortBotApiError` and re-emits as 502
+      // with `{error: 'upstream_failure', upstream_status: 503}` — note
+      // it does NOT forward `code` (only the write-side routes do).
+      const t = await makeTestApp({ sortBotApiBaseUrl: UPSTREAM });
+      const breaker = t.sortBotApi.breakers!.for('GET /v1/leaderboard');
+      for (let i = 0; i < 5; i++) {
+        await breaker
+          .run(() =>
+            Promise.reject(
+              new SortBotApiError({ status: 503, message: 'forced upstream failure' }),
+            ),
+          )
+          .catch(() => undefined);
+      }
+      expect(breaker.state()).toBe('open');
+
+      const res = await t.app.request('/api/v1/leaderboard?limit=10');
+      expect(res.status).toBe(502);
+      const body = ApiErrorEnvelopeStrictSchema.parse(await res.json());
+      expect(body.error).toBe('upstream_failure');
+      expect(body.upstream_status).toBe(503);
     });
   });
 });

@@ -4,6 +4,11 @@ import { SortBotApiError, type SortBotApiClient } from '../clients/sort-bot-api/
 import { CACHE_TTL_MS } from '../lib/cache-ttl.js';
 import { withStaleFallback } from '../lib/upstream-fallback.js';
 import { nicknameFor } from '../persona/nicknames.js';
+import {
+  deriveRecordFromRows,
+  listCompletedForBots,
+  type RecentBattleRow,
+} from '../store/recent-battles.js';
 
 import type { AppContext } from '../auth/middleware.js';
 import type { PersonaService } from '../persona/service.js';
@@ -68,8 +73,29 @@ export function leaderboardRoutes(deps: {
               });
             }
           }
+          // Phase 11 T2.2 — single batched read of completed battles
+          // for every bot on the page; group in memory by bot_id; pass
+          // the per-bot slice to `deriveRecordFromRows`. Listener +
+          // 60s sweep populate `recent_battles` so this is the closure
+          // of the D-8 wiring (the listener landed in phase 10; the
+          // consumer was still hardcoded to 0-0-0 until now).
+          const botIds = lb.bots.map((b) => b.bot_id);
+          const battleRows = await listCompletedForBots(deps.db, botIds);
+          const rowsByBot = new Map<string, RecentBattleRow[]>();
+          for (const row of battleRows) {
+            for (const id of [row.bot_a_id, row.bot_b_id]) {
+              const list = rowsByBot.get(id) ?? [];
+              list.push(row);
+              rowsByBot.set(id, list);
+            }
+          }
           const items: LeaderboardEntry[] = lb.bots.map((b, i) => {
             const p = personas[i] ?? null;
+            const rows = rowsByBot.get(b.bot_id) ?? [];
+            const record = deriveRecordFromRows(b.bot_id, rows);
+            // Newest first (store helper already sorts that way) — pick
+            // the freshest completed battle's timestamp as last_fight_at.
+            const lastFightAt = rows[0]?.completed_at ?? null;
             return {
               bot_id: b.bot_id,
               rank: b.rank,
@@ -78,10 +104,13 @@ export function leaderboardRoutes(deps: {
               nickname: p?.nickname ?? nicknameFor(b.bot_id),
               language: b.language,
               portrait_url: p?.portrait_url ?? null,
-              record: { wins: 0, losses: 0, draws: 0 },
+              record,
+              // KO% would need per-run data (sandbox crash/timeout
+              // signals); `recent_battles` only stores the verdict, not
+              // runs. Stays 0 until we add a runs persistence layer.
               ko_percentage: 0,
               signature_input: null,
-              last_fight_at: null,
+              last_fight_at: lastFightAt,
               retired: false,
             };
           });

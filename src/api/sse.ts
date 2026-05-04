@@ -5,8 +5,12 @@ import { deriveBattleState } from '@/lib/battleReducer';
 import { battleEventSchema } from './battleSchema';
 import { apiClient } from './client';
 import { config } from './config';
+import { ReplayPayloadSchema } from './schemas';
 
 import type { BattleEvent, BattleOutcome } from './types';
+import type { z } from 'zod';
+
+type ReplayPayload = z.infer<typeof ReplayPayloadSchema>;
 
 export type SseStatus = 'idle' | 'connecting' | 'open' | 'reconnecting' | 'polling' | 'failed';
 
@@ -15,29 +19,6 @@ const MAX_SSE_FAILURES = RECONNECT_BACKOFFS_MS.length;
 const POLL_INTERVAL_MS = 3_000;
 const POLL_MAX_DURATION_MS = 5 * 60_000;
 const REPLAY_GAP_MS = 500;
-
-interface ReplayRound {
-  round: number;
-  input_id: string;
-  input_name: string;
-  a_time_seconds: number;
-  b_time_seconds: number;
-  delta_seconds: number;
-  winner_bot_id: string | null;
-}
-
-interface ReplayPayload {
-  battle_id: string;
-  status: 'pending' | 'running' | 'complete' | 'failed';
-  bot_a_id: string;
-  bot_b_id: string;
-  winner_bot_id: string | null;
-  outcome: 'a_ko' | 'b_ko' | 'a_decision' | 'b_decision' | 'draw' | null;
-  a_rounds_won: number;
-  b_rounds_won: number;
-  rounds: ReplayRound[];
-  completed_at: string | null;
-}
 
 interface UseBattleEventsResult {
   events: BattleEvent[];
@@ -141,10 +122,10 @@ export function useBattleEvents(
       const tick = async () => {
         if (cancelled) return;
         try {
-          const replayPayload = await apiClient.get<ReplayPayload>(
-            `/api/v1/battles/${battleId}/replay`,
-            { signal: pollAbort?.signal },
-          );
+          const replayPayload = await apiClient.get(`/api/v1/battles/${battleId}/replay`, {
+            signal: pollAbort?.signal,
+            schema: ReplayPayloadSchema,
+          });
           if (replayPayload.status === 'complete' || replayPayload.status === 'failed') {
             replay(replayPayload);
             return;

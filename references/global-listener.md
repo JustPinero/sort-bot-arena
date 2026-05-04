@@ -116,3 +116,31 @@ End-to-end through the orchestrator (covered in `tournament-orchestrator.test.ts
 
 - Replay catch-up on reconnect (could use a `last_event_at` cursor + a separate REST endpoint sort-bot-api doesn't have yet). For now we accept that events lost during a reconnect window are reconciled by the 60s sweep instead.
 - Cross-replica coordination. Single replica enforced via `RUN_LISTENER=true` set on exactly one Railway replica.
+
+## Production observations (phase 11 T2.1, 2026-05-04)
+
+After phase 10 shipped the listener to production we observed two things in the Railway logs.
+
+### Stream errors fire on a ~5-minute cadence
+
+```
+[INFO] global listener stream error err="fetch failed"   2026-05-04T19:10:20Z
+[INFO] global listener stream error err="fetch failed"   2026-05-04T19:15:21Z
+[INFO] global listener stream error err="fetch failed"   2026-05-04T19:20:33Z
+```
+
+The fetch-level error type ("fetch failed", "terminated") indicates the underlying TCP connection drops, not an HTTP error from `sort-bot-api`. The 5-minute cadence is consistent with a proxy idle timeout — both Railway's edge and `sort-bot-api`'s own ingress have ~5-minute defaults on long-lived outbound connections. The reconnect logic (`fetchOnce` → backoff → reconnect) is firing correctly each time; the listener is not stuck.
+
+**Decision:** treat as expected upstream behavior. Our reconnect cadence (jittered exponential backoff capped at 30s) is fast enough that any window of missed events is at most one sweep cycle wide (60s). The 60s `battle-sweep` is the safety net for events lost during reconnect, exactly as designed.
+
+**Not done:** following the events into sort-bot-api to ask for a longer keep-alive or a `?since=<event_id>` cursor. Tracked in `debt.md` D-12 — needs upstream cooperation.
+
+### Records stuck at 0-0-0 was a consumer bug, not a listener bug
+
+The leaderboard returned `record: { wins: 0, losses: 0, draws: 0 }` for every bot despite battles completing in production. Investigation:
+
+- Listener was correctly writing `recent_battles` rows with `winner_bot_id` and `status='complete'`.
+- The bot profile route (`server/src/routes/bots.ts:71`) and the leaderboard route (`server/src/routes/leaderboard.ts:81`) both ignored `recent_battles` entirely. Leaderboard hardcoded `0-0-0`. Bot profile passed `history: []` to `synthesizeBot`.
+- Phase 7 close-out ("Battle history listener (slice 7) is deferred — see debt.md D-8") was strictly true at the time. Phase 10 landed the listener (D-8 resolved). The consumer wiring was the missing step nobody noticed because the leaderboard kept returning 0-0-0 either way.
+
+**Fixed in phase 11 T2.2:** added `listCompletedForBot` + `listCompletedForBots` + `deriveRecordFromRows` in `server/src/store/recent-battles.ts`; both routes now derive W/L/D from those rows. KO% remains 0 because we don't persist per-input runs (would need a `recent_battle_runs` table); tracked separately if it becomes a priority.

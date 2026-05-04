@@ -24,13 +24,7 @@ import {
 } from './schemas';
 
 import type { HealthResponseSchema } from './schemas';
-import type {
-  CursorPage,
-  InputSummary,
-  LeaderboardEntry,
-  LeaderboardFilters,
-  PerInputLeaderboardEntry,
-} from './types';
+import type { LeaderboardFilters } from './types';
 
 // `/api/healthz` returns `text/plain "ok"` on the deployed server, not JSON.
 // We synthesize the historical `{status: 'ok'}` shape from a 200 response so
@@ -156,15 +150,11 @@ function leaderboardPath(filters: LeaderboardFilters): string {
   return `/api/v1/leaderboard${suffix ? `?${suffix}` : ''}`;
 }
 
-export interface LeaderboardResponse extends CursorPage<LeaderboardEntry> {
-  stale?: boolean;
-  stale_age_ms?: number;
-}
-
 const LeaderboardResponseSchema = CursorPageSchema(LeaderboardEntrySchema).extend({
   stale: z.boolean().optional(),
   stale_age_ms: z.number().optional(),
 });
+export type LeaderboardResponse = z.infer<typeof LeaderboardResponseSchema>;
 
 export function useLeaderboard(filters: LeaderboardFilters) {
   return useQuery({
@@ -174,12 +164,6 @@ export function useLeaderboard(filters: LeaderboardFilters) {
   });
 }
 
-export interface PerInputLeaderboardResponse {
-  input: InputSummary;
-  items: PerInputLeaderboardEntry[];
-  next_cursor: string | null;
-}
-
 const PerInputLeaderboardResponseSchema = z
   .object({
     input: InputSummarySchema,
@@ -187,6 +171,7 @@ const PerInputLeaderboardResponseSchema = z
     next_cursor: z.string().nullable(),
   })
   .passthrough();
+export type PerInputLeaderboardResponse = z.infer<typeof PerInputLeaderboardResponseSchema>;
 
 export function usePerInputLeaderboard(inputId: string | undefined) {
   return useQuery({
