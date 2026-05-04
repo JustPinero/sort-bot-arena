@@ -145,13 +145,36 @@ async function buildTournamentPayload(
     ),
   );
 
-  const participants = await Promise.all(
-    participantIds.map(async (botId) => {
-      const [bot, persona] = await Promise.all([
-        deps.sortBotApi.getBot(botId),
-        deps.persona.get(botId).catch(() => null),
-      ]);
-      return buildParticipant(bot, persona);
+  // Per-bot upstream fetch errors must NOT 500 the whole tournament fetch.
+  // A single bot 404 (or transient upstream blip) used to take down the
+  // bracket page render-tree — Promise.all is fail-fast. Catch per
+  // participant and fall back to a synthesized placeholder so the
+  // bracket still renders.
+  const participants: TournamentParticipant[] = await Promise.all(
+    participantIds.map(async (botId): Promise<TournamentParticipant> => {
+      try {
+        const [bot, persona] = await Promise.all([
+          deps.sortBotApi.getBot(botId),
+          deps.persona.get(botId).catch(() => null),
+        ]);
+        return buildParticipant(bot, persona);
+      } catch (err) {
+        log.warn(
+          {
+            tournament_id: id,
+            bot_id: botId,
+            err: err instanceof Error ? err.message : String(err),
+          },
+          'tournaments GET: participant fetch failed; serving placeholder',
+        );
+        return {
+          bot_id: botId,
+          nickname: nicknameFor(botId),
+          display_name: `Bot ${botId.slice(0, 8)}`,
+          language: 'unknown',
+          portrait_url: null,
+        };
+      }
     }),
   );
 
@@ -378,8 +401,31 @@ export function tournamentsRoutes(deps: {
 
     const recent = await getRecentTournamentById(deps.db, id);
     if (recent) {
-      const matches = await listAllForTournament(deps.db, id);
-      return c.json(await buildTournamentPayload(deps, id, recent, matches));
+      try {
+        const matches = await listAllForTournament(deps.db, id);
+        return c.json(await buildTournamentPayload(deps, id, recent, matches));
+      } catch (err) {
+        // `buildTournamentPayload` already swallows per-bot 404s, but a
+        // SortBotApiError from `listAllForTournament` (impossible — pure
+        // DB read), or a runtime bug in payload assembly, would surface
+        // here. Return a structured envelope so the FE's `isError`
+        // branch renders a friendly card instead of crashing on a raw
+        // 500 HTML page.
+        log.warn(
+          {
+            tournament_id: id,
+            err: err instanceof Error ? err.message : String(err),
+          },
+          'tournaments GET: payload assembly failed',
+        );
+        return c.json(
+          {
+            error: 'tournament_unavailable',
+            tournament_id: id,
+          },
+          502,
+        );
+      }
     }
 
     // Legacy fallback — pre-D4 tournaments live only upstream.
