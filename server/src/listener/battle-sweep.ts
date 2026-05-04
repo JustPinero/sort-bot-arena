@@ -20,6 +20,18 @@ import { listRunningOlderThan, markComplete, markFailed } from '../store/recent-
 
 import type { Client } from '@libsql/client';
 
+// Phase 11 victor-conditions — minimum surface the sweep needs from the
+// orchestrator. Mirror of `OrchestratorAdvancer` in global-listener.ts;
+// duplicating the structural type keeps this module decoupled from the
+// listener.
+export interface SweepOrchestratorAdvancer {
+  advanceForBattle(
+    battleId: string,
+    winnerBotId: string | null,
+    completedAt: string,
+  ): Promise<void>;
+}
+
 export interface BattleSweeperOptions {
   db: Client;
   sortBotApi: Pick<SortBotApiClient, 'getBattle'>;
@@ -27,6 +39,12 @@ export interface BattleSweeperOptions {
   ageThresholdMs?: number;
   /** Fire one sweep() immediately on start() so tests don't need to wait. */
   runOnStart?: boolean;
+  // Phase 11 — when present, the sweep advances tournament_matches whose
+  // battle_id was just resolved. Closes the gap where the listener missed
+  // a `battle_complete` event during a reconnect window: without this
+  // wiring, the sweep would mark `recent_battles.complete` but leave
+  // tournament_matches stuck `in_flight` forever.
+  orchestrator?: SweepOrchestratorAdvancer;
 }
 
 export class BattleSweeper {
@@ -35,6 +53,7 @@ export class BattleSweeper {
   private readonly intervalMs: number;
   private readonly ageThresholdMs: number;
   private readonly runOnStart: boolean;
+  private readonly orchestrator: SweepOrchestratorAdvancer | undefined;
   private handle: ReturnType<typeof setInterval> | null = null;
 
   constructor(opts: BattleSweeperOptions) {
@@ -43,6 +62,7 @@ export class BattleSweeper {
     this.intervalMs = opts.intervalMs ?? 60_000;
     this.ageThresholdMs = opts.ageThresholdMs ?? 60_000;
     this.runOnStart = opts.runOnStart ?? false;
+    this.orchestrator = opts.orchestrator;
   }
 
   start(): void {
@@ -81,13 +101,30 @@ export class BattleSweeper {
       try {
         const { battle } = await this.sortBotApi.getBattle(row.battle_id);
         if (battle.status === 'complete') {
-          await markComplete(
-            this.db,
-            row.battle_id,
-            battle.winner_bot_id,
-            battle.completed_at ?? new Date().toISOString(),
-          );
+          const completedAt = battle.completed_at ?? new Date().toISOString();
+          await markComplete(this.db, row.battle_id, battle.winner_bot_id, completedAt);
           updated += 1;
+          // Phase 11 victor-conditions — if this battle was a
+          // tournament match the listener missed (e.g. event arrived
+          // during a reconnect window), advance the bracket now.
+          // No-op for non-tournament battles or already-advanced rows.
+          if (this.orchestrator) {
+            try {
+              await this.orchestrator.advanceForBattle(
+                row.battle_id,
+                battle.winner_bot_id,
+                completedAt,
+              );
+            } catch (err) {
+              log.warn(
+                {
+                  battle_id: row.battle_id,
+                  err: err instanceof Error ? err.message : String(err),
+                },
+                'battle sweep: advanceForBattle failed',
+              );
+            }
+          }
         } else if (battle.status === 'failed') {
           await markFailed(this.db, row.battle_id);
           updated += 1;

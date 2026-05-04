@@ -474,3 +474,95 @@ describe('TournamentOrchestrator — idempotency', () => {
     expect(r2Rows).toHaveLength(1);
   });
 });
+
+// Phase 11 victor-conditions — `advanceForBattle` is the entry point
+// the listener + sweep both call when they have a battle_id and a
+// resolved winner (possibly null on tie verdicts). It does the
+// tournament_matches lookup, then delegates to advanceMatch which owns
+// the complete-vs-failed branch. Without this entry point, the
+// listener used to short-circuit on null winner and leave bracket
+// rows stuck `in_flight` forever.
+describe('TournamentOrchestrator.advanceForBattle', () => {
+  it('with a winner: marks the in_flight match complete and slots the winner into the next round', async () => {
+    const upstream = mockUpstream({});
+    const { t, tournamentId, orchestrator, participants } = await setupTournament({
+      bracketSize: 4,
+    });
+    await orchestrator.schedule(tournamentId);
+    void upstream.battlesFired();
+
+    const r1m0 = await getMatch(t, tournamentId, 1, 0);
+    expect(r1m0.status).toBe('in_flight');
+    const winner = r1m0.bot_a_id ?? participants[0]!;
+
+    await orchestrator.advanceForBattle(r1m0.battle_id!, winner, '2026-05-04T00:00:00Z');
+
+    const r1m0After = await getMatch(t, tournamentId, 1, 0);
+    expect(r1m0After.status).toBe('complete');
+    expect(r1m0After.winner_bot_id).toBe(winner);
+
+    const r2m0 = await getMatch(t, tournamentId, 2, 0);
+    expect(r2m0.bot_a_id).toBe(winner); // r1m0's winner slots into R2 slot a
+  });
+
+  it('with a NULL winner (tie): marks the match AND the tournament failed (regression — listener used to silently bail)', async () => {
+    const upstream = mockUpstream({});
+    const { t, tournamentId, orchestrator } = await setupTournament({ bracketSize: 4 });
+    await orchestrator.schedule(tournamentId);
+    void upstream.battlesFired();
+
+    const r1m0 = await getMatch(t, tournamentId, 1, 0);
+    expect(r1m0.status).toBe('in_flight');
+
+    // Upstream emitted a tie — every input was a draw or both bots failed.
+    await orchestrator.advanceForBattle(r1m0.battle_id!, null, '2026-05-04T00:00:00Z');
+
+    const r1m0After = await getMatch(t, tournamentId, 1, 0);
+    expect(r1m0After.status).toBe('failed');
+    // Tournament status flipped to failed; no R2 row materialized for
+    // this leg (advanceMatch's null-winner branch short-circuits).
+    const tournamentRow = await t.db.execute({
+      sql: `SELECT status FROM recent_tournaments WHERE tournament_id = ?`,
+      args: [tournamentId],
+    });
+    expect(tournamentRow.rows[0]?.['status']).toBe('failed');
+  });
+
+  it('no-ops on a battle_id that has no tournament_matches row', async () => {
+    const upstream = mockUpstream({});
+    const { t, tournamentId, orchestrator } = await setupTournament({ bracketSize: 4 });
+    await orchestrator.schedule(tournamentId);
+    void upstream.battlesFired();
+
+    // Snapshot pre-state so we can assert nothing changed.
+    const before = await listAllForTournament(t.db, tournamentId);
+    await orchestrator.advanceForBattle('bat_does_not_exist', 'bot_42', '2026-05-04T00:00:00Z');
+    const after = await listAllForTournament(t.db, tournamentId);
+    expect(after).toEqual(before);
+  });
+
+  it('no-ops on a battle whose tournament_matches row is already complete (idempotency)', async () => {
+    const upstream = mockUpstream({});
+    const { t, tournamentId, orchestrator, participants } = await setupTournament({
+      bracketSize: 4,
+    });
+    await orchestrator.schedule(tournamentId);
+    void upstream.battlesFired();
+
+    const r1m0 = await getMatch(t, tournamentId, 1, 0);
+    const winner = r1m0.bot_a_id ?? participants[0]!;
+    await orchestrator.advanceForBattle(r1m0.battle_id!, winner, '2026-05-04T00:00:00Z');
+
+    const r2m0Before = await getMatch(t, tournamentId, 2, 0);
+
+    // Replay the same advance with a bogus winner — already-complete
+    // row must be excluded by the `status NOT IN ('complete','failed')`
+    // filter, so neither r1m0 nor r2m0 changes.
+    await orchestrator.advanceForBattle(r1m0.battle_id!, 'bot_imposter', '2026-05-04T00:01:00Z');
+
+    const r1m0After = await getMatch(t, tournamentId, 1, 0);
+    expect(r1m0After.winner_bot_id).toBe(winner);
+    const r2m0After = await getMatch(t, tournamentId, 2, 0);
+    expect(r2m0After.bot_a_id).toBe(r2m0Before.bot_a_id);
+  });
+});

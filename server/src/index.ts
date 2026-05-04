@@ -102,7 +102,12 @@ async function bootstrap(): Promise<void> {
   // Slice C3 (D-10) — reconcile orphaned recent_battles.status='running'
   // rows whose upstream battle has long since completed. Belt-and-suspenders
   // for the cooldown rule when the listener misses an event.
-  new BattleSweeper({ db, sortBotApi }).start();
+  // Phase 11 victor-conditions — sweep gets the orchestrator so a
+  // missed `battle_complete` event (listener disconnect window) still
+  // advances tournament_matches when the next sweep tick reconciles
+  // recent_battles. Without this, a tied or missed match leaves the
+  // bracket stuck `in_flight` forever.
+  new BattleSweeper({ db, sortBotApi, orchestrator }).start();
 
   listener.start();
 
