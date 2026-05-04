@@ -65,3 +65,93 @@ jobs:
             ls -lh dist/assets/*.js 2>/dev/null | awk '{print $5"\t"$NF}' || true
             echo "::endgroup::"
           fi
+
+  e2e-mocked:
+    name: e2e (mocked Playwright project)
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: setup node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: install
+        run: pnpm install --frozen-lockfile
+
+      - name: cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            playwright-${{ runner.os }}-
+
+      - name: install Playwright (chromium only)
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: e2e (mocked)
+        run: pnpm exec playwright test --project=mocked
+
+      - name: upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-mocked
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
+
+  e2e-real-server:
+    name: e2e (real-server Playwright project)
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: setup node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: install
+        run: pnpm install --frozen-lockfile
+
+      - name: cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            playwright-${{ runner.os }}-
+
+      - name: install Playwright (chromium only)
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: e2e (real-server)
+        run: pnpm exec playwright test --project=real-server
+
+      - name: upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-real-server
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
