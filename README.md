@@ -21,7 +21,9 @@ browser ──cookie session──▶ our backend (server/) ──Bearer sk_live
 - **Cookie-only sessions.** Browser holds an HttpOnly session cookie. The user's `sort-bot-api` API key is provisioned server-side at signup and stored AES-256-GCM-encrypted in our DB. Frontend never sees an API key.
 - **Single API surface.** All frontend calls go through `src/api/client.ts` to our `/api/v1/*` paths. The frontend never talks to `sort-bot-api` directly.
 - **Lazy personas.** Nickname, portrait (Leonardo), trash-talk (Anthropic) are generated per-bot the first time it's requested and cached in `bot_personas`. Generation is fully async; missing personas degrade to deterministic fallbacks.
-- **Upstream resilience.** Every call from `server/` to sort-bot-api passes through a per-endpoint circuit breaker + retry. Listing endpoints (leaderboard, stats, inputs, feed, halloffame, achievements, h2h, per-input-leaderboard) write through a TTL'd `upstream_cache` table. When sort-bot-api is unreachable, those endpoints serve stale data with `X-Stale: true` headers instead of 502ing. The frontend has a top-level `<ErrorBoundary>`, and the live-battle SSE hook auto-falls-back to polling a synthesized `/replay` endpoint after 3 connection failures. Operational status is exposed at `GET /api/readyz`.
+- **Upstream resilience.** Every call from `server/` to sort-bot-api passes through a per-endpoint circuit breaker + retry. Listing endpoints (leaderboard, stats, inputs, feed, halloffame, achievements, h2h, per-input-leaderboard) write through a TTL'd `upstream_cache` table. When sort-bot-api is unreachable, those endpoints serve stale data with `X-Stale: true` headers instead of 502ing. The frontend has a top-level `<ErrorBoundary>`, and the live-battle SSE hook auto-falls-back to polling a synthesized `/replay` endpoint after 3 connection failures (with real exponential-backoff reconnect). Operational status is exposed at `GET /api/readyz`, including listener health.
+- **Contract integrity.** `src/api/schemas.ts` mirrors `src/api/types.ts` as Zod schemas. `apiClient.get/post` accept a `{schema}` overload that surfaces `ApiError({code:'malformed_response'})` on drift. Server tests parse responses with strict schemas, and `server/tests/contract-drift.test.ts` walks every `queries.ts` endpoint to catch added/removed/renamed fields before they reach the browser.
+- **Background workers.** `server/src/listener/` runs a global SSE consumer against sort-bot-api (idempotent updates, reconnect with backoff) plus a 60s `battle-sweep` that reconciles stuck `running` battles. `server/src/orchestrator/tournament.ts` advances bracket matches one at a time off a `tournament_matches` table.
 
 See [`references/server-architecture.md`](references/server-architecture.md) for the deployed-server design, [`references/sort-bot-api-overview.md`](references/sort-bot-api-overview.md) for the third-party service it wraps, [`requests/api-reconciliation-plan.md`](requests/api-reconciliation-plan.md) for the slice-by-slice ship log, and [`CLAUDE.md`](./CLAUDE.md) for the agent brain.
 
@@ -121,11 +123,13 @@ vercel.json           # SPA rewrite + security headers
 
 Phase plans live in `requests/phase-N-plan.md`. Phases merge to `main` via `/phase-complete`. Local validation must pass before commit.
 
-| Phase | Theme                                                            | Status  |
-| ----- | ---------------------------------------------------------------- | ------- |
-| 1–6   | Frontend phases — foundation through homepage polish             | shipped |
-| 7     | API reconciliation — drop MSW, ship our own backend, cookie auth | shipped |
-| 8     | Cross-service resilience — breaker + stale cache + Sentry        | shipped |
+| Phase | Theme                                                                  | Status  |
+| ----- | ---------------------------------------------------------------------- | ------- |
+| 1–6   | Frontend phases — foundation through homepage polish                   | shipped |
+| 7     | API reconciliation — drop MSW, ship our own backend, cookie auth       | shipped |
+| 8     | Cross-service resilience — breaker + stale cache + Sentry              | shipped |
+| 9     | Promoter — battles + tournaments + persistent Turso + portrait variety | shipped |
+| 10    | Tightening — contract integrity, listeners, orchestrator, CI lockdown  | shipped |
 
 ## Companion
 

@@ -8,11 +8,15 @@ Entries from `/defer`. Resurface via `/activate <id>`.
 
 When activated: either (a) sort-bot-api adds per-match input arrays to its tournament create, or (b) we orchestrate match-by-match by POSTing `/v1/battles` for each tournament match server-side. (a) is cheaper.
 
+Resolved by: phase 10 slices D1-D5 (2026-05-04). Took option (b): self-orchestration. `server/src/synthesize/bracket.ts` builds initial brackets (4/6/8/12 with bye placement), `server/src/synthesize/tournament-inputs.ts` picks small/medium/large per round in escalation mode, `server/src/store/tournament-matches.ts` persists the per-match state machine, and `server/src/orchestrator/tournament.ts` walks the bracket round-by-round with a per-tournament mutex. `POST /api/v1/tournaments` inserts initial matches + fire-and-forget schedules; `GET /api/v1/tournaments/:id` now reads from our DB. InputModeToggle copy updated to describe real behavior.
+
 ## D-10 (2026-05-01) — phase-9-promoter / battle status reconciliation
 
 `recent_battles.status` transitions from `pending → running` happen on POST, but `running → complete` only happens lazily when our server proxies a battle GET (the user landing on the BattlePage). For battles that finish without a viewer, the status stays `running` indefinitely. Cooldown rule 1 (no simultaneous) gracefully handles this — a stale `running` row blocks new battles for that pair, but `Retry-After` will look weird (computes elapsed since created_at).
 
 When activated: ship the global SSE listener (D-8), which already would observe `battle_complete` events; pipe them through to update `recent_battles`. Or add a 60s background sweep that fetches upstream status for any `running` row older than 60s and updates accordingly.
+
+Resolved by: phase 10 slice C3 (2026-05-04). Both options shipped. `server/src/listener/battle-sweep.ts` runs a 60s background timer that finds `recent_battles.status='running'` rows older than 60s and reconciles via upstream `getBattle` (marks complete or failed). Idempotent re-runs covered by tests; bootstrapped from `server/src/index.ts`. The global listener (D-8) provides the reactive path on top of this sweep's safety net.
 
 ## D-8 (2026-04-29) — api-reconciliation / slice 7 deferred
 
@@ -21,6 +25,8 @@ Global SSE listener — subscribes to sort-bot-api's `/v1/events/stream` and per
 Why deferred: at demo scale (a handful of bots, no automated traffic) the records that the listener populates would still be near-zero. The synthesis layer + DB schema are ready (`src/synthesize/record.ts`, `BattleForBot`, `recent_battles` table is the only addition); the listener itself is the only missing piece. Frontend renders 0-0-0 records cleanly.
 
 When activated: add `0004_recent_battles` migration, write `src/listener/global-stream.ts` (consume upstream SSE, write each `battle_complete` row), boot it from `src/index.ts` when `RUN_LISTENER=true`. Wire `getBattleHistoryFor(botId)` from the new table into `synthesizeBot`'s `history` arg in routes/bots.ts and routes/users.ts.
+
+Resolved by: phase 10 slice C4 (2026-05-04). `server/src/listener/global-listener.ts` consumes upstream `/v1/events/stream` when `RUN_LISTENER=true`, parses lines via a new `SseLineParser` helper, updates `recent_battles` on `battle_complete` (with INSERT OR IGNORE for unknown battles via a one-shot upstream fetch), and reconnects with jittered exponential backoff [1s, 2s, 5s, 10s, 30s]. Slice D4 wired the listener into the orchestrator so a `battle_complete` on a tournament-bound match calls `orchestrator.advanceMatch`. `/api/readyz` (slice C5) exposes listener health (`running`, `last_event_at`, `events_processed`).
 
 ## D-1 (2026-04-28) — phase-2-fighter-profile / 40a38da
 
@@ -96,3 +102,27 @@ Polish items deferred to Phase 6:
 - Native share sheet integration with copy-link fallback.
 - `<BotBadge />` embeddable shield component.
 - Champion-crowning ticker-tape effect on tournament finale.
+
+## D-11 (2026-05-04) — phase-10-tightening / G1 follow-up
+
+`tests/e2e/real-server/outage-stale-cache.spec.ts` is broken under the new real-server Playwright project. MSW intercepts requests before `page.route` overrides can simulate an upstream outage, so the spec can't drive the stale-cache path it was written for. Flagged in slice G1's commit message as the only failing real-server spec.
+
+When activated: disable MSW in that one spec (the rest of the real-server project relies on the stub sort-bot-api on :8081, not MSW), or refactor the outage simulation to drive the stub's failure mode directly rather than via `page.route`. The stale-cache layer itself is covered by server unit tests; this is purely E2E coverage of the user-visible path.
+
+## D-12 (2026-05-04) — phase-10-tightening / listener reconnect replay catch-up
+
+`server/src/listener/global-listener.ts` reconnects with jittered exponential backoff but does not replay events that arrived during the disconnect window. Sort-bot-api's `/v1/events/stream` is fire-and-forget; missed `battle_complete` events are recovered indirectly by the 60s `battle-sweep` (D-10 fallback) and by the lazy upstream fetch on battle GET. At demo scale this is fine, but a long disconnect could let `tournament_matches` advancement stall until the next sweep tick (or user visit).
+
+When activated: design depends on whether sort-bot-api adds an `?since=<event_id>` cursor or a replay buffer. Open question logged in `references/global-listener.md`. Tracked as phase 11+ in the phase 10 plan's "what this phase does NOT include" list.
+
+## D-13 (2026-05-04) — phase-10-tightening / tournament match retry on transient failure
+
+`TournamentOrchestrator.advanceMatch` marks a `tournament_matches` row `failed` on any non-recoverable upstream error and short-circuits further advancement. There is no transient-vs-terminal classifier and no automatic retry — a one-off network blip on a battle POST can fail the whole bracket. Tracked as out-of-scope in the phase 10 plan.
+
+When activated: distinguish transient (5xx, network, circuit-open) from terminal (4xx other than 429) errors in `server/src/orchestrator/tournament.ts`. Retry transients with bounded backoff before marking failed; surface failure reason on the match row for FE rendering.
+
+## D-14 (2026-05-04) — phase-10-tightening / cross-replica leader election for the listener
+
+`GlobalEventListener` and `BattleSweeper` assume a single server replica. Running multiple Railway instances with `RUN_LISTENER=true` would double-process every `battle_complete` event and run duplicate sweep ticks. Today we enforce single-replica deploy out-of-band; there is no in-process guard. Tracked as out-of-scope in the phase 10 plan.
+
+When activated: add a Turso-backed leader lease (row in a `listener_leader` table with a TTL the holder refreshes). Non-leader replicas skip listener + sweeper boot. Alternative: gate on a `LEADER=true` env per-replica via Railway service config, simpler but ops-driven.

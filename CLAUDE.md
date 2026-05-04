@@ -42,6 +42,7 @@ Prime → Plan → RED → GREEN → Validate.
 | 7     | `api-reconciliation`         | shipped |
 | 8     | `phase-8-resilience`         | shipped |
 | 9     | `phase-9-promoter`           | shipped |
+| 10    | `phase-10-tightening`        | shipped |
 
 Phases merge to `main` only after `/phase-complete` passes.
 
@@ -59,6 +60,29 @@ on listing endpoints (`upstream_cache` table), an `/api/readyz` for
 breaker visibility, a `/api/v1/battles/:id/replay` synthesized payload,
 a top-level `<ErrorBoundary>` and SSE→polling fallback on the frontend,
 plus optional Sentry in both halves.
+
+Phase 10 (tightening) closed the open debt and lifted the QA grade.
+Contract integrity: `src/api/schemas.ts` mirrors `types.ts` as Zod
+schemas, `apiClient.get/post` gained a `{schema}` overload that surfaces
+`ApiError({code:'malformed_response'})`, server tests parse with strict
+schemas, and `server/tests/contract-drift.test.ts` walks every
+`queries.ts` endpoint to catch the class of bug phase 8 leaked.
+Reliability: `src/api/sse.ts` reconnects with real exponential backoff,
+`useStartBattle` invalidates `['battles']`, `server/src/listener/`
+ships a global SSE listener (closes D-8) plus a 60s `battle-sweep`
+(closes D-10), and `/api/readyz` exposes listener health.
+`server/src/orchestrator/tournament.ts` plus the `tournament_matches`
+migration drive bracket advancement match-by-match (closes D-9). FE
+cleanup: `error-helpers.ts`, `<DialogTriggerButton>`,
+`useEligibleFighters`, `SignUpDialog` on `useMutation`, and a polish
+bundle. Accessibility: `vitest-axe` runs on every modal + page test,
+analysis renders through `react-markdown` + `rehype-sanitize`. Real-
+server Playwright project under `tests/e2e/real-server/` covers 5
+flows (signup→submit, login→battle, logout→401, custom input upload,
+8-bracket tournament). CI lockdown: server typecheck/test/build in
+`.github/workflows/ci.yml`, vitest coverage thresholds (80/75/80/80)
+on both halves, husky pre-commit (lint-staged) + pre-push (typecheck),
+and required-checks documented in `references/deployment-landmines.md`.
 
 ## Invariants (do not violate)
 
