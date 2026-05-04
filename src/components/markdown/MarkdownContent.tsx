@@ -19,18 +19,20 @@ const ALLOWED_TAGS = [
   'pre',
 ] as const;
 
+// Strict allowlist on top of `defaultSchema`. We narrow `tagNames` (drop
+// everything outside ALLOWED_TAGS) and `attributes` (only `code` keeps a
+// `className` for syntax-highlighting hooks). We deliberately INHERIT
+// `defaultSchema`'s clobber / ancestors / protocols / required hardening
+// — those fields prevent name/id attribute-clobbering attacks (e.g.
+// `<x id="cookie">` colliding with `document.cookie`). An earlier version
+// of this schema explicitly emptied them; spreading defaults and not
+// re-overriding is the fix.
 const sanitizeSchema: typeof defaultSchema = {
   ...defaultSchema,
   tagNames: [...ALLOWED_TAGS],
-  // Trim attributes to only generic ones the allowed tags need.
   attributes: {
     code: [['className', /^language-./]],
   },
-  // Drop everything else hast-util-sanitize defaults expose.
-  clobber: [],
-  ancestors: {},
-  protocols: {},
-  required: {},
   strip: ['script', 'style'],
 };
 
