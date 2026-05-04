@@ -321,3 +321,78 @@ export async function listRecent(db: Client, opts: ListRecentOpts): Promise<Rece
     };
   });
 }
+
+// Phase 11 T2.2 — completed battles for a single bot, used by the bot
+// profile + leaderboard routes to derive W/L/D records. Returns rows
+// where the bot was either side and the battle is in a terminal
+// `complete` state. Newest-first so the caller can slice for
+// "recent_form" or just sum W/L/D.
+export async function listCompletedForBot(db: Client, botId: string): Promise<RecentBattleRow[]> {
+  const res = await db.execute({
+    sql: `SELECT battle_id, bot_a_id, bot_b_id, pair_key, initiator_user_id,
+                 weight_class, status, winner_bot_id, created_at, completed_at
+            FROM recent_battles
+           WHERE status = 'complete'
+             AND (bot_a_id = ? OR bot_b_id = ?)
+        ORDER BY completed_at DESC, created_at DESC`,
+    args: [botId, botId],
+  });
+  return res.rows.map(rowToBattle);
+}
+
+// Phase 11 T2.2 — batch version of `listCompletedForBot` for the
+// leaderboard route. One query for the entire page's bot ids; the
+// caller groups in memory. Avoids N round trips when rendering the
+// leaderboard. Empty input returns [].
+export async function listCompletedForBots(
+  db: Client,
+  botIds: ReadonlyArray<string>,
+): Promise<RecentBattleRow[]> {
+  if (botIds.length === 0) return [];
+  const placeholders = botIds.map(() => '?').join(', ');
+  const res = await db.execute({
+    sql: `SELECT battle_id, bot_a_id, bot_b_id, pair_key, initiator_user_id,
+                 weight_class, status, winner_bot_id, created_at, completed_at
+            FROM recent_battles
+           WHERE status = 'complete'
+             AND (bot_a_id IN (${placeholders}) OR bot_b_id IN (${placeholders}))
+        ORDER BY completed_at DESC, created_at DESC`,
+    args: [...botIds, ...botIds],
+  });
+  return res.rows.map(rowToBattle);
+}
+
+function rowToBattle(row: unknown): RecentBattleRow {
+  const r = row as Record<string, unknown>;
+  return {
+    battle_id: r['battle_id'] as string,
+    bot_a_id: r['bot_a_id'] as string,
+    bot_b_id: r['bot_b_id'] as string,
+    pair_key: r['pair_key'] as string,
+    initiator_user_id: (r['initiator_user_id'] as string | null) ?? null,
+    weight_class: (r['weight_class'] as string | null) ?? null,
+    status: r['status'] as RecentBattleRow['status'],
+    winner_bot_id: (r['winner_bot_id'] as string | null) ?? null,
+    created_at: r['created_at'] as string,
+    completed_at: (r['completed_at'] as string | null) ?? null,
+  };
+}
+
+// Pure helper — derive {wins, losses, draws} for a single bot from a
+// list of `recent_battles` rows. Skips non-complete rows and rows the
+// bot wasn't in. Draws are `complete` rows where `winner_bot_id` is
+// null (sort-bot-api emits a null winner on a tie verdict).
+export function deriveRecordFromRows(
+  botId: string,
+  rows: ReadonlyArray<RecentBattleRow>,
+): { wins: number; losses: number; draws: number } {
+  const acc = { wins: 0, losses: 0, draws: 0 };
+  for (const r of rows) {
+    if (r.status !== 'complete') continue;
+    if (r.bot_a_id !== botId && r.bot_b_id !== botId) continue;
+    if (r.winner_bot_id === null) acc.draws++;
+    else if (r.winner_bot_id === botId) acc.wins++;
+    else acc.losses++;
+  }
+  return acc;
+}

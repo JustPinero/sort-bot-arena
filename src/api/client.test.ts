@@ -119,7 +119,10 @@ describe('apiClient', () => {
     it('returns the parsed JSON body on 2xx', async () => {
       // `/api/healthz` returns text/plain on the deployed server, so we
       // exercise the JSON happy-path against a JSON endpoint instead.
-      const body = await apiClient.get<{ id: string; email: string }>('/api/v1/auth/me');
+      const body = (await apiClient.get('/api/v1/auth/me')) as {
+        id: string;
+        email: string;
+      };
       expect(body.email).toBe('test@example.com');
     });
 
@@ -151,7 +154,7 @@ describe('apiClient', () => {
         http.get(`${BASE}/api/v1/user`, () => HttpResponse.json({ id: 'u_1', name: 'Ada' })),
       );
 
-      const user = await apiClient.get<z.infer<typeof userSchema>>('/api/v1/user', {
+      const user = await apiClient.get('/api/v1/user', {
         schema: userSchema,
       });
       expect(user).toEqual({ id: 'u_1', name: 'Ada' });
@@ -184,7 +187,7 @@ describe('apiClient', () => {
         http.get(`${BASE}/api/v1/user`, () => HttpResponse.json({ id: 'u_2', extra: 'field' })),
       );
 
-      const user = await apiClient.get<{ id: string; extra: string }>('/api/v1/user');
+      const user = (await apiClient.get('/api/v1/user')) as { id: string; extra: string };
       expect(user).toEqual({ id: 'u_2', extra: 'field' });
     });
 
@@ -202,7 +205,7 @@ describe('apiClient', () => {
         ),
       );
 
-      const user = await apiClient.get<z.infer<typeof passthroughSchema>>('/api/v1/user', {
+      const user = await apiClient.get('/api/v1/user', {
         schema: passthroughSchema,
       });
       expect(user).toMatchObject({ id: 'u_3', name: 'Grace', extra: 'allowed' });

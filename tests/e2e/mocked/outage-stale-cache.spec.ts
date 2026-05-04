@@ -23,14 +23,18 @@ const STALE_RESPONSE = {
 };
 
 test.describe('leaderboard during upstream outage', () => {
-  // D-11 (debt.md) — under the post-phase-7 architecture (MSW-in-browser
-  // intercepts the leaderboard fetch BEFORE Playwright's `page.route`
-  // override can simulate an outage), this spec can't drive the
-  // stale-cache UI path it was written for. Either disable MSW for this
-  // one spec or refactor the outage simulation to drive the stub's
-  // failure mode directly. Tracked separately; skipping here so the
-  // e2e-mocked CI job is green.
-  test.skip('shows stale indicator and renders cached rankings', async ({ page }) => {
+  // Phase 11 T2.3 — closes D-11. The mocked project boots Vite with
+  // `VITE_USE_MOCKS=true`, so MSW normally intercepts the leaderboard
+  // fetch before `page.route` can. We `addInitScript` a window flag
+  // before navigation; `src/main.tsx` honors it and skips registering
+  // the MSW worker. Route overrides become the only intercept layer.
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => {
+      (window as unknown as { __E2E_DISABLE_MSW__: boolean }).__E2E_DISABLE_MSW__ = true;
+    });
+  });
+
+  test('shows stale indicator and renders cached rankings', async ({ page }) => {
     await page.route('**/api/v1/leaderboard**', async (route) => {
       await route.fulfill({
         status: 200,

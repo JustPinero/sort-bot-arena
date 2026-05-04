@@ -103,6 +103,51 @@ describe('GET /api/v1/leaderboard shape', () => {
     expect(parsed.items[0]?.rank).toBe(1);
   });
 
+  it('derives W/L/D records from recent_battles via the listener path (Phase 11 T2.2)', async () => {
+    server.use(http.get(`${UPSTREAM}/v1/leaderboard`, () => HttpResponse.json(FRESH_LEADERBOARD)));
+    const t = await makeTestApp({ sortBotApiBaseUrl: UPSTREAM });
+
+    // Seed `recent_battles` directly — listener-equivalent state.
+    // `insertCompletedFromUpstream` derives pair_key from the two
+    // bot_ids and stamps `completed_at` as both created_at + completed_at.
+    const { insertCompletedFromUpstream } = await import('../src/store/recent-battles.js');
+    await insertCompletedFromUpstream(t.db, {
+      battle_id: 'bat_1',
+      bot_a_id: 'bot_alpha',
+      bot_b_id: 'bot_beta',
+      winner_bot_id: 'bot_alpha',
+      completed_at: '2026-05-04T00:01:00Z',
+    });
+    await insertCompletedFromUpstream(t.db, {
+      battle_id: 'bat_2',
+      bot_a_id: 'bot_alpha',
+      bot_b_id: 'bot_beta',
+      winner_bot_id: 'bot_beta', // alpha lost this one
+      completed_at: '2026-05-04T00:03:00Z',
+    });
+    await insertCompletedFromUpstream(t.db, {
+      battle_id: 'bat_3_draw',
+      bot_a_id: 'bot_alpha',
+      bot_b_id: 'bot_beta',
+      winner_bot_id: null, // tie verdict
+      completed_at: '2026-05-04T00:05:00Z',
+    });
+
+    const res = await t.app.request('/api/v1/leaderboard?limit=10');
+    expect(res.status).toBe(200);
+    const parsed = CursorPageSchema(LeaderboardEntryStrictSchema).parse(await res.json());
+
+    const alpha = parsed.items.find((b) => b.bot_id === 'bot_alpha');
+    const beta = parsed.items.find((b) => b.bot_id === 'bot_beta');
+    expect(alpha?.record).toEqual({ wins: 1, losses: 1, draws: 1 });
+    expect(beta?.record).toEqual({ wins: 1, losses: 1, draws: 1 });
+    // last_fight_at populated to the most-recent completed battle's
+    // timestamp (the draw at 00:05).
+    expect(alpha?.last_fight_at).toBe('2026-05-04T00:05:00Z');
+    // KO% deferred (no runs persistence yet) — must remain 0.
+    expect(alpha?.ko_percentage).toBe(0);
+  }, 15_000);
+
   it('surfaces stale + stale_age_ms on the body and X-Stale header when upstream is down', async () => {
     let upstreamUp = true;
     server.use(

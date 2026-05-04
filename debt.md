@@ -105,9 +105,11 @@ Polish items deferred to Phase 6:
 
 ## D-11 (2026-05-04) — phase-10-tightening / G1 follow-up
 
-`tests/e2e/real-server/outage-stale-cache.spec.ts` is broken under the new real-server Playwright project. MSW intercepts requests before `page.route` overrides can simulate an upstream outage, so the spec can't drive the stale-cache path it was written for. Flagged in slice G1's commit message as the only failing real-server spec.
+`tests/e2e/mocked/outage-stale-cache.spec.ts` was broken under the mocked Playwright project once it landed in CI. MSW (booted by the project's Vite via `VITE_USE_MOCKS=true`) intercepted the leaderboard fetch before Playwright's `page.route` override could simulate an outage, so the spec couldn't drive the stale-cache UI path it was written for. The spec was `test.skip`'d in phase 10 follow-up PR #8 to keep the e2e-mocked CI job green.
 
 When activated: disable MSW in that one spec (the rest of the real-server project relies on the stub sort-bot-api on :8081, not MSW), or refactor the outage simulation to drive the stub's failure mode directly rather than via `page.route`. The stale-cache layer itself is covered by server unit tests; this is purely E2E coverage of the user-visible path.
+
+Resolved by: phase 11 slice T2.3 (2026-05-04). `src/main.tsx`'s bootstrap now respects a `window.__E2E_DISABLE_MSW__` flag that the spec sets via `addInitScript` before navigation. With MSW disabled, `page.route` is the only intercept layer and the outage simulation works as originally designed. Both mocked-project specs pass; the `test.skip` annotation is gone.
 
 ## D-12 (2026-05-04) — phase-10-tightening / listener reconnect replay catch-up
 
@@ -126,3 +128,9 @@ When activated: distinguish transient (5xx, network, circuit-open) from terminal
 `GlobalEventListener` and `BattleSweeper` assume a single server replica. Running multiple Railway instances with `RUN_LISTENER=true` would double-process every `battle_complete` event and run duplicate sweep ticks. Today we enforce single-replica deploy out-of-band; there is no in-process guard. Tracked as out-of-scope in the phase 10 plan.
 
 When activated: add a Turso-backed leader lease (row in a `listener_leader` table with a TTL the holder refreshes). Non-leader replicas skip listener + sweeper boot. Alternative: gate on a `LEADER=true` env per-replica via Railway service config, simpler but ops-driven.
+
+## D-15 (2026-05-04) — phase-11-tightening-followup / KO% needs per-run persistence
+
+`server/src/routes/leaderboard.ts` and `server/src/routes/bots.ts` now derive W/L/D records from `recent_battles` (phase 11 T2.2). KO% stays hardcoded at 0 because the listener writes only the verdict (winner*bot_id + status), not the per-input runs that `deriveKoPercentage` needs (it inspects `bot*\*\_status` per run to detect non-success outcomes).
+
+When activated: add a `recent_battle_runs` table mirroring `sort-bot-api`'s `runs` shape (`battle_id`, `input_id`, `bot_a_status`, `bot_b_status`, durations, `winner_bot_id`). Listener writes one row per `run_complete` event (or one batch per `battle_complete` if upstream emits the run array on completion only). `synthesizeBot` already accepts the full `BattleForBot.is_ko` shape — the route just needs to populate `is_ko` from the runs. Demo-scale priority: low — KO% as 0 is visually fine until somebody asks "why is mine zero."

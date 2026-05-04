@@ -287,6 +287,43 @@ describe('useBattleEvents', () => {
       }
     });
 
+    it('surfaces a poll error when /replay returns a shape ReplayPayloadSchema rejects', async () => {
+      // Malformed shape: `outcome` is a non-union string the schema rejects.
+      server.use(
+        http.get('http://api.test/api/v1/battles/bat_malformed/replay', () =>
+          HttpResponse.json({
+            battle_id: 'bat_malformed',
+            status: 'complete',
+            bot_a_id: 'a',
+            bot_b_id: 'b',
+            winner_bot_id: 'a',
+            outcome: 'totally_invalid',
+            a_rounds_won: 1,
+            b_rounds_won: 0,
+            rounds: [],
+            completed_at: '2026-04-30T00:00:00Z',
+          }),
+        ),
+      );
+
+      const { result } = renderHook(() =>
+        useBattleEvents('bat_malformed', { fighterAId: 'a', fighterBId: 'b' }),
+      );
+      await waitFor(() => expect(mockInstances.length).toBe(1));
+      for (let attempt = 1; attempt <= 3; attempt += 1) {
+        act(() => mockInstances[mockInstances.length - 1]!.triggerError());
+        if (attempt < 3) {
+          await waitFor(() => expect(mockInstances.length).toBe(attempt + 1), { timeout: 5_000 });
+        }
+      }
+      await waitFor(() => expect(result.current.error).toMatchObject({ name: 'ApiError' }), {
+        timeout: 8_000,
+      });
+      // The malformed shape never produces a fight_end — replay() is gated on
+      // schema validation passing.
+      expect(result.current.events.some((e) => e.type === 'fight_end')).toBe(false);
+    });
+
     it('does not reconnect when unmounted during the reconnect window', async () => {
       vi.useFakeTimers();
       try {

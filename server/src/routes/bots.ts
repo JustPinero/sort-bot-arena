@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { decryptString } from '../auth/encrypt.js';
 import { requireAuth, getUser, type AppContext } from '../auth/middleware.js';
 import { SortBotApiError } from '../clients/sort-bot-api/index.js';
+import { listCompletedForBot } from '../store/recent-battles.js';
 import { isUserOwnerOf, markRetired, recordUserBot } from '../store/user-bots.js';
 import { synthesizeBot } from '../synthesize/bot.js';
 
@@ -68,7 +69,7 @@ export function botsRoutes(deps: {
   r.get('/:id', async (c) => {
     const id = c.req.param('id');
     try {
-      const [bot, profile, analysis, persona] = await Promise.all([
+      const [bot, profile, analysis, persona, battleRows] = await Promise.all([
         deps.sortBotApi.getBot(id),
         deps.sortBotApi.getBotProfile(id).catch(() => undefined),
         deps.sortBotApi
@@ -78,6 +79,12 @@ export function botsRoutes(deps: {
             a && typeof a === 'object' ? ((a as { algorithm?: string }).algorithm ?? null) : null,
           ),
         deps.persona.get(id),
+        // Phase 11 T2.2 — pull completed battles for this bot from the
+        // listener-populated `recent_battles` table. Synthesis derives
+        // W/L/D + recent_form. Failure-soft: any DB error → empty
+        // history → 0-0-0 record (no worse than the prior hardcoded
+        // value). Avoids any new chance of 500 on the hot profile path.
+        listCompletedForBot(deps.db, id).catch(() => []),
       ]);
       // Re-kick persona generation lazily if it never ran (e.g. bot was
       // submitted before the personas table existed).
@@ -89,7 +96,24 @@ export function botsRoutes(deps: {
           algorithm: analysis,
         });
       }
-      const synth = synthesizeBot({ bot, profile, algorithm: analysis, persona });
+      // Map `recent_battles` rows to the `BattleForBot` shape that
+      // `synthesizeBot` expects. We only have the verdict (winner +
+      // completed_at), not per-input runs — so `is_ko: false` for every
+      // entry. KO% therefore stays 0 until a runs persistence layer
+      // ships. W/L/D and recent_form are correct.
+      const history = battleRows.map((row) => {
+        const bot_was: 'a' | 'b' = row.bot_a_id === id ? 'a' : 'b';
+        const won = row.winner_bot_id === id;
+        const drawn = row.winner_bot_id === null;
+        return {
+          battle_id: row.battle_id,
+          bot_was,
+          outcome: drawn ? ('draw' as const) : won ? ('win' as const) : ('loss' as const),
+          is_ko: false,
+          completed_at: row.completed_at ?? row.created_at,
+        };
+      });
+      const synth = synthesizeBot({ bot, profile, algorithm: analysis, persona, history });
       return c.json(synth);
     } catch (err) {
       if (err instanceof SortBotApiError && err.status === 404) {
