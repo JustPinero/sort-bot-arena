@@ -21,9 +21,7 @@ describe('<DialogTriggerButton />', () => {
   });
 
   it('renders the tooltip on hover when supplied', async () => {
-    render(
-      withProviders(<DialogTriggerButton tooltip="explainer">Open</DialogTriggerButton>),
-    );
+    render(withProviders(<DialogTriggerButton tooltip="explainer">Open</DialogTriggerButton>));
     const wrapper = screen.getByRole('button', { name: /open/i }).parentElement as HTMLElement;
     fireEvent.pointerMove(wrapper);
     await waitFor(async () => {
@@ -63,11 +61,7 @@ describe('<DialogTriggerButton />', () => {
   });
 
   it('passes testId through as data-testid', () => {
-    render(
-      withProviders(
-        <DialogTriggerButton testId="my-test-id">Open</DialogTriggerButton>,
-      ),
-    );
+    render(withProviders(<DialogTriggerButton testId="my-test-id">Open</DialogTriggerButton>));
     expect(screen.getByTestId('my-test-id')).toBeInTheDocument();
   });
 });

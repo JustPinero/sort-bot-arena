@@ -77,9 +77,7 @@ function upstreamBattleGet(
       initiator_id: 'u1',
       status,
       winner_bot_id:
-        winnerBotId !== null
-          ? { String: winnerBotId, Valid: true }
-          : { String: '', Valid: false },
+        winnerBotId !== null ? { String: winnerBotId, Valid: true } : { String: '', Valid: false },
       bot_a_wins: status === 'complete' && winnerBotId === 'bot_a' ? 2 : 0,
       bot_b_wins: status === 'complete' && winnerBotId === 'bot_b' ? 2 : 0,
       ties: 0,

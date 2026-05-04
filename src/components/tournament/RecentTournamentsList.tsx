@@ -22,10 +22,7 @@ export function RecentTournamentsList() {
       data-testid="recent-tournaments"
       className="mt-12"
     >
-      <h2
-        id="recent-tournaments-heading"
-        className="font-display text-2xl uppercase tracking-wide"
-      >
+      <h2 id="recent-tournaments-heading" className="font-display text-2xl uppercase tracking-wide">
         Recent Tournaments
       </h2>
       <p className="mt-1 font-mono text-xs uppercase tracking-widest text-text-tertiary">

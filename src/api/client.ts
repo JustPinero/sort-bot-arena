@@ -1,6 +1,6 @@
-import type { ZodType, ZodTypeAny, z } from 'zod';
-
 import { config } from './config';
+
+import type { ZodType, ZodTypeAny, z } from 'zod';
 
 const DEFAULT_TIMEOUT_MS = 15_000;
 
@@ -45,7 +45,10 @@ export interface RequestOptions {
   schema?: ZodType<unknown>;
 }
 
-export interface RequestOptionsWithSchema<S extends ZodTypeAny> extends Omit<RequestOptions, 'schema'> {
+export interface RequestOptionsWithSchema<S extends ZodTypeAny> extends Omit<
+  RequestOptions,
+  'schema'
+> {
   schema: S;
 }
 
@@ -167,7 +170,10 @@ interface ApiClient {
     opts: RequestOptionsWithSchema<S>,
   ): Promise<z.infer<S>>;
   put<T>(path: string, body: unknown, opts?: RequestOptions): Promise<T>;
-  delete<S extends ZodTypeAny>(path: string, opts: RequestOptionsWithSchema<S>): Promise<z.infer<S>>;
+  delete<S extends ZodTypeAny>(
+    path: string,
+    opts: RequestOptionsWithSchema<S>,
+  ): Promise<z.infer<S>>;
   delete<T>(path: string, opts?: RequestOptions): Promise<T>;
 }
 

@@ -374,9 +374,7 @@ describe('PerInputLeaderboardEntrySchema', () => {
     ).toThrow();
   });
   it('strict rejects extra key', () => {
-    expect(() =>
-      PerInputLeaderboardEntryStrictSchema.parse({ ...happy, extra: 1 }),
-    ).toThrow();
+    expect(() => PerInputLeaderboardEntryStrictSchema.parse({ ...happy, extra: 1 })).toThrow();
   });
 });
 
@@ -388,9 +386,7 @@ describe('BattleFighterSchema', () => {
     expect(() => BattleFighterSchema.parse({ ...happyBattleFighter, corner: 'green' })).toThrow();
   });
   it('strict rejects extra key', () => {
-    expect(() =>
-      BattleFighterStrictSchema.parse({ ...happyBattleFighter, extra: 1 }),
-    ).toThrow();
+    expect(() => BattleFighterStrictSchema.parse({ ...happyBattleFighter, extra: 1 })).toThrow();
   });
 });
 
@@ -414,9 +410,7 @@ describe('SubmitBotResponseSchema', () => {
     expect(() => SubmitBotResponseSchema.parse({})).toThrow();
   });
   it('strict rejects extra key', () => {
-    expect(() =>
-      SubmitBotResponseStrictSchema.parse({ bot_id: 'bot_1', extra: 1 }),
-    ).toThrow();
+    expect(() => SubmitBotResponseStrictSchema.parse({ bot_id: 'bot_1', extra: 1 })).toThrow();
   });
 });
 
@@ -519,9 +513,7 @@ describe('HomeSnapshotSchema', () => {
     expect(() => HomeSnapshotSchema.parse({ ...happyHomeSnapshot, ticker: 'no' })).toThrow();
   });
   it('strict rejects extra key', () => {
-    expect(() =>
-      HomeSnapshotStrictSchema.parse({ ...happyHomeSnapshot, extra: 1 }),
-    ).toThrow();
+    expect(() => HomeSnapshotStrictSchema.parse({ ...happyHomeSnapshot, extra: 1 })).toThrow();
   });
 });
 

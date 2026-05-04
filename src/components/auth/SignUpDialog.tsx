@@ -59,11 +59,7 @@ export function SignUpDialog({ triggerLabel = 'Sign up', triggerClassName }: Sig
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTriggerButton
-        variant="combat"
-        testId="signup-cta"
-        className={triggerClassName}
-      >
+      <DialogTriggerButton variant="combat" testId="signup-cta" className={triggerClassName}>
         {triggerLabel}
       </DialogTriggerButton>
       <DialogContent>

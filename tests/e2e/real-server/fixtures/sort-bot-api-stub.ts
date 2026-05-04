@@ -252,9 +252,7 @@ const routes: StubRoute[] = [
       let displayName = 'Stub Bot';
       let language: 'python' | 'node' | 'binary' = 'python';
       if (ct.startsWith('multipart/form-data')) {
-        const dn = raw.match(
-          /name="display_name"\r?\n\r?\n([\s\S]*?)\r?\n--/,
-        );
+        const dn = raw.match(/name="display_name"\r?\n\r?\n([\s\S]*?)\r?\n--/);
         const lg = raw.match(/name="language"\r?\n\r?\n([\s\S]*?)\r?\n--/);
         if (dn?.[1]) displayName = dn[1];
         if (lg?.[1]) {

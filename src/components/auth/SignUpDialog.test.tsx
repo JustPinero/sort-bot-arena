@@ -53,7 +53,9 @@ describe('<SignUpDialog />', () => {
     expect(useAuthStore.getState().sessionLoaded).toBe(true);
 
     await waitFor(() => {
-      expect(screen.queryByRole('heading', { name: /step into the cage/i })).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('heading', { name: /step into the cage/i }),
+      ).not.toBeInTheDocument();
     });
   });
 

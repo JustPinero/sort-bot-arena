@@ -14,15 +14,11 @@
 // are not a hazard either: each gets its own UPDATE keyed by
 // battle_id PK.
 
-import type { Client } from '@libsql/client';
-
 import { SortBotApiError, type SortBotApiClient } from '../clients/sort-bot-api/index.js';
 import { log } from '../lib/log.js';
-import {
-  listRunningOlderThan,
-  markComplete,
-  markFailed,
-} from '../store/recent-battles.js';
+import { listRunningOlderThan, markComplete, markFailed } from '../store/recent-battles.js';
+
+import type { Client } from '@libsql/client';
 
 export interface BattleSweeperOptions {
   db: Client;
@@ -61,10 +57,7 @@ export class BattleSweeper {
     }
     this.handle = setInterval(() => {
       this.sweep().catch((err: unknown) => {
-        log.warn(
-          { err: err instanceof Error ? err.message : String(err) },
-          'battle sweep failed',
-        );
+        log.warn({ err: err instanceof Error ? err.message : String(err) }, 'battle sweep failed');
       });
     }, this.intervalMs);
     // Don't pin the Node process if the sweep timer is the only thing

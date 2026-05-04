@@ -2,18 +2,23 @@ import { renderHook } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { useEligibleFighters } from './eligible-fighters';
+import { useLeaderboard } from './queries';
 
 import type { LeaderboardEntry } from './types';
 
+// vi.mock is hoisted to the top of the file by vitest's transformer,
+// so importing `./queries` above this call is safe at runtime.
 vi.mock('./queries', () => ({
   useLeaderboard: vi.fn(),
 }));
 
-import { useLeaderboard } from './queries';
-
 const mockedUseLeaderboard = vi.mocked(useLeaderboard);
 
-function makeEntry(overrides: { bot_id: string; retired?: boolean; rank?: number }): LeaderboardEntry {
+function makeEntry(overrides: {
+  bot_id: string;
+  retired?: boolean;
+  rank?: number;
+}): LeaderboardEntry {
   return {
     bot_id: overrides.bot_id,
     rank: overrides.rank ?? 1,
@@ -30,11 +35,7 @@ function makeEntry(overrides: { bot_id: string; retired?: boolean; rank?: number
   } as LeaderboardEntry;
 }
 
-function mockQuery(state: {
-  items?: LeaderboardEntry[];
-  isLoading?: boolean;
-  isError?: boolean;
-}) {
+function mockQuery(state: { items?: LeaderboardEntry[]; isLoading?: boolean; isError?: boolean }) {
   // Cast through unknown — we only consume a tiny surface of UseQueryResult.
   mockedUseLeaderboard.mockReturnValue({
     data: state.items ? { items: state.items, next_cursor: null } : undefined,

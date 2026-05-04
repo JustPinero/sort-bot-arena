@@ -244,10 +244,7 @@ export async function getWeightClassByBattleId(
 // than `ageMs` milliseconds. Lex order on ISO-8601 created_at columns
 // matches chronological order, so we compute the cutoff in JS and
 // compare as strings — same trick the cooldown rule uses.
-export async function listRunningOlderThan(
-  db: Client,
-  ageMs: number,
-): Promise<RecentBattleRow[]> {
+export async function listRunningOlderThan(db: Client, ageMs: number): Promise<RecentBattleRow[]> {
   const cutoffISO = new Date(Date.now() - ageMs).toISOString();
   const res = await db.execute({
     sql: `SELECT battle_id, bot_a_id, bot_b_id, pair_key, initiator_user_id,

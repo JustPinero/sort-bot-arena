@@ -21,10 +21,14 @@ import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
-import { buildInitialBracket, type BracketSize } from '../src/synthesize/bracket.js';
 import { TournamentOrchestrator } from '../src/orchestrator/tournament.js';
 import { recordTournament } from '../src/store/recent-tournaments.js';
-import { insertInitialMatches, listAllForTournament, getMatchById } from '../src/store/tournament-matches.js';
+import {
+  insertInitialMatches,
+  listAllForTournament,
+  getMatchById,
+} from '../src/store/tournament-matches.js';
+import { buildInitialBracket, type BracketSize } from '../src/synthesize/bracket.js';
 
 import { makeTestApp } from './helpers/test-app.js';
 
@@ -41,24 +45,73 @@ function makeInputs(): ApiInput[] {
   // 6 inputs across all three size classes — covers escalation rounds
   // 1 (small), 2 (medium), and 3 (large).
   return [
-    { id: 1, size_class: 'small', case_index: 0, array_len: 100, is_custom: false, uploader_id: null, created_at: '2026-01-01T00:00:00Z' },
-    { id: 2, size_class: 'small', case_index: 1, array_len: 100, is_custom: false, uploader_id: null, created_at: '2026-01-01T00:00:00Z' },
-    { id: 3, size_class: 'small', case_index: 2, array_len: 100, is_custom: false, uploader_id: null, created_at: '2026-01-01T00:00:00Z' },
-    { id: 4, size_class: 'medium', case_index: 0, array_len: 1000, is_custom: false, uploader_id: null, created_at: '2026-01-01T00:00:00Z' },
-    { id: 5, size_class: 'medium', case_index: 1, array_len: 1000, is_custom: false, uploader_id: null, created_at: '2026-01-01T00:00:00Z' },
-    { id: 6, size_class: 'large', case_index: 0, array_len: 10000, is_custom: false, uploader_id: null, created_at: '2026-01-01T00:00:00Z' },
+    {
+      id: 1,
+      size_class: 'small',
+      case_index: 0,
+      array_len: 100,
+      is_custom: false,
+      uploader_id: null,
+      created_at: '2026-01-01T00:00:00Z',
+    },
+    {
+      id: 2,
+      size_class: 'small',
+      case_index: 1,
+      array_len: 100,
+      is_custom: false,
+      uploader_id: null,
+      created_at: '2026-01-01T00:00:00Z',
+    },
+    {
+      id: 3,
+      size_class: 'small',
+      case_index: 2,
+      array_len: 100,
+      is_custom: false,
+      uploader_id: null,
+      created_at: '2026-01-01T00:00:00Z',
+    },
+    {
+      id: 4,
+      size_class: 'medium',
+      case_index: 0,
+      array_len: 1000,
+      is_custom: false,
+      uploader_id: null,
+      created_at: '2026-01-01T00:00:00Z',
+    },
+    {
+      id: 5,
+      size_class: 'medium',
+      case_index: 1,
+      array_len: 1000,
+      is_custom: false,
+      uploader_id: null,
+      created_at: '2026-01-01T00:00:00Z',
+    },
+    {
+      id: 6,
+      size_class: 'large',
+      case_index: 0,
+      array_len: 10000,
+      is_custom: false,
+      uploader_id: null,
+      created_at: '2026-01-01T00:00:00Z',
+    },
   ];
 }
 
 function mockUpstream(handlers: {
-  battles?: (body: { bot_a: string; bot_b: string; input_ids?: number[] }, battleId: string) => CreateBattleResponse;
+  battles?: (
+    body: { bot_a: string; bot_b: string; input_ids?: number[] },
+    battleId: string,
+  ) => CreateBattleResponse;
 }) {
   let battleCounter = 0;
-  let captures: Array<{ bot_a: string; bot_b: string; input_ids: number[] }> = [];
+  const captures: Array<{ bot_a: string; bot_b: string; input_ids: number[] }> = [];
   server.use(
-    http.get(`${UPSTREAM}/v1/inputs`, () =>
-      HttpResponse.json({ inputs: makeInputs(), total: 6 }),
-    ),
+    http.get(`${UPSTREAM}/v1/inputs`, () => HttpResponse.json({ inputs: makeInputs(), total: 6 })),
     http.post(`${UPSTREAM}/v1/battles`, async ({ request }) => {
       const body = (await request.json()) as { bot_a: string; bot_b: string; input_ids?: number[] };
       captures.push({
@@ -68,14 +121,16 @@ function mockUpstream(handlers: {
       });
       battleCounter += 1;
       const battleId = `bat_${battleCounter}`;
-      const fn = handlers.battles ?? ((b, id) => ({
-        battle_id: id,
-        bot_a: b.bot_a,
-        bot_b: b.bot_b,
-        input_ids: b.input_ids ?? [],
-        status: 'running',
-        created_at: new Date().toISOString(),
-      }));
+      const fn =
+        handlers.battles ??
+        ((b, id) => ({
+          battle_id: id,
+          bot_a: b.bot_a,
+          bot_b: b.bot_b,
+          input_ids: b.input_ids ?? [],
+          status: 'running',
+          created_at: new Date().toISOString(),
+        }));
       return HttpResponse.json(fn(body, battleId));
     }),
   );
@@ -212,7 +267,7 @@ describe('TournamentOrchestrator.advanceMatch — non-final match', () => {
     // Advance R1 match 0: winner = bot_a_id of that match.
     await orchestrator.advanceMatch({ ...r1m0, winner_bot_id: r1m0.bot_a_id });
 
-    let r1m0After = await getMatchById(t.db, r1m0.match_id);
+    const r1m0After = await getMatchById(t.db, r1m0.match_id);
     expect(r1m0After?.status).toBe('complete');
     expect(r1m0After?.winner_bot_id).toBe(r1m0.bot_a_id);
 
@@ -269,8 +324,8 @@ describe('TournamentOrchestrator — 4-bracket walk to completion', () => {
 
     await orchestrator.schedule(tournamentId);
     // Pick the bot_a side for every match — deterministic.
-    let r1m0 = await getMatch(t, tournamentId, 1, 0);
-    let r1m1 = await getMatch(t, tournamentId, 1, 1);
+    const r1m0 = await getMatch(t, tournamentId, 1, 0);
+    const r1m1 = await getMatch(t, tournamentId, 1, 1);
     await orchestrator.advanceMatch({ ...r1m0, winner_bot_id: r1m0.bot_a_id });
     await orchestrator.advanceMatch({ ...r1m1, winner_bot_id: r1m1.bot_a_id });
     const r2 = await getMatch(t, tournamentId, 2, 0);

@@ -11,12 +11,12 @@
 import { createClient, type Client } from '@libsql/client';
 import { beforeEach, describe, expect, it } from 'vitest';
 
+import { runMigrations } from '../src/db/migrate.js';
 import {
   buildInitialBracket,
   type BracketSize,
   type InitialMatch,
 } from '../src/synthesize/bracket.js';
-import { runMigrations } from '../src/db/migrate.js';
 import { pickRoundInputs } from '../src/synthesize/tournament-inputs.js';
 
 import type { ApiInput } from '../src/clients/sort-bot-api/types.js';

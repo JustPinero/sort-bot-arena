@@ -7,6 +7,7 @@ import {
   CursorPageSchema,
   TournamentStrictSchema,
 } from '../../src/api/schemas.js';
+
 import { makeTestApp } from './helpers/test-app.js';
 
 const UPSTREAM = 'http://api.test';
@@ -295,9 +296,8 @@ describe('GET /api/v1/tournaments/:id — Slice D5 our-DB-driven path', () => {
     // mirror what the POST handler does; we skip the HTTP path so the
     // test is focused on the GET path's read shape.
     const { recordTournament } = await import('../src/store/recent-tournaments.js');
-    const { insertInitialMatches, markInFlight, markComplete } = await import(
-      '../src/store/tournament-matches.js'
-    );
+    const { insertInitialMatches, markInFlight, markComplete } =
+      await import('../src/store/tournament-matches.js');
 
     const tid = 'tour_d5_test_001';
     await recordTournament(t.db, {
@@ -432,12 +432,10 @@ describe('GET /api/v1/tournaments/:id — Slice D5 our-DB-driven path', () => {
   it('reports champion_bot_id once the recent_tournaments row is marked complete', async () => {
     const t = await makeTestApp({ sortBotApiBaseUrl: UPSTREAM });
 
-    const { recordTournament, markComplete: markTournamentComplete } = await import(
-      '../src/store/recent-tournaments.js'
-    );
-    const { insertInitialMatches, markComplete: markMatchComplete } = await import(
-      '../src/store/tournament-matches.js'
-    );
+    const { recordTournament, markComplete: markTournamentComplete } =
+      await import('../src/store/recent-tournaments.js');
+    const { insertInitialMatches, markComplete: markMatchComplete } =
+      await import('../src/store/tournament-matches.js');
 
     const tid = 'tour_d5_test_champ';
     await recordTournament(t.db, {

@@ -79,7 +79,7 @@ describe('GET /api/readyz listener field', () => {
     });
   });
 
-  it('surfaces a running listener\'s getters verbatim', async () => {
+  it("surfaces a running listener's getters verbatim", async () => {
     server.use(http.get(`${UPSTREAM}/healthz`, () => new HttpResponse('ok', { status: 200 })));
     const listener = stubListener({
       running: true,

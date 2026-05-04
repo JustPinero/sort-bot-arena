@@ -3,6 +3,7 @@ import { setupServer } from 'msw/node';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
 import { HomeSnapshotStrictSchema } from '../../src/api/schemas.js';
+
 import { makeTestApp } from './helpers/test-app.js';
 
 const UPSTREAM = 'http://api.test';

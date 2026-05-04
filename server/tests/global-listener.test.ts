@@ -24,12 +24,12 @@ import { describe, expect, it } from 'vitest';
 import { GlobalEventListener } from '../src/listener/global-listener.js';
 import { SseLineParser } from '../src/listener/sse-parser.js';
 import { insertPending, markRunning } from '../src/store/recent-battles.js';
+import { recordTournament } from '../src/store/recent-tournaments.js';
 import {
   insertInitialMatches,
   markInFlight,
   type TournamentMatchRow,
 } from '../src/store/tournament-matches.js';
-import { recordTournament } from '../src/store/recent-tournaments.js';
 
 import { makeTestApp } from './helpers/test-app.js';
 
@@ -51,26 +51,28 @@ class FakeSseSource {
     this.controller = null;
   }
   buildResponse(signal: AbortSignal): Response {
-    const self = this;
     let endResolve!: () => void;
-    self.ended = new Promise<void>((resolve) => {
+    this.ended = new Promise<void>((resolve) => {
       endResolve = resolve;
     });
+    const setController = (c: ReadableStreamDefaultController<Uint8Array> | null): void => {
+      this.controller = c;
+    };
     const stream = new ReadableStream<Uint8Array>({
-      start(controller) {
-        self.controller = controller;
+      start: (controller) => {
+        setController(controller);
         signal.addEventListener('abort', () => {
           try {
             controller.error(new Error('aborted'));
           } catch {
             // already closed
           }
-          self.controller = null;
+          setController(null);
           endResolve();
         });
       },
-      cancel() {
-        self.controller = null;
+      cancel: () => {
+        setController(null);
         endResolve();
       },
     });
@@ -90,7 +92,10 @@ interface FakeUpstreamHandlers {
 }
 
 function makeFetchImpl(handlers: FakeUpstreamHandlers): typeof fetch {
-  return (async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]): Promise<Response> => {
+  return (async (
+    input: Parameters<typeof fetch>[0],
+    init?: Parameters<typeof fetch>[1],
+  ): Promise<Response> => {
     const url =
       typeof input === 'string'
         ? input

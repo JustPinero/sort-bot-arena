@@ -17,8 +17,8 @@ import { Hono } from 'hono';
 import { runMigrations } from '../db/migrate.js';
 import { listAllForTournament } from '../store/tournament-matches.js';
 
-import type { AppContext } from '../auth/middleware.js';
 import type { OrchestratorHandle } from './tournaments.js';
+import type { AppContext } from '../auth/middleware.js';
 import type { Client } from '@libsql/client';
 
 interface Deps {

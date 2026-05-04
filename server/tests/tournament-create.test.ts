@@ -427,9 +427,7 @@ describe('POST /api/v1/tournaments', () => {
         args: ['tour_6_matches'],
       });
       expect(rows.rows).toHaveLength(4);
-      const statuses = rows.rows.map(
-        (r) => (r as unknown as Record<string, unknown>)['status'],
-      );
+      const statuses = rows.rows.map((r) => (r as unknown as Record<string, unknown>)['status']);
       expect(statuses.filter((s) => s === 'bye')).toHaveLength(2);
       expect(statuses.filter((s) => s === 'pending')).toHaveLength(2);
     });

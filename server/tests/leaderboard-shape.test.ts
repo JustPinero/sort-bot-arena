@@ -9,6 +9,7 @@ import {
   LeaderboardEntryStrictSchema,
   PerInputLeaderboardEntryStrictSchema,
 } from '../../src/api/schemas.js';
+
 import { makeTestApp } from './helpers/test-app.js';
 
 const UPSTREAM = 'http://api.test';

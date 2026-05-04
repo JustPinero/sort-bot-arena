@@ -358,10 +358,7 @@ describe('<TournamentSetupModal />', () => {
     // Tournament shape via `useTournament(id)`.
     server.use(
       http.post(`${BASE}/api/v1/tournaments`, () =>
-        HttpResponse.json(
-          { tournament_id: 'trn_yay', status: 'pending' },
-          { status: 201 },
-        ),
+        HttpResponse.json({ tournament_id: 'trn_yay', status: 'pending' }, { status: 201 }),
       ),
     );
 

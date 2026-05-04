@@ -96,9 +96,7 @@ test.describe('tournament 8-bracket → orchestrator advances → champion', () 
     // even before the FE navigates. The redirect happens inside the
     // useStartTournament onSuccess + the modal's onSubmit handler.
     const postPromise = page.waitForResponse(
-      (r) =>
-        r.url().endsWith('/api/v1/tournaments') &&
-        r.request().method() === 'POST',
+      (r) => r.url().endsWith('/api/v1/tournaments') && r.request().method() === 'POST',
       { timeout: 10_000 },
     );
     await page.getByRole('button', { name: /^start tournament$/i }).click();

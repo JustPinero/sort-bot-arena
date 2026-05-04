@@ -19,7 +19,8 @@ export function QuickFightButton({ className }: QuickFightButtonProps) {
   const [error, setError] = useState<string | null>(null);
 
   const bots = eligibleFighters.fighters;
-  const disabled = eligibleFighters.isLoading || !eligibleFighters.hasEnough(2) || startBattle.isPending;
+  const disabled =
+    eligibleFighters.isLoading || !eligibleFighters.hasEnough(2) || startBattle.isPending;
 
   const onClick = async () => {
     setError(null);

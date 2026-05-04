@@ -204,10 +204,9 @@ describe('useStartBattle', () => {
       return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
     }
 
-    const { result } = renderHook(
-      () => ({ battles: useBattles(), start: useStartBattle() }),
-      { wrapper: sharedWrapper },
-    );
+    const { result } = renderHook(() => ({ battles: useBattles(), start: useStartBattle() }), {
+      wrapper: sharedWrapper,
+    });
 
     await waitFor(() => expect(result.current.battles.isSuccess).toBe(true));
 

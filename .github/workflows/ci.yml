@@ -45,11 +45,11 @@ jobs:
       - name: typecheck (server)
         run: pnpm --filter @sort-bot-arena/server typecheck
 
-      - name: unit tests (frontend)
-        run: pnpm run test
+      - name: unit tests (frontend) + coverage
+        run: pnpm run test:coverage
 
-      - name: unit tests (server)
-        run: pnpm --filter @sort-bot-arena/server test
+      - name: unit tests (server) + coverage
+        run: pnpm --filter @sort-bot-arena/server exec vitest run --coverage --passWithNoTests
 
       - name: build (frontend)
         run: pnpm run build

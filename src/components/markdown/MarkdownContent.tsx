@@ -66,18 +66,12 @@ const components: Components = {
     </h3>
   ),
   p: ({ node: _node, className, children, ...props }) => (
-    <p
-      className={cn('mt-2 text-base leading-relaxed text-text-secondary', className)}
-      {...props}
-    >
+    <p className={cn('mt-2 text-base leading-relaxed text-text-secondary', className)} {...props}>
       {children}
     </p>
   ),
   ul: ({ node: _node, className, children, ...props }) => (
-    <ul
-      className={cn('mt-2 list-disc space-y-1 pl-5 text-text-secondary', className)}
-      {...props}
-    >
+    <ul className={cn('mt-2 list-disc space-y-1 pl-5 text-text-secondary', className)} {...props}>
       {children}
     </ul>
   ),
@@ -136,10 +130,7 @@ interface MarkdownContentProps {
 export function MarkdownContent({ children, className }: MarkdownContentProps) {
   return (
     <div className={cn('text-text-secondary', className)}>
-      <ReactMarkdown
-        rehypePlugins={[[rehypeSanitize, sanitizeSchema]]}
-        components={components}
-      >
+      <ReactMarkdown rehypePlugins={[[rehypeSanitize, sanitizeSchema]]} components={components}>
         {children}
       </ReactMarkdown>
     </div>

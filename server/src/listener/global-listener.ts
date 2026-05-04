@@ -22,6 +22,7 @@ import {
   markComplete as markTournamentMatchComplete,
   type TournamentMatchRow,
 } from '../store/tournament-matches.js';
+
 import { SseLineParser, type ParsedEvent } from './sse-parser.js';
 
 import type { Client } from '@libsql/client';
@@ -250,7 +251,10 @@ export class GlobalEventListener {
       args: [winnerBotId, completedAt, battleId],
     });
     if (updateRes.rowsAffected > 0) {
-      log.info({ battle_id: battleId, winner_bot_id: winnerBotId }, 'global listener: battle marked complete');
+      log.info(
+        { battle_id: battleId, winner_bot_id: winnerBotId },
+        'global listener: battle marked complete',
+      );
       // Slice D4 — if this battle is a tournament match, mark the match
       // complete and hand off to the orchestrator. The
       // `WHERE status != 'complete'` guard on the lookup keeps replays
@@ -368,4 +372,3 @@ export class GlobalEventListener {
     return { bot_a_id: a, bot_b_id: b };
   }
 }
-

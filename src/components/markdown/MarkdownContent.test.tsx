@@ -22,7 +22,7 @@ describe('<MarkdownContent />', () => {
 
   it('drops unsafe HTML via sanitization', () => {
     const { container } = render(
-      <MarkdownContent>{"**Hi** <script>alert(1)</script>"}</MarkdownContent>,
+      <MarkdownContent>{'**Hi** <script>alert(1)</script>'}</MarkdownContent>,
     );
     expect(container.querySelector('script')).toBeNull();
     // The <strong>Hi</strong> should still render

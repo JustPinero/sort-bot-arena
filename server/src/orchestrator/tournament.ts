@@ -57,7 +57,7 @@
 // eliminates the window entirely.
 
 import { log } from '../lib/log.js';
-import { insertPending, markRunning } from '../store/recent-battles.js';
+import { insertPending, markRunning, pairKey } from '../store/recent-battles.js';
 import {
   markFailed as markTournamentFailed,
   markComplete as markTournamentComplete,
@@ -76,9 +76,8 @@ import {
   setSlot,
   type TournamentMatchRow,
 } from '../store/tournament-matches.js';
-import { pickRoundInputs, type TournamentInputMode } from '../synthesize/tournament-inputs.js';
-import { pairKey } from '../store/recent-battles.js';
 import { getUserById } from '../store/users.js';
+import { pickRoundInputs, type TournamentInputMode } from '../synthesize/tournament-inputs.js';
 
 import type { SortBotApiClient } from '../clients/sort-bot-api/index.js';
 import type { Client } from '@libsql/client';
@@ -101,10 +100,7 @@ export interface OrchestratorOpts {
 // tournament serialize; different tournaments run in parallel.
 const tournamentLocks = new Map<string, Promise<unknown>>();
 
-export function withTournamentLock<T>(
-  tournamentId: string,
-  fn: () => Promise<T>,
-): Promise<T> {
+export function withTournamentLock<T>(tournamentId: string, fn: () => Promise<T>): Promise<T> {
   const prev = tournamentLocks.get(tournamentId) ?? Promise.resolve();
   const next = prev.then(fn, fn);
   // Store a swallowed-rejection tail copy. The caller still sees the
@@ -150,9 +146,7 @@ export class TournamentOrchestrator {
   // Public entry for the listener/sweep on `battle_complete`. Marks
   // the match complete, walks the winner forward, and re-schedules.
   async advanceMatch(matchRow: TournamentMatchRow): Promise<void> {
-    return withTournamentLock(matchRow.tournament_id, () =>
-      this.advanceMatchLocked(matchRow),
-    );
+    return withTournamentLock(matchRow.tournament_id, () => this.advanceMatchLocked(matchRow));
   }
 
   private async scheduleLocked(tournamentId: string): Promise<void> {
@@ -274,12 +268,7 @@ export class TournamentOrchestrator {
       await markMatchComplete(this.db, bye.match_id, winner, new Date().toISOString());
       const nextRound = bye.round + 1;
       const nextPosition = Math.floor(bye.bracket_position / 2);
-      const next = await findOrCreateNextMatch(
-        this.db,
-        tournamentId,
-        nextRound,
-        nextPosition,
-      );
+      const next = await findOrCreateNextMatch(this.db, tournamentId, nextRound, nextPosition);
       const slot: 'a' | 'b' = bye.bracket_position % 2 === 0 ? 'a' : 'b';
       await setSlot(this.db, next.match_id, slot, winner);
     }

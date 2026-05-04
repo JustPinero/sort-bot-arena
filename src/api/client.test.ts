@@ -148,9 +148,7 @@ describe('apiClient', () => {
 
     it('returns the parsed value when the response matches the schema', async () => {
       server.use(
-        http.get(`${BASE}/api/v1/user`, () =>
-          HttpResponse.json({ id: 'u_1', name: 'Ada' }),
-        ),
+        http.get(`${BASE}/api/v1/user`, () => HttpResponse.json({ id: 'u_1', name: 'Ada' })),
       );
 
       const user = await apiClient.get<z.infer<typeof userSchema>>('/api/v1/user', {
@@ -183,9 +181,7 @@ describe('apiClient', () => {
 
     it('preserves existing behavior (returns JSON as T) when no schema is provided', async () => {
       server.use(
-        http.get(`${BASE}/api/v1/user`, () =>
-          HttpResponse.json({ id: 'u_2', extra: 'field' }),
-        ),
+        http.get(`${BASE}/api/v1/user`, () => HttpResponse.json({ id: 'u_2', extra: 'field' })),
       );
 
       const user = await apiClient.get<{ id: string; extra: string }>('/api/v1/user');

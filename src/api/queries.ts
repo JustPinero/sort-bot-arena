@@ -13,7 +13,6 @@ import {
   BotSnapshotSchema,
   CreateTournamentResponseSchema,
   CursorPageSchema,
-  HealthResponseSchema,
   HomeSnapshotSchema,
   InputPerformanceSchema,
   InputSummarySchema,
@@ -24,6 +23,7 @@ import {
   TournamentSchema,
 } from './schemas';
 
+import type { HealthResponseSchema } from './schemas';
 import type {
   CursorPage,
   InputSummary,
@@ -117,8 +117,7 @@ const BotSnapshotsSchema = z.array(BotSnapshotSchema);
 export function useBotSnapshots(botId: string | undefined) {
   return useQuery({
     queryKey: ['bots', botId, 'snapshots'],
-    queryFn: () =>
-      apiClient.get(`/api/v1/bots/${botId}/snapshots`, { schema: BotSnapshotsSchema }),
+    queryFn: () => apiClient.get(`/api/v1/bots/${botId}/snapshots`, { schema: BotSnapshotsSchema }),
     enabled: Boolean(botId),
     staleTime: 5 * 60 * 1000,
   });
@@ -170,8 +169,7 @@ const LeaderboardResponseSchema = CursorPageSchema(LeaderboardEntrySchema).exten
 export function useLeaderboard(filters: LeaderboardFilters) {
   return useQuery({
     queryKey: ['leaderboard', filters],
-    queryFn: () =>
-      apiClient.get(leaderboardPath(filters), { schema: LeaderboardResponseSchema }),
+    queryFn: () => apiClient.get(leaderboardPath(filters), { schema: LeaderboardResponseSchema }),
     staleTime: 60 * 1000,
   });
 }
