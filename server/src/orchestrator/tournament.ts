@@ -149,6 +149,52 @@ export class TournamentOrchestrator {
     return withTournamentLock(matchRow.tournament_id, () => this.advanceMatchLocked(matchRow));
   }
 
+  // Phase 11 victor-conditions fix — entry point for callers (listener +
+  // sweep) that have a battle_id and a resolved winner (possibly null on
+  // tie verdicts) but don't want to know about tournament_matches. Looks
+  // up the (in-flight or pending) match row by battle_id and delegates to
+  // `advanceMatch`. Idempotent against replays via the
+  // `status NOT IN ('complete','failed')` filter.
+  //
+  // Null winner is forwarded — `advanceMatchLocked`'s null-winner branch
+  // marks both the match AND the tournament `failed`, which is the right
+  // semantic for upstream-emitted ties (we have no tie-breaker today).
+  // Without this entry point, the listener used to silently bail on null
+  // winner, leaving tournament_matches stuck `in_flight` forever.
+  async advanceForBattle(
+    battleId: string,
+    winnerBotId: string | null,
+    completedAt: string,
+  ): Promise<void> {
+    const res = await this.db.execute({
+      sql: `SELECT match_id, tournament_id, round, bracket_position,
+                   bot_a_id, bot_b_id, battle_id, status,
+                   winner_bot_id, scheduled_at, completed_at
+              FROM tournament_matches
+             WHERE battle_id = ?
+               AND status NOT IN ('complete', 'failed')
+             LIMIT 1`,
+      args: [battleId],
+    });
+    const row = res.rows[0];
+    if (!row) return;
+    const r = row as unknown as Record<string, unknown>;
+    const matchRow: TournamentMatchRow = {
+      match_id: r['match_id'] as string,
+      tournament_id: r['tournament_id'] as string,
+      round: Number(r['round']),
+      bracket_position: Number(r['bracket_position']),
+      bot_a_id: (r['bot_a_id'] as string | null) ?? null,
+      bot_b_id: (r['bot_b_id'] as string | null) ?? null,
+      battle_id: (r['battle_id'] as string | null) ?? null,
+      status: r['status'] as TournamentMatchRow['status'],
+      winner_bot_id: winnerBotId,
+      scheduled_at: (r['scheduled_at'] as string | null) ?? null,
+      completed_at: completedAt,
+    };
+    await this.advanceMatch(matchRow);
+  }
+
   private async scheduleLocked(tournamentId: string): Promise<void> {
     const tournament = await getTournamentById(this.db, tournamentId);
     if (!tournament) return; // never inserted / cascaded away

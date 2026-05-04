@@ -277,6 +277,120 @@ describe('BattleSweeper.sweep', () => {
     expect(row.rows[0]?.['winner_bot_id']).toBe('bot_b');
   });
 
+  // Phase 11 victor-conditions — sweep advances tournament_matches
+  // when the listener missed a battle_complete event (reconnect window
+  // or ungraceful disconnect). Three branches matter:
+  //   1. Tournament battle with a winner: orchestrator.advanceForBattle
+  //      called with the winner_bot_id from upstream getBattle.
+  //   2. Tournament battle with a tie (null winner): same call shape,
+  //      but the orchestrator's null-winner branch fails the match.
+  //   3. Non-tournament battle: still calls advanceForBattle (the
+  //      orchestrator no-ops on no row); listener and sweep are
+  //      symmetric on this front.
+  it('calls orchestrator.advanceForBattle with winner_bot_id on a complete tournament battle (Phase 11 — gap closure for missed listener events)', async () => {
+    const t = await makeTestApp({ sortBotApiBaseUrl: UPSTREAM });
+    await seedBattle(t.db, {
+      battle_id: 'bat_tour_winner',
+      status: 'running',
+      created_at: STALE_ISO,
+    });
+    server.use(
+      http.get(`${UPSTREAM}/v1/battles/bat_tour_winner`, () =>
+        HttpResponse.json(upstreamBattleGet('bat_tour_winner', 'complete', 'bot_a')),
+      ),
+    );
+
+    const calls: Array<{ battleId: string; winnerBotId: string | null }> = [];
+    const orchestrator = {
+      advanceForBattle: async (battleId: string, winnerBotId: string | null): Promise<void> => {
+        calls.push({ battleId, winnerBotId });
+      },
+    };
+
+    const sweeper = new BattleSweeper({ db: t.db, sortBotApi: t.sortBotApi, orchestrator });
+    await sweeper.sweep();
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.battleId).toBe('bat_tour_winner');
+    expect(calls[0]?.winnerBotId).toBe('bot_a');
+  });
+
+  it('calls orchestrator.advanceForBattle with NULL winner on a tied tournament battle (regression)', async () => {
+    // Upstream returned `complete` with no winner — this is exactly the
+    // production state the user's tournament was stuck in: the listener
+    // missed the event, sweep marked recent_battles complete, but
+    // tournament_matches was never advanced.
+    const t = await makeTestApp({ sortBotApiBaseUrl: UPSTREAM });
+    await seedBattle(t.db, {
+      battle_id: 'bat_tour_tied',
+      status: 'running',
+      created_at: STALE_ISO,
+    });
+    server.use(
+      http.get(`${UPSTREAM}/v1/battles/bat_tour_tied`, () =>
+        HttpResponse.json(upstreamBattleGet('bat_tour_tied', 'complete', null)),
+      ),
+    );
+
+    const calls: Array<{ battleId: string; winnerBotId: string | null }> = [];
+    const orchestrator = {
+      advanceForBattle: async (battleId: string, winnerBotId: string | null): Promise<void> => {
+        calls.push({ battleId, winnerBotId });
+      },
+    };
+
+    const sweeper = new BattleSweeper({ db: t.db, sortBotApi: t.sortBotApi, orchestrator });
+    await sweeper.sweep();
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.battleId).toBe('bat_tour_tied');
+    expect(calls[0]?.winnerBotId).toBeNull();
+  });
+
+  it('does not crash if orchestrator.advanceForBattle throws — sweep loop continues', async () => {
+    const t = await makeTestApp({ sortBotApiBaseUrl: UPSTREAM });
+    await seedBattle(t.db, {
+      battle_id: 'bat_a',
+      status: 'running',
+      created_at: STALE_ISO,
+    });
+    await seedBattle(t.db, {
+      battle_id: 'bat_b',
+      status: 'running',
+      created_at: STALE_ISO,
+    });
+    server.use(
+      http.get(`${UPSTREAM}/v1/battles/bat_a`, () =>
+        HttpResponse.json(upstreamBattleGet('bat_a', 'complete', 'bot_x')),
+      ),
+      http.get(`${UPSTREAM}/v1/battles/bat_b`, () =>
+        HttpResponse.json(upstreamBattleGet('bat_b', 'complete', 'bot_y')),
+      ),
+    );
+
+    let calls = 0;
+    const orchestrator = {
+      advanceForBattle: async (battleId: string): Promise<void> => {
+        calls += 1;
+        if (battleId === 'bat_a') throw new Error('boom');
+      },
+    };
+
+    const sweeper = new BattleSweeper({ db: t.db, sortBotApi: t.sortBotApi, orchestrator });
+    await sweeper.sweep();
+
+    expect(calls).toBe(2); // both rows attempted; first throw didn't bail the loop
+    // Both recent_battles rows are still marked complete despite the throw.
+    const rows = await t.db.execute({
+      sql: 'SELECT battle_id, status FROM recent_battles ORDER BY battle_id',
+      args: [],
+    });
+    expect(rows.rows.map((r) => (r as Record<string, unknown>)['status'])).toEqual([
+      'complete',
+      'complete',
+    ]);
+  });
+
   it('start() schedules an unref()ed interval and stop() clears it', async () => {
     const t = await makeTestApp({ sortBotApiBaseUrl: UPSTREAM });
     const setSpy = vi.spyOn(global, 'setInterval');
