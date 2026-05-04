@@ -70,7 +70,7 @@ export function MatchCard({ match, participantsById, className }: MatchCardProps
             to={`/arena/${match.battle_id}`}
             className="font-mono text-[10px] uppercase tracking-widest text-tech underline-offset-2 hover:underline"
           >
-            Open
+            {match.status === 'live' ? 'Watch' : 'View'}
           </Link>
         ) : null}
       </header>
