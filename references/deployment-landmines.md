@@ -116,15 +116,16 @@ Configured in the GitHub repo Settings → Branches. Phase 10 locks the
 
 - `validate / validate` — lint + format-check + frontend & server typecheck +
   frontend & server vitest with coverage thresholds + frontend & server
-  build (the workflow at `.github/workflows/ci.yml`).
+  build. `server/tests/contract-drift.test.ts` (the phase 8 contract-drift
+  defense) runs as part of the server vitest step in this job.
 - `e2e-mocked / e2e-mocked` — `pnpm exec playwright test --project=mocked`
-  (the legacy MSW-in-browser outage spec).
+  (the legacy MSW-in-browser outage spec). Caches `~/.cache/ms-playwright`
+  by `pnpm-lock.yaml` hash; uploads `playwright-report/` + `test-results/`
+  on failure.
 - `e2e-real-server / e2e-real-server` — `pnpm exec playwright test
   --project=real-server` (smoke + G2-G6 flows against the real Hono
-  server + libsql + stubbed sort-bot-api).
-- `contract-drift / contract-drift` — runs `server/tests/contract-drift.test.ts`
-  against every endpoint listed in `src/api/queries.ts`. The phase 8
-  contract-drift bug would have been caught here.
+  server + libsql + stubbed sort-bot-api). Same caching + artifact
+  upload as the mocked job.
 
 Additional rules:
 

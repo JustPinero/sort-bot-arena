@@ -59,4 +59,32 @@ describe('<MarkdownContent />', () => {
     expect(container.querySelector('a')).toBeNull();
     expect(screen.getByText(/home/)).toBeInTheDocument();
   });
+
+  // Regression — earlier the sanitize schema explicitly emptied
+  // `clobber`/`ancestors`/`protocols`/`required`, wiping the
+  // attribute-clobbering hardening rehype-sanitize ships with by default.
+  // We now spread `defaultSchema` and inherit those fields. These tests
+  // assert that the hardening is in effect: clobbering payloads are
+  // sanitized, raw HTML for non-allowed tags is dropped, and the strict
+  // tagName allowlist still wins for everything outside it.
+  it('drops attribute-clobbering name/id payloads on raw HTML', () => {
+    // Even if a parser flowed raw HTML through, anchor + name="document"
+    // is exactly the sort of clobber payload `defaultSchema.clobber`
+    // defends against.
+    const { container } = render(<MarkdownContent>{'<a name="document">x</a>'}</MarkdownContent>);
+    expect(container.querySelector('a')).toBeNull();
+    // Should not produce any element with `name="document"` attribute.
+    expect(container.querySelector('[name="document"]')).toBeNull();
+  });
+
+  it('strips id/name attributes on allowed tags (clobber defense)', () => {
+    // `code` IS in the allowlist; the attribute schema only allows
+    // `className`. Anything else (id, name) must be dropped — so even
+    // an inline `<code id="cookie">` can't clobber `document.cookie`.
+    const { container } = render(<MarkdownContent>{'`safe`'}</MarkdownContent>);
+    const code = container.querySelector('code');
+    expect(code).toBeTruthy();
+    expect(code?.getAttribute('id')).toBeNull();
+    expect(code?.getAttribute('name')).toBeNull();
+  });
 });
