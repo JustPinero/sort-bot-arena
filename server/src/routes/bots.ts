@@ -6,6 +6,7 @@ import { requireAuth, getUser, type AppContext } from '../auth/middleware.js';
 import { SortBotApiError } from '../clients/sort-bot-api/index.js';
 import { listCompletedForBot } from '../store/recent-battles.js';
 import { isUserOwnerOf, markRetired, recordUserBot } from '../store/user-bots.js';
+import { baselineAnalysisFor } from '../synthesize/baseline-analyses.js';
 import { synthesizeBot } from '../synthesize/bot.js';
 
 import type { SortBotApiClient } from '../clients/sort-bot-api/index.js';
@@ -138,33 +139,40 @@ export function botsRoutes(deps: {
 
   r.get('/:id/analysis', async (c) => {
     const id = c.req.param('id');
+    // Try upstream first. On 404, surface as not-found. On any other
+    // error class (412 `bot_not_evaluated`, 5xx, network), or when
+    // upstream returns an empty/un-formattable body, fall back to the
+    // pre-written baseline analyses for the curated production bots.
+    // For non-baseline bots the fallback returns null and we serve an
+    // empty analysis (FE renders the empty state without crashing).
     try {
       const analysis = await deps.sortBotApi.getBotAnalysis(id);
-      return c.json({
-        bot_id: id,
-        analysis: formatAnalysis(analysis),
-        generated_at: new Date().toISOString(),
-      });
+      const formatted = formatAnalysis(analysis);
+      if (formatted.length > 0) {
+        return c.json({
+          bot_id: id,
+          analysis: formatted,
+          generated_at: new Date().toISOString(),
+        });
+      }
+      // Upstream returned a body that formatted to empty (e.g. all
+      // fields were missing). Fall through to baseline fallback.
     } catch (err) {
       if (err instanceof SortBotApiError && err.status === 404) {
         return c.json({ error: 'not_found' }, 404);
       }
-      // Upstream returns 412 with code `bot_not_evaluated` while a bot
-      // is still in `evaluating` status (sandbox running or re-queued).
-      // The Scouting Report tab calls this endpoint independently of
-      // the rich bot GET (which already swallows the same error at
-      // `routes/bots.ts:74`); without this branch the tab 500s and the
-      // FE renders ErrorBoundary fallback. Return an empty analysis so
-      // the tab degrades to an empty state.
-      if (err instanceof SortBotApiError && err.status === 412) {
-        return c.json({
-          bot_id: id,
-          analysis: '',
-          generated_at: new Date().toISOString(),
-        });
+      // Any other SortBotApiError (412 bot_not_evaluated, 5xx, breaker
+      // open) → fall through to fallback. Anything else (programmer
+      // error, parse failure) → rethrow so we see it in logs.
+      if (!(err instanceof SortBotApiError)) {
+        throw err;
       }
-      throw err;
     }
+    return c.json({
+      bot_id: id,
+      analysis: baselineAnalysisFor(id) ?? '',
+      generated_at: new Date().toISOString(),
+    });
   });
 
   r.get('/:id/snapshots', async (c) => {

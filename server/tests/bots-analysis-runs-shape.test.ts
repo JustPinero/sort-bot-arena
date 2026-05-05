@@ -69,11 +69,10 @@ describe('GET /api/v1/bots/:id/analysis', () => {
     expect(res.status).toBe(404);
   });
 
-  it('returns 200 with empty analysis when sort-bot-api 412s with code=bot_not_evaluated (regression)', async () => {
-    // Upstream emits 412 while a bot is in `evaluating` status. The
-    // dedicated analysis tab calls this endpoint independently of the
-    // rich bot GET (which already swallows the same error). Without the
-    // 412 branch, the tab 500s and the FE swaps in ErrorBoundary.
+  it('returns 200 with empty analysis when sort-bot-api 412s on a non-baseline bot (regression)', async () => {
+    // Upstream emits 412 while a bot is in `evaluating` status. For
+    // non-baseline bots the route falls back to empty analysis so the
+    // FE renders the empty state instead of an ErrorBoundary fallback.
     server.use(
       http.get(`${UPSTREAM}/v1/bots/bot_evaluating/analysis`, () =>
         HttpResponse.json(
@@ -91,6 +90,45 @@ describe('GET /api/v1/bots/:id/analysis', () => {
     const parsed = AnalysisResponseStrictSchema.parse(await res.json());
     expect(parsed.bot_id).toBe('bot_evaluating');
     expect(parsed.analysis).toBe('');
+  });
+
+  it('serves the baseline-analyses fallback for a curated bot when upstream 5xxs', async () => {
+    // Upstream returns 502; the bot is in the curated baseline set
+    // (std-go's production id). Route should fall back to the
+    // pre-written analysis instead of either erroring or empty.
+    const stdGoId = '679beb22e6a1d8e27b7539a51cebf8a5';
+    server.use(
+      http.get(`${UPSTREAM}/v1/bots/${stdGoId}/analysis`, () =>
+        HttpResponse.json({ error: 'upstream_down' }, { status: 502 }),
+      ),
+    );
+    const t = await makeTestApp({ sortBotApiBaseUrl: UPSTREAM });
+    const res = await t.app.request(`/api/v1/bots/${stdGoId}/analysis`);
+    expect(res.status).toBe(200);
+    const parsed = AnalysisResponseStrictSchema.parse(await res.json());
+    expect(parsed.bot_id).toBe(stdGoId);
+    expect(parsed.analysis).toContain('pdqsort');
+    expect(parsed.analysis).toContain('**Algorithm:**');
+  });
+
+  it('upstream-supplied analysis takes precedence over the baseline fallback', async () => {
+    // Same baseline id, but upstream now serves a real analysis. Our
+    // route prefers upstream content and never reaches the fallback.
+    const stdGoId = '679beb22e6a1d8e27b7539a51cebf8a5';
+    server.use(
+      http.get(`${UPSTREAM}/v1/bots/${stdGoId}/analysis`, () =>
+        HttpResponse.json({
+          algorithm: 'Real upstream analysis',
+          reasoning: 'This came from sort-bot-api, not the fallback.',
+        }),
+      ),
+    );
+    const t = await makeTestApp({ sortBotApiBaseUrl: UPSTREAM });
+    const res = await t.app.request(`/api/v1/bots/${stdGoId}/analysis`);
+    expect(res.status).toBe(200);
+    const parsed = AnalysisResponseStrictSchema.parse(await res.json());
+    expect(parsed.analysis).toContain('Real upstream analysis');
+    expect(parsed.analysis).not.toContain('pdqsort');
   });
 });
 
