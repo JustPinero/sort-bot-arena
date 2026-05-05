@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 
 import { apiErrorStatus } from '@/api/error-helpers';
 import { useBattle, useBot } from '@/api/queries';
-import type { BattleEvent } from '@/api/types';
+import type { BattleEvent, BattleFighter, Bot } from '@/api/types';
 import { LiveBattle } from '@/components/arena/LiveBattle';
 import { PostFightDecision } from '@/components/arena/PostFightDecision';
 import { PreFightStaredown } from '@/components/arena/PreFightStaredown';
@@ -14,6 +14,38 @@ import { deriveBattleState } from '@/lib/battleReducer';
 import { playMockBattle } from '@/lib/playMockBattle';
 
 type Phase = 'pre_fight' | 'live' | 'completed';
+
+// Synthesize a Bot shape from the BattleFighter that already rides on
+// the battle response. Used when the dedicated `useBot` fetch returns
+// undefined (upstream sort-bot-api occasionally 404s during sandbox
+// rebuilds; TanStack's `retryNon4xx` won't retry, leaving the page
+// stuck on "Fighters not in the database"). The battle response
+// already carries bot_id / nickname / display_name / language /
+// portrait_url / corner / rank — everything the arena components need
+// to render the staredown, the live viewer, and the post-fight
+// decision card. Rich fields the dedicated bot endpoint adds
+// (record / KO% / signature_input / achilles_heel / recent_form /
+// achievements / analysis) degrade to neutral defaults.
+function botFromBattleFighter(f: BattleFighter): Bot {
+  return {
+    id: f.bot_id,
+    display_name: f.display_name,
+    nickname: f.nickname,
+    language: f.language,
+    algorithm: null,
+    portrait_url: f.portrait_url,
+    rank: f.rank,
+    record: { wins: 0, losses: 0, draws: 0 },
+    ko_percentage: 0,
+    signature_input: null,
+    achilles_heel: null,
+    recent_form: [],
+    achievements: [],
+    trash_talk: f.trash_talk ?? null,
+    analysis_url: null,
+    retired: false,
+  };
+}
 
 export default function BattlePage() {
   const { battleId } = useParams<{ battleId: string }>();
@@ -64,7 +96,9 @@ export default function BattlePage() {
     [events, battle?.fighter_a.bot_id, battle?.fighter_b.bot_id],
   );
 
-  if (battleQuery.isLoading || fighterAQuery.isLoading || fighterBQuery.isLoading) {
+  // We only block on the `battle` fetch — fighter fetches degrade to
+  // the BattleFighter on the battle response if they fail or are slow.
+  if (battleQuery.isLoading) {
     return (
       <section className="mx-auto max-w-5xl px-4 py-8">
         <div className="h-12 w-48 animate-pulse rounded-sm bg-surface-2" />
@@ -88,16 +122,11 @@ export default function BattlePage() {
     );
   }
 
-  if (!fighterAQuery.data || !fighterBQuery.data) {
-    return (
-      <section className="mx-auto max-w-2xl px-4 py-16 text-center">
-        <p className="text-combat">Fighters not in the database.</p>
-      </section>
-    );
-  }
-
-  const a = fighterAQuery.data;
-  const b = fighterBQuery.data;
+  // Prefer the rich Bot from the dedicated endpoint; fall back to the
+  // synthesized shape from the battle response so a transient
+  // upstream 404 on `/v1/bots/:id` never blocks the page from rendering.
+  const a: Bot = fighterAQuery.data ?? botFromBattleFighter(battle.fighter_a);
+  const b: Bot = fighterBQuery.data ?? botFromBattleFighter(battle.fighter_b);
   const finalEvent = events.find((e) => e.type === 'fight_end') as
     | Extract<BattleEvent, { type: 'fight_end' }>
     | undefined;
