@@ -68,6 +68,30 @@ describe('GET /api/v1/bots/:id/analysis', () => {
     const res = await t.app.request('/api/v1/bots/missing/analysis');
     expect(res.status).toBe(404);
   });
+
+  it('returns 200 with empty analysis when sort-bot-api 412s with code=bot_not_evaluated (regression)', async () => {
+    // Upstream emits 412 while a bot is in `evaluating` status. The
+    // dedicated analysis tab calls this endpoint independently of the
+    // rich bot GET (which already swallows the same error). Without the
+    // 412 branch, the tab 500s and the FE swaps in ErrorBoundary.
+    server.use(
+      http.get(`${UPSTREAM}/v1/bots/bot_evaluating/analysis`, () =>
+        HttpResponse.json(
+          {
+            code: 'bot_not_evaluated',
+            error: 'bot is evaluating; analysis is available only after status=evaluated',
+          },
+          { status: 412 },
+        ),
+      ),
+    );
+    const t = await makeTestApp({ sortBotApiBaseUrl: UPSTREAM });
+    const res = await t.app.request('/api/v1/bots/bot_evaluating/analysis');
+    expect(res.status).toBe(200);
+    const parsed = AnalysisResponseStrictSchema.parse(await res.json());
+    expect(parsed.bot_id).toBe('bot_evaluating');
+    expect(parsed.analysis).toBe('');
+  });
 });
 
 describe('GET /api/v1/bots/:id/runs', () => {

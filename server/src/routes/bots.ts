@@ -149,6 +149,20 @@ export function botsRoutes(deps: {
       if (err instanceof SortBotApiError && err.status === 404) {
         return c.json({ error: 'not_found' }, 404);
       }
+      // Upstream returns 412 with code `bot_not_evaluated` while a bot
+      // is still in `evaluating` status (sandbox running or re-queued).
+      // The Scouting Report tab calls this endpoint independently of
+      // the rich bot GET (which already swallows the same error at
+      // `routes/bots.ts:74`); without this branch the tab 500s and the
+      // FE renders ErrorBoundary fallback. Return an empty analysis so
+      // the tab degrades to an empty state.
+      if (err instanceof SortBotApiError && err.status === 412) {
+        return c.json({
+          bot_id: id,
+          analysis: '',
+          generated_at: new Date().toISOString(),
+        });
+      }
       throw err;
     }
   });
